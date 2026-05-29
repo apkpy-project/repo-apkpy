@@ -1,0 +1,33 @@
+APKPY PROPRIETARY LICENSE
+
+Copyright (c) 2025 ApkPy. All rights reserved.
+
+This software and its source code are proprietary and confidential.
+Unauthorized copying, distribution, modification, or use of this software,
+via any medium, is strictly prohibited.
+
+PERMISSIONS
+-----------
+You are permitted to:
+- Install and use ApkPy for personal and commercial projects.
+- Distribute applications built WITH ApkPy (your own apps).
+
+RESTRICTIONS
+------------
+You may NOT:
+- Copy, reproduce, or redistribute the ApkPy source code or binaries.
+- Reverse engineer, decompile, or disassemble the software.
+- Sell, sublicense, or transfer the software to any third party.
+- Remove or alter any proprietary notices or labels on the software.
+
+DISCLAIMER
+----------
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING
+FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
+For licensing inquiries, please open an issue on the GitHub repository.
