@@ -254,7 +254,7 @@ See [`LICENSE`](LICENSE) for full details.
 
 ## 🤝 Community
 
-- **Found a bug or have a feature idea?** Post on Reddit: [u/idkaesd](https://www.reddit.com/user/idkaesd/)
+- **Found a bug or have a feature idea?** [Open an issue on GitHub!](https://github.com/apkpy-project/repo-apkpy/issues)
 - **Want to contribute?** We're looking for contributors to expand the native component library!
 
 ---

@@ -9,7 +9,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in ApkPy, **please do not open a public GitHub issue**. Instead, report it privately by opening a confidential issue or contacting us through Reddit ([u/idkaesd](https://www.reddit.com/user/idkaesd/)).
+If you discover a security vulnerability in ApkPy, **please do not open a public GitHub issue**. Instead, please report it by opening a private security advisory on GitHub or contacting the maintainers.
 
 We will acknowledge your report within 48 hours and aim to release a patch within 7 days for confirmed vulnerabilities.
 
