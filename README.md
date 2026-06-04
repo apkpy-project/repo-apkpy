@@ -11,7 +11,7 @@
 
 ---
 
-## ✨ What's in v0.9.7
+## ✨ What's in v0.9.7.1
 
 > The biggest update yet. Two completely new API modules for **data** and **networking**.
 
@@ -96,7 +96,7 @@ json_get(db.query("SELECT * FROM t"), "0.id")  # First row, "id" column
 pip install apkpy
 ```
 
-Need the latest features? Upgrade to v0.9.7:
+Need the latest features? Upgrade to v0.9.7.1:
 ```bash
 pip install --upgrade apkpy
 ```
