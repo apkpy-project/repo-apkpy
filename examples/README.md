@@ -31,6 +31,9 @@ This folder contains complete, runnable ApkPy example apps.
 | `03_storage.py` | `storage.set()`, `storage.get()`, `storage.clear()`, auto-load on start |
 | `04_coffee_haven.py` | Full app: `image`, `radio`, storage persistence, animations, navigation |
 | `05_permissions.py` | `declare_permissions`, `permissions.request()`, runtime callbacks |
+| `06_background_and_sharing.py` | `service.every()`, `service.once()`, `service.cancel()`, `notify()`, `share()`, `clipboard.copy()` |
+| `07_camera_and_gallery.py` | `camera.capture()`, `gallery.pick()`, async `on_result(success, path)` callbacks |
+| `08_alert_and_confirm.py` | `alert()`, `confirm()`, async `on_result(confirmed)` callback, storage integration |
 
 ---
 

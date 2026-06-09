@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.9.8] — 2026-06-08
+
+### Added
+- **`service` (Background Services API)**: Run code in the background, even when the app is closed. `service.every(run=fn, minutes=N, id="...", only_on_wifi=True, only_when_charging=True)` schedules a recurring task; `service.once(run=fn, after_minutes=N, id="...")` schedules a one-time delayed task; `service.cancel(id="...")` stops a scheduled task. In the Hot Previewer, runs on a background thread on a timer. On Android, compiles to native `WorkManager` (`PeriodicWorkRequest` / `OneTimeWorkRequest`) with real `setInitialDelay`, `NetworkType`, and `requiresCharging` constraints — background functions can use `storage`, `db`, `https`, `toast` and `notify`, just like in the Preview, with **100% identical code**.
+- **`notify(title, message, id=...)`**: Show native system notifications in the phone's notification bar — unlike `toast()`, these are visible even when the app isn't open, making them the natural companion to background services. Compiles to a real `NotificationCompat.Builder` + `NotificationManager` on Android, and to a native OS toast/banner-style popup in the Hot Previewer.
+- **`share(text, title=None)`**: Open the system's native share sheet to send text to other apps (WhatsApp, Email, SMS, Bluetooth, etc.). Compiles to `Intent.ACTION_SEND` + `Intent.createChooser(...)` on Android (works from both screens and background services via `FLAG_ACTIVITY_NEW_TASK`), and shows a Preview popup that mimics the Android share sheet with a list of common apps.
+- **`clipboard.copy(text)`**: Copy text to the system clipboard — handy for sharing links, codes or generated results. Compiles to native `ClipboardManager`/`ClipData` on Android. In the Hot Previewer it writes to the **real OS clipboard** via Tkinter, so `Ctrl+V` outside the app pastes the actual copied text.
+- **`camera.capture(on_result=callback)`**: Opens the device's native camera app to take a photo, delivering `(success, path)` to an async callback — the same pattern as `https.get/post`. Compiles to `ActivityResultContracts.TakePicture()` with automatic `CAMERA` runtime-permission requests and a `FileProvider`/`content://` setup (manifest `<provider>` entry + `res/xml/file_paths.xml` generated automatically — zero manual configuration). Since a desktop computer has no camera app, the Hot Previewer simulates the flow by opening the OS file picker filtered to images; the callback receives the real path of whatever file is chosen, keeping the Python code 100% identical between Preview and Android.
+- **`gallery.pick(on_result=callback)`**: Opens the system's native image picker and delivers `(success, path)` to an async callback. Compiles to `ActivityResultContracts.GetContent()`, which is scoped-storage compliant and requires **no storage permissions** on modern Android. In the Hot Previewer it simulates the picker with the OS file explorer filtered to images, for the same reason and with the same 100%-identical-code guarantee as `camera.capture`.
+- **`alert(title, message)`**: Show a native informational dialog with an OK button. Fire-and-forget — no callback needed. Compiles to `AlertDialog.Builder` on Android. In the Hot Previewer, opens a custom dialog with English button text regardless of OS language.
+- **`confirm(title, message, on_result=callback)`**: Show a native confirmation dialog with OK and Cancel buttons. Calls `on_result(True)` if the user confirms, `on_result(False)` if they cancel — the same async `on_result` pattern as `camera.capture` / `gallery.pick`. Compiles to `AlertDialog.Builder` with positive/negative buttons on Android.
+
+### Fixed
+- Fixed a bug where running `apkpy build` opened a blank, empty Hot Previewer window that the user had to manually close every time — the preview window is now created lazily, only the first time the app actually runs the Previewer (`run()`), not on a simple `import`.
+- Fixed `toast(f"...")` (and any other f-string passed to `toast`) generating an empty string in the compiled app — the message is now correctly compiled as a Java string concatenation, exactly like `notify`, `share` and `clipboard.copy` already did.
+- Fixed `notify()` declaring the `POST_NOTIFICATIONS` permission in the manifest but never requesting it at runtime on Android 13+, which silently prevented notifications from showing on newer devices.
+- Fixed `service.cancel()` and `service.once()` calls being silently dropped when used inside nested/indirect button-handler code paths (calls routed through `pythonCallback_X`), so they now generate correctly in every codegen path.
+- Fixed `apkpy build` crashing with `FileNotFoundError: ... 'res/xml/file_paths.xml'` whenever an app used `camera.capture()` — the build command didn't know how to place files generated under `res/xml/` (the `FileProvider` paths file). It now creates `app/src/main/res/xml/` and writes the file there, just like it already did for `res/values/`.
+
+---
+
 ## [0.9.7.1] — 2026-06-04
 
 ### Added

@@ -11,9 +11,103 @@
 
 ---
 
-## ✨ What's in v0.9.7.1
+## ✨ What's in v0.9.8
 
-> The biggest update yet. Two completely new API modules for **data** and **networking**.
+> Take your app into the background: scheduled work, system notifications, sharing and the clipboard — all with the same Python you already write for the screen.
+
+### ⏱️ Background Services — Run Code Even When the App Is Closed
+Schedule recurring or one-time tasks that keep working in the background. The same function runs identically in the Hot Previewer (on a timer thread) and on Android (compiled to native `WorkManager`).
+
+```python
+from apkpy_lib import service, storage, notify
+
+def sincronizar_em_background():
+    storage.set("last_sync", "Sync completed!")
+    notify("Sync complete", "Your data is up to date.", id="sync_done")
+
+# Repeats every N minutes, with real Android constraints
+service.every(run=sincronizar_em_background, minutes=15, id="bg_sync",
+              only_on_wifi=True, only_when_charging=True)
+
+# Runs ONCE, after a delay — like a one-shot reminder
+service.once(run=sincronizar_em_background, after_minutes=5, id="reminder")
+
+# Cancel a scheduled task
+service.cancel(id="bg_sync")
+```
+
+### 🔔 `notify()` — Native System Notifications
+Show a real notification in the phone's notification bar — visible even when your app isn't open. The natural companion to background services.
+
+```python
+from apkpy_lib import notify
+
+notify("New message", "You have 3 unread notifications", id="inbox")
+```
+
+### 📤 `share()` — Open the Native Share Sheet
+Send text to WhatsApp, Email, SMS, Bluetooth and more with one call. Compiles to a real `Intent.ACTION_SEND` chooser on Android, and shows an Android-style share popup in the Previewer.
+
+```python
+from apkpy_lib import share
+
+share("Check out this app I built with ApkPy! 🚀", title="Share via")
+```
+
+### 📋 `clipboard.copy()` — Copy to the System Clipboard
+Copy any text to the clipboard so the user can paste it elsewhere. Uses native `ClipboardManager` on Android, and the **real OS clipboard** in the Previewer (`Ctrl+V` outside the app pastes the actual text).
+
+```python
+from apkpy_lib import clipboard, toast
+
+clipboard.copy("https://my-app-link.example.com")
+toast("Link copied to clipboard!")
+```
+
+### 📸 `camera.capture()` & `gallery.pick()` — Native Photos & Images
+Open the device's native camera or image picker and get the result back through an async `on_result(success, path)` callback — same pattern as `https`. Auto-handles the `CAMERA` permission and `FileProvider` setup for you. Since your computer has no camera or gallery, the Previewer simulates both with your OS's file picker — your code is 100% identical either way.
+
+```python
+from apkpy_lib import camera, gallery, toast
+
+def foto_tirada(success, path):
+    if success:
+        lbl_foto.set_value(f"Photo: {path}")
+        toast("Photo captured!")
+
+def imagem_escolhida(success, path):
+    if success:
+        lbl_foto.set_value(f"Picked: {path}")
+
+button("Take Photo", command=lambda: camera.capture(on_result=foto_tirada), screen=main)
+button("Pick from Gallery", command=lambda: gallery.pick(on_result=imagem_escolhida), screen=main)
+```
+
+### 🗨️ `alert()` & `confirm()` — Native Dialogs
+Show native informational and confirmation dialogs in a single line of Python. `alert()` is fire-and-forget. `confirm()` uses the same async `on_result` callback pattern as `camera` and `gallery` — `True` if the user taps OK, `False` if they cancel.
+
+```python
+from apkpy_lib import alert, confirm, storage, toast
+
+def guardar():
+    nome = inp_nome.get_value()
+    if nome:
+        storage.set("nome", nome)
+        alert("Saved!", f"The name '{nome}' was saved.")
+    else:
+        alert("Warning", "Enter a name before saving.")
+
+def ao_confirmar_apagar(confirmou):
+    if confirmou:
+        storage.clear()
+        toast("All data erased!")
+
+def apagar():
+    confirm("Delete everything?", "This will erase all saved data. Are you sure?",
+            on_result=ao_confirmar_apagar)
+```
+
+---
 
 ### 🗄️ SQLite Database — Offline Data Storage
 Build fully offline, persistent Android apps. The same `db` object works on your computer (Python `sqlite3`) and on real Android devices (native `SQLiteDatabase`).
@@ -86,6 +180,12 @@ json_get(db.query("SELECT * FROM t"), "0.id")  # First row, "id" column
 | 🎬 **Declarative animations** | `@keyframes`-style animations that compile to native Android XML |
 | 🖼️ **Image support** | Drop any `.png` or `.jpg` next to your script — ApkPy handles the rest |
 | 🍞 **Toast notifications** | `toast("message")` → native `Toast.makeText()` |
+| 🔔 **System notifications** | `notify(title, message)` → native `NotificationCompat` in the notification bar |
+| ⏱️ **Background services** | `service.every()` / `service.once()` / `service.cancel()` → native `WorkManager` |
+| 📤 **Native sharing** | `share(text, title)` → native `Intent.ACTION_SEND` chooser |
+| 📋 **System clipboard** | `clipboard.copy(text)` → native `ClipboardManager` (real OS clipboard in Preview) |
+| 📸 **Camera & Gallery** | `camera.capture()` / `gallery.pick()` → native camera & image picker, async `on_result(success, path)` |
+| 🗨️ **Alert & Confirm dialogs** | `alert(title, message)` / `confirm(title, message, on_result=cb)` → native `AlertDialog.Builder` |
 | 📡 **Multi-screen navigation** | Multiple `Screen` objects with `on_click_navigate()` |
 
 ---
@@ -96,7 +196,7 @@ json_get(db.query("SELECT * FROM t"), "0.id")  # First row, "id" column
 pip install apkpy
 ```
 
-Need the latest features? Upgrade to v0.9.7.1:
+Need the latest features? Upgrade to v0.9.8:
 ```bash
 pip install --upgrade apkpy
 ```
