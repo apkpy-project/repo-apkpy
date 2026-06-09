@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.9.9] — 2026-06-09
+
+### Added
+- **`type="date"`**: Opens the native Android `DatePickerDialog`. `get_value()` returns `"DD/MM/YYYY"` after the user picks a date, or `""` if not picked yet. In the Hot Previewer, opens a spinbox dialog (Day / Month / Year) so you can test without a device.
+- **`type="time"`**: Opens the native Android `TimePickerDialog`. `get_value()` returns `"HH:MM"` after the user picks a time, or `""` if not picked yet. In the Hot Previewer, opens a spinbox dialog (Hour / Minute).
+- **`type="number"`**: Shows the numeric keyboard on Android automatically. In the Hot Previewer, rejects non-numeric characters as you type. Supports integers, decimals, and negatives. `get_value()` always returns a string — use `int()` or `float()` in your Python code.
+- **`type="switch"`**: Native Android `SwitchCompat` toggle switch. CSS `background-color` sets the track color when the switch is ON (defaults to `#4CAF50`). `get_value()` returns `"true"` or `"false"`.
+- **`type="select"`**: Native Android `Spinner` dropdown. Pass options as `"A|B|C"`. `get_value()` returns the selected option text. CSS supports `color`, `background-color`, `border-*`, and `border-radius`.
+- **`type="textarea"`**: Multi-line `EditText`. Control height with CSS `rows` (e.g. `rows: 6;`). Supports all standard input CSS properties.
+- **`apkpy examples`**: New CLI command that lets you pick one of 5 complete, ready-made apps (`Hello World`, `Calculator`, `Notes`, `Settings`, `Login Screen`) and drop it straight into any folder. Each example can be previewed immediately with `python writehere.py` and built for Android with `apkpy build`.
+
+### Fixed
+- Fixed `AndroidManifest.xml` template using the wrong XML namespace (`schemas.microsoft.com` instead of `schemas.android.com`), which could cause build failures in Android Studio.
+- Removed hardcoded `android:icon="@mipmap/ic_launcher"` and `android:label="Meu App ApkPy"` from the template manifest; the label is now set to a generic `"ApkPy App"` placeholder and `android:supportsRtl="true"` is added.
+
+---
+
 ## [0.9.8] — 2026-06-08
 
 ### Added

@@ -11,6 +11,31 @@
 
 ---
 
+## ✨ What's in v0.9.9
+
+> New native input types: date picker, time picker, and numeric keyboard — all with the same one-line Python API.
+
+### 📅 Date & Time Pickers
+Open the native Android `DatePickerDialog` / `TimePickerDialog` with a single `type=` argument. The Hot Previewer shows a spinbox dialog so you can test without a device.
+
+```python
+inp_date = inputs("Select date...", type="date", id="inp_date", screen=screen)
+inp_time = inputs("Select time...", type="time", id="inp_time", screen=screen)
+
+date = inp_date.get_value()  # "25/12/2024" or "" if not picked yet
+time = inp_time.get_value()  # "14:30"      or ""
+```
+
+### 🔢 Numeric Input
+Opens the numeric keyboard on Android automatically. In the Previewer, rejects non-numeric characters as you type.
+
+```python
+inp_age = inputs("Your age...", type="number", id="inp_age", screen=screen)
+age = int(inp_age.get_value())  # get_value() always returns a string
+```
+
+---
+
 ## ✨ What's in v0.9.8
 
 > Take your app into the background: scheduled work, system notifications, sharing and the clipboard — all with the same Python you already write for the screen.
@@ -172,6 +197,7 @@ json_get(db.query("SELECT * FROM t"), "0.id")  # First row, "id" column
 | 🎨 **CSS-inspired styling** | `border-radius`, `gap`, `flex-direction`, `padding`, animations — all in a CSS string |
 | 🔄 **Live Previewer** | `python writehere.py` instantly shows your app on your computer (Tkinter) |
 | 📦 **One-command build** | `apkpy build` generates a ready-to-compile Android Studio project as `.zip` |
+| 🎯 **Built-in examples** | `apkpy examples` — pick from 5 ready-made apps and drop them into any folder |
 | 🗄️ **SQLite database** | `db.execute()` / `db.query()` → native `SQLiteDatabase` on Android |
 | 🌐 **HTTPS requests** | `https.get()` / `https.post()` with headers support → native `HttpURLConnection` |
 | 🔎 **`json_get()`** | Read JSON fields with dot-notation (`"main.temp"`, `"0.name"`) |
@@ -186,6 +212,12 @@ json_get(db.query("SELECT * FROM t"), "0.id")  # First row, "id" column
 | 📋 **System clipboard** | `clipboard.copy(text)` → native `ClipboardManager` (real OS clipboard in Preview) |
 | 📸 **Camera & Gallery** | `camera.capture()` / `gallery.pick()` → native camera & image picker, async `on_result(success, path)` |
 | 🗨️ **Alert & Confirm dialogs** | `alert(title, message)` / `confirm(title, message, on_result=cb)` → native `AlertDialog.Builder` |
+| 🔽 **Dropdown / Select** | `type="select"` with `"A\|B\|C"` options → native Android `Spinner` |
+| 📝 **Multi-line textarea** | `type="textarea"` with CSS `rows` → native `EditText` with `textMultiLine` |
+| 🔘 **Toggle Switch** | `type="switch"` → native Android `SwitchCompat`; CSS `background-color` sets the "on" color |
+| 🔢 **Number input** | `type="number"` → numeric keyboard on Android; Preview rejects non-numeric characters; `get_value()` returns a string |
+| 📅 **Date picker** | `type="date"` → native `DatePickerDialog`; Preview shows spinbox dialog; returns `"DD/MM/YYYY"` |
+| 🕐 **Time picker** | `type="time"` → native `TimePickerDialog`; Preview shows spinbox dialog; returns `"HH:MM"` |
 | 📡 **Multi-screen navigation** | Multiple `Screen` objects with `on_click_navigate()` |
 
 ---
@@ -222,6 +254,31 @@ apkpy build
 
 # 5. Open the .zip in Android Studio → Build → Generate APK
 ```
+
+### 🎯 Prefer a ready-made example?
+
+Run `apkpy examples` to pick one of 5 complete apps and drop it straight into any folder:
+
+```
+$ apkpy examples
+
+What example do you want to use?
+
+  [1] Hello World
+  [2] Calculator
+  [3] Notes
+  [4] Settings
+  [5] Login Screen
+
+Enter a number: 2
+Where do you want to create it? [.]: ./my_app
+
+Done! "Calculator" example created at: ./my_app/writehere.py
+Preview it with:  python writehere.py
+Build it with:    apkpy build
+```
+
+All examples are fully working apps — preview them instantly or build for Android straight away.
 
 ---
 
