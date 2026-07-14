@@ -7,7 +7,690 @@
 [![License](https://img.shields.io/badge/license-Proprietary-red)](#-license)
 [![Platform](https://img.shields.io/badge/platform-Android-green)](https://developer.android.com)
 
-**ApkPy** is a closed-source Python-to-Android transpiler. Write your app in pure Python using a clean, CSS-inspired design system. ApkPy parses your Python code, generates native Java + XML Android projects, and bundles everything into a ready-to-compile `.zip`. **No Java, no Kotlin, no Android Studio configuration.**
+**ApkPy** is a closed-source Python-to-Android transpiler. Write your app in pure Python using a clean, CSS-inspired design system. ApkPy parses your Python code, generates native Java + XML Android projects, and either bundles them into a ready-to-compile `.zip` or — with a single `apkpy run` — compiles them straight into an installable `.apk`. **No Java, no Kotlin, no Android Studio.**
+
+---
+
+## ✨ What's in v1.0.0
+
+> One-command APK builds, real Python logic (your own functions + comparisons), a bottom navigation bar, scrollable screens, and a native list component.
+
+### 🚀 `apkpy run` — Python → installable APK in one command
+
+Go from a `.py` file to an app on your phone **without ever opening Android Studio**:
+
+```bash
+apkpy run
+```
+
+ApkPy transpiles your code, compiles it with Gradle, and drops a ready-to-install **`.apk` right next to your script**. Getting it onto a phone is optional and your choice:
+
+- **`apkpy run --qr`** — serves the APK over your Wi-Fi and prints a scannable QR code. Scan it, tap install, done. (The `.apk` is on disk either way — if you'd rather not scan anything, just copy the file across.)
+- **`apkpy run --usb`** — installs straight to a USB-connected device via `adb`.
+
+Two helpers round it out:
+
+- **`apkpy doctor`** — checks whether your machine has what it needs (a JDK 17–21, the Android SDK, and Gradle) and tells you exactly what's missing.
+- **`apkpy setup`** — downloads a compatible toolchain into `~/.apkpy` for machines that don't already have Android Studio.
+
+> **Requirements:** a JDK (17–21) and the Android SDK. Already have Android Studio? ApkPy finds and reuses its bundled JDK and SDK automatically — zero configuration. Otherwise run `apkpy setup` once. Prefer to compile in Android Studio yourself? `apkpy build` still produces a `.zip` project.
+
+### 🗂️ `bottom_nav` — Native Bottom Navigation Bar
+
+Add a tab bar at the bottom of every screen — the standard Android pattern for apps with 2–5 top-level sections (think Instagram, WhatsApp, YouTube).
+
+```python
+from apkpy_lib import Screen, label, button, inputs, list_view, toast, bottom_nav, run
+
+# ── Screens ───────────────────────────────────────────
+home     = Screen(id="home")
+explore  = Screen(id="explore", scroll=True)
+profile  = Screen(id="profile")
+
+# ── Home ──────────────────────────────────────────────
+label("Dashboard", id="dash_title", screen=home)
+button("Get started", id="btn_start", command=lambda: toast("Let's go!"), screen=home)
+
+# ── Explore (scrollable with a list) ──────────────────
+label("Trending", id="exp_title", screen=explore)
+explore_list = list_view(
+    [
+        {"title": "Morning Routine",   "subtitle": "10 min · Productivity"},
+        {"title": "Deep Focus",        "subtitle": "25 min · Work"},
+        {"title": "Evening Wind-Down", "subtitle": "15 min · Wellness"},
+    ],
+    id="exp_list",
+    screen=explore,
+    on_click=lambda item: toast(item["title"])
+)
+
+# ── Profile ───────────────────────────────────────────
+label("Alex Johnson",     id="p_name",    screen=profile)
+label("alex@example.com", id="p_email",   screen=profile)
+button("Log out", id="btn_logout", command=lambda: toast("Bye!"), screen=profile)
+
+# ── Bottom nav — call once, outside any screen ────────
+bottom_nav(
+    [home, explore, profile],
+    labels=["Home", "Explore", "Profile"],
+    icons=["home", "search", "person"]
+)
+
+style = """
+home    { background-color: #0F172A; padding: 24px; gap: 16px; }
+explore { background-color: #0F172A; padding: 24px; gap: 14px; }
+profile { background-color: #0F172A; padding: 32px; gap: 12px; }
+dash_title { color: #F8FAFC; font-size: 26px; font-weight: bold; }
+btn_start  { background-color: #6366F1; color: #FFFFFF; border-radius: 12px; padding: 14px; }
+exp_title  { color: #F8FAFC; font-size: 22px; font-weight: bold; }
+exp_list   { background-color: #1E293B; color: #F8FAFC; border-color: #334155; height: 400px; }
+p_name     { color: #F8FAFC; font-size: 22px; font-weight: bold; }
+p_email    { color: #94A3B8; font-size: 14px; }
+btn_logout { background-color: #1E293B; color: #F87171; border-radius: 12px; padding: 14px; }
+"""
+
+if __name__ == "__main__":
+    run(start_screen=home)
+```
+
+**Available icons:** `home` · `person` · `settings` · `search` · `list` · `add` · `star` · `bell` · `chart` · `message` · `heart` · `camera` · `info` · `circle`
+
+**On Android:**
+- Compiles to `BottomNavigationView` with a `RelativeLayout` wrapper — content always sits above the bar, nothing gets hidden behind it
+- Menu XML and vector drawables are auto-generated — no image assets or icon fonts needed
+- Tab switches use `FLAG_ACTIVITY_REORDER_TO_FRONT` — Activities are reused, not recreated; switching is instant
+- Each Activity has an `onResume()` that restores the correct selected tab — pressing the system back button and returning to a screen always shows the right tab highlighted
+- Active icon/label: white. Inactive: grey. Bar background: `#1E293B`
+
+**Hot Previewer:** Dark 56 px bar at the bottom, one column per tab, active-tab indicator line + bold white label.
+
+> Call `bottom_nav` once at the top level — outside any screen or function. It applies to all listed screens automatically.
+
+---
+
+### 📦 Passing Data Between Screens
+
+Pass values when navigating with `on_click_navigate(screen, data={...})` and read them on the destination screen with `screen.get_param("key")`.
+
+```python
+from apkpy_lib import Screen, label, list_view, on_click_navigate, run
+
+list_screen   = Screen(id="list_screen")
+detail_screen = Screen(id="detail_screen")
+
+items = [{"title": "Apple", "subtitle": "A red fruit"}, {"title": "Banana", "subtitle": "A yellow fruit"}]
+
+# Tap list item → navigate with data
+item_list = list_view(
+    items,
+    screen=list_screen,
+    on_click=lambda item: on_click_navigate(detail_screen, data={"title": item["title"], "desc": item["subtitle"]})
+)
+
+# Read data on the destination screen
+lbl_name = label("", screen=detail_screen)
+lbl_desc = label("", screen=detail_screen)
+
+lbl_name.set_value(detail_screen.get_param("title"))         # required param
+lbl_desc.set_value(detail_screen.get_param("desc", "N/A"))   # optional default
+```
+
+Works the same way with `button` clicks:
+
+```python
+btn = button("Go", screen=list_screen,
+             command=lambda: on_click_navigate(detail_screen, data={"id": "42"}))
+```
+
+**On Android** — `on_click_navigate(..., data={"k": v})` compiles to `intent.putExtra("k", String.valueOf(v))`. `screen.get_param("k")` compiles to `getIntent().getStringExtra("k")`.
+
+**In the Hot Previewer** — params are stored in `screen._params` before navigation; `get_param` reads from that dict.
+
+---
+
+### 📜 Scrollable Screens
+
+Pass `scroll=True` to any `Screen` to make the whole page vertically scrollable. All components — labels, inputs, buttons, and lists — scroll together as one page.
+
+```python
+home = Screen(id="home", scroll=True)
+```
+
+In the Hot Previewer, scroll with the mouse wheel from anywhere on the screen. On Android, compiles to a `NestedScrollView` wrapping a `LinearLayout` — no manual XML editing needed.
+
+### 📋 `list_view` — Native Scrollable List
+
+Render a vertical list of items with an optional click handler. Accepts plain strings or dicts with `"title"` and `"subtitle"` keys.
+
+```python
+from apkpy_lib import Screen, list_view, toast, run
+
+home = Screen(id="home", scroll=True)
+
+items = [
+    {"title": "08/06/2026", "subtitle": "Mood: Great — Energy: 85"},
+    {"title": "07/06/2026", "subtitle": "Mood: Good — Energy: 70"},
+]
+
+history = list_view(
+    items,
+    id="history_list",
+    screen=home,
+    on_click=lambda item: toast(item["title"] + ": " + item["subtitle"]),
+)
+```
+
+Update the list at runtime:
+
+```python
+def save():
+    items.insert(0, {"title": "today", "subtitle": "Mood: Great"})
+    history.set_items(items)
+```
+
+Style it with CSS:
+
+```css
+history_list {
+    background-color: #1E293B;
+    color: #F8FAFC;
+    border-color: #334155;
+}
+```
+
+> In scroll screens, `list_view` compiles to `TextViews` inside a `LinearLayout` — no nested scroll conflict.
+
+### 📊 Data → UI — feed a `list_view` straight from SQLite or an API
+
+`set_items` now accepts a **JSON string** — exactly what `db.query()` returns and what REST APIs respond with. `title=`/`subtitle=` pick which field of each object to display:
+
+```python
+notes_list = list_view([], id="notes_list", screen=notes)
+
+def refresh():
+    rows = db.query("SELECT content, created FROM notes ORDER BY id DESC")
+    notes_list.set_items(rows, title="content", subtitle="created")
+
+refresh()   # module-level call runs on app start — the list is filled on launch
+```
+
+The same one-liner works with an `https` response (Supabase, Firebase, any REST API):
+
+```python
+def on_response(success, response):
+    if success:
+        users_list.set_items(response, title="name", subtitle="email")
+```
+
+- Each row renders as `title — subtitle`; arrays of plain values also work; invalid JSON gives an empty list instead of a crash.
+- Module-level calls to your own functions (like `refresh()`) now compile into Android's `onCreate` — initial data loads automatically.
+- This closes the **fetch → list → tap → detail** loop: `db`/`https` fetch, `set_items` shows, `on_click` + `on_click_navigate(data=...)` navigate.
+- Try it: `apkpy examples` → **[11] DB Notes List**, or `examples/14_db_notes_list.py`.
+
+---
+
+### 🎵 Build music apps — audio, queues, mini-player, favourites & playlists
+
+v1.0.0 can build a complete Spotify-style music experience in pure Python. Audio runs through the native Android media stack: foreground playback keeps playing when the app is backgrounded, integrates with the notification/lock screen, handles audio focus, and exposes queue controls to the UI. The Hot Previewer implements the same public API so the app flow can be tested on desktop.
+
+```python
+from apkpy_lib import Screen, button, label, image, inputs, audio, mini_player, run
+
+home = Screen(id="home")
+player = Screen(id="player")
+cover = image("https://example.com/cover.jpg", screen=player)
+title = label("Nothing playing", screen=player)
+artist = label("", screen=player)
+seek = inputs("", type="range", screen=player)
+time = label("0:00 / 0:00", screen=player)
+play_pause = button("▶", screen=player)
+shuffle = button("Shuffle", screen=player)
+repeat = button("Repeat", screen=player)
+
+audio.now_playing(progress=seek, time=time, cover=cover, title=title, artist=artist)
+audio.controls(play_pause=play_pause, shuffle=shuffle, repeat=repeat)
+mini_player(open=player)
+
+def start_album():
+    audio.play_playlist(
+        ["https://example.com/one.mp3", "https://example.com/two.mp3"],
+        titles=["First Track", "Second Track"],
+        artists=["The Example Band", "The Example Band"],
+        arts=["https://example.com/one.jpg", "https://example.com/two.jpg"],
+    )
+
+button("Play album", command=start_album, screen=home)
+run(start_screen=home)
+```
+
+The playback API includes:
+
+- `audio.play(src)`, `pause()`, `resume()`, `stop()` and `seek(seconds)` for basic playback.
+- `audio.play_background(src, title=..., artist=..., art=...)` for a background track with native media notification and lock-screen metadata.
+- `audio.play_playlist(sources, titles=..., artists=..., arts=..., start=...)`, plus `next()` and `previous()`, for a real queue. `start` may be an index or the selected source URL.
+- `audio.shuffle()` and `audio.repeat()` for queue modes.
+- `audio.now_playing(...)` to bind progress, elapsed/total time, cover, title and artist components to the current track. Moving the bound range input seeks through the track.
+- `audio.controls(...)` to turn ordinary ApkPy buttons into synchronized play/pause, shuffle and repeat controls.
+- `mini_player(open=player)` to place a persistent now-playing bar above the bottom navigation; tapping it opens the full player.
+
+Playback uses an Android foreground `Service` and `MediaSession`, publishes transport controls and album art to the system notification/lock screen, reacts to audio-focus loss (pause/duck/resume), and keeps the queue alive while Activities move between foreground and background.
+
+#### Favourites and user playlists
+
+Favourites and playlists are persistent and need no database schema:
+
+```python
+liked_button = button("🤍", screen=player)
+liked_tracks = list_view([], rich=True, screen=home)
+playlists = list_view([], screen=home)
+editor = list_view([], rich=True, screen=home)
+
+audio.like_button(liked_button, liked="❤️", unliked="🤍")
+audio.liked_list(liked_tracks)
+audio.playlists_list(playlists)
+audio.add_to_playlist("Road trip")
+audio.play_saved_playlist("Road trip")
+audio.edit_playlist("Road trip")
+audio.playlist_editor(editor)
+audio.remove_from_playlist("Road trip")
+audio.delete_playlist("Road trip")
+```
+
+`like_button` follows the current track automatically. `liked_list`, `playlists_list`, and `playlist_editor` repopulate their bound lists when the relevant screen resumes. Playlist entries preserve the source, title, artist and cover needed to play them again.
+
+---
+
+### 🖼️ Rich lists, horizontal carousels and grids
+
+Media-heavy apps can render native cards with a title, subtitle, remote image and optional `src` payload:
+
+```python
+tracks = [{
+    "title": "Midnight Drive", "subtitle": "Neon Avenue",
+    "image": "https://example.com/midnight.jpg",
+    "src": "https://example.com/midnight.mp3",
+}]
+
+def play_track(item):
+    audio.play_background(item["src"], title=item["title"],
+                          artist=item["subtitle"], art=item["image"])
+
+results = list_view(tracks, screen=home, rich=True, on_click=play_track)
+recent = carousel(tracks, screen=home, on_click=play_track)
+genres = grid(tracks, screen=home, cols=2, on_click=play_track)
+```
+
+- `list_view(..., rich=True)` generates native rows with thumbnail, title and subtitle. Dynamic JSON can include artwork with `set_items(rows, title="name", subtitle="artist", image="cover")`.
+- `carousel(...)` generates a horizontally scrolling shelf of cards.
+- `grid(..., cols=N)` generates an Android `GridLayout` with the requested number of columns.
+- Remote covers load asynchronously and automatically add the `INTERNET` permission.
+- The complete item remains available to `on_click`, including custom fields such as `src`.
+
+---
+
+### 📥 Offline audio downloads
+
+The `files` API downloads media or any other file into app-private storage:
+
+```python
+def downloaded(success, path):
+    if success:
+        audio.play(path)
+    else:
+        toast("Download failed")
+
+files.download("https://example.com/song.mp3", "song.mp3", on_result=downloaded)
+if files.exists("song.mp3"):
+    audio.play(files.path("song.mp3"))
+files.delete("song.mp3")
+```
+
+Downloads run off the UI thread. On Android the files live in the app's private directory, so no broad storage permission is required.
+
+---
+
+### 🔐 OAuth login and user profiles — Google, Spotify & GitHub
+
+ApkPy includes OAuth 2.0 Authorization Code flow with PKCE. It ships provider defaults for Google, Spotify and GitHub, supports custom endpoints, stores the access token, and fetches a normalized profile.
+
+```python
+login = Screen(id="login")
+home = Screen(id="home")
+name = label("", screen=home)
+
+def load_profile(user):
+    name.set_value(user["name"])
+
+def sign_in():
+    auth.login(provider="spotify", client_id="YOUR_SPOTIFY_CLIENT_ID",
+               scopes=["user-read-email", "user-read-private"], then=home)
+
+def sign_out():
+    auth.logout()
+
+button("Continue with Spotify", command=sign_in, screen=login)
+button("Load profile", command=lambda: auth.user(on_result=load_profile), screen=home)
+button("Log out", command=sign_out, screen=home)
+run(start_screen=login)
+```
+
+Useful calls are `auth.login(...)`, `auth.is_logged_in()`, `auth.token()`, `auth.user(on_result=...)`, and `auth.logout()`. `auth.user` normalizes provider data to `{"name", "email", "picture"}`.
+
+On Android the browser returns through the `apkpy://auth` deep link and a generated Activity exchanges the code for a token. The Previewer uses a loopback redirect such as `http://127.0.0.1:8888/callback`. Register both redirect URIs with the provider. PKCE means a client secret is not embedded in the APK.
+
+> These primitives are enough to build a Spotify-style client or authenticate with Spotify, but ApkPy does not bundle Spotify's catalogue. Tracks, artwork and API access must come from sources you are authorized to use, subject to the provider's terms.
+
+---
+
+### 🔁 `for` Loops — real Python iteration, compiled to native Java
+
+Plain Python `for` loops now work on Android. Iterate lists, `range()`, **and rows straight from `db.query()` or an API response** — `row["column"]` reads each field:
+
+```python
+# Over a list
+for fruta in ["Maçã", "Pera", "Uva"]:
+    db.execute("INSERT INTO itens (nome) VALUES (?)", [fruta])
+
+# Counting
+for i in range(5):
+    status.set_value(f"step {i}")
+
+# Over database rows  ⭐
+rows = db.query("SELECT nome, idade FROM pessoas")
+for row in rows:
+    toast(f"{row['nome']} tem {row['idade']} anos")
+
+# Over an API response, inside the callback
+def on_posts(ok, resp):
+    if ok:
+        for post in resp:
+            db.execute("INSERT INTO cache (title) VALUES (?)", [post["title"]])
+```
+
+- Works inside callbacks, at module level (runs on app start), nested, and with `if`/`else` in the body.
+- **`break` and `continue` are supported** — they compile to native Java `break;`/`continue;` (e.g. `for i in range(100): if i == 5: break`).
+- On Android, list loops compile to `for (String x : ...)`, JSON loops to an `org.json.JSONArray` walk with safe field access — invalid/non-array JSON means the loop runs zero times instead of crashing.
+- In the Hot Previewer it's real Python: `db.query()` results and `https` responses are iterable row-by-row while still being normal JSON strings.
+
+---
+
+### 🌐 Full REST Client — PUT, PATCH & DELETE
+
+`https` now speaks all five HTTP methods — **full CRUD against any REST backend** (Supabase, Firebase, Django, FastAPI...). `put`/`patch` work like `post`; `delete` works like `get`:
+
+```python
+from apkpy_lib import https
+
+https.get("https://api.example.com/users/42", on_response=on_done)
+https.post("https://api.example.com/users", '{"name": "Alex"}',
+           headers={"Content-Type": "application/json"}, on_response=on_done)
+https.put("https://api.example.com/users/42", '{"name": "Alex", "age": 30}',
+          headers={"Content-Type": "application/json"}, on_response=on_done)
+https.patch("https://api.example.com/users/42", '{"age": 31}',
+            headers={"Content-Type": "application/json"}, on_response=on_done)
+https.delete("https://api.example.com/users/42", on_response=on_done)
+```
+
+- Every callback receives `(success, response)`; on a 4xx/5xx error, `response` is the **error body** the server returned — show the user what went wrong.
+- Always non-blocking (background thread), callback delivered on the UI thread, `INTERNET` permission declared automatically.
+- PATCH on Android falls back to `POST` + `X-HTTP-Method-Override: PATCH` (the standard workaround for `HttpURLConnection`); the Previewer sends native PATCH.
+- Try it: `apkpy examples` → **[10] REST Client**, or `examples/13_rest_client.py`.
+
+---
+
+### 🔐 Security — crypto, encrypted storage & safe SQL
+
+Anyone can decompile an APK and read SharedPreferences or the SQLite file. v1.0.0 ships a complete security layer — zero external dependencies, no new permissions, and the same Python code in the Hot Previewer and on Android.
+
+**Password hashing (PBKDF2 + salt) — no `hashlib` import needed:**
+
+```python
+from apkpy_lib import storage, crypto
+
+def register():
+    storage.set("pw_hash", crypto.hash_password(pw_in.get_value()))
+
+def do_login():
+    ok = crypto.verify_password(pw_in.get_value(), storage.get("pw_hash", ""))
+    if ok:
+        toast("Welcome back!")
+```
+
+- Stored as `pbkdf2-sha256$200000$<salt>$<hash>` — 200,000 iterations make GPU brute-force ~200,000× slower, and the random salt means the same password never produces the same hash twice.
+- `verify_password` uses a constant-time comparison and returns a real boolean.
+- Hashes are bit-for-bit identical in the Previewer (Python `hashlib.pbkdf2_hmac`) and on Android (native `javax.crypto.Mac` loop) — fully portable.
+
+**Two-way encryption for data you need to read back:**
+
+```python
+db.execute("INSERT INTO secrets (content) VALUES (?)", [crypto.encrypt(secret)])
+plain = crypto.decrypt(stored_value)
+```
+
+On Android this is **AES-256-GCM with the key stored in the Android Keystore** — hardware-backed and non-extractable, even with root. Encrypted values are per-device by design: a stolen database cannot be decrypted anywhere else.
+
+**Automatic storage encryption:** every value passed to `storage.set()` is encrypted before it touches the disk and decrypted transparently by `storage.get()` — the SharedPreferences XML only ever contains `enc1$…` ciphertext. Zero code changes needed.
+
+**Parameterized SQL — injection-proof queries:**
+
+```python
+db.execute("INSERT INTO users (name) VALUES (?)", [name])        # safe
+rows = db.query("SELECT * FROM users WHERE name = ?", [name])    # safe
+```
+
+The `?` placeholders are filled by the SQLite engine itself, never concatenated into the SQL — `O'Brien` no longer breaks the query, and `x'); DROP TABLE users; --` is stored as harmless text instead of being executed.
+
+---
+
+### 🧠 Real Python logic — your own functions, comparisons & live queries
+
+Three language features that used to run **only** in the Previewer now compile to native Java as well — so what you test is what ships.
+
+**Functions with arguments** — define your own helpers that take parameters and call them from any button or list item:
+
+```python
+def adjust(delta):
+    db.execute("UPDATE tank SET level = MAX(0, MIN(100, level + ?))", [delta])
+    refresh()
+
+button("＋ Fill",  id="fill",  command=lambda: adjust("10"),  screen=home)
+button("－ Drain", id="drain", command=lambda: adjust("-10"), screen=home)
+```
+
+Compiles to a real `pythonCallback_adjust(String delta)` method with a typed call site — previously these calls were silently dropped on Android.
+
+**Comparison operators in `if`** — `<`, `>`, `<=`, `>=` now join `==` and `!=`. Numbers compare numerically (floats included), strings lexicographically, exactly like Python:
+
+```python
+if level >= 80:
+    status.set_value("Almost full 🌊")
+if level <= 20:
+    status.set_value("Almost empty 🪣")
+```
+
+**Iterate `db.query()` directly** — loop over query results inline, no temporary variable needed:
+
+```python
+for row in db.query("SELECT level FROM tank"):
+    gauge.set_value(f"{row['level']}%")
+```
+
+The inline form used to compile to an empty result set on Android (it worked only in the Previewer); now both the inline and the assigned (`rows = db.query(...)`) forms generate the same native SQLite read.
+
+---
+
+### 🎲 `random` — bundled in apkpy_lib
+
+No stdlib import needed — `random` ships **with apkpy_lib**. Just `from apkpy_lib import random` and use it like normal Python; it compiles to native Android (`java.util.Random` / `Math.random()`). Great for dice, pickers, quizzes and games:
+
+```python
+from apkpy_lib import random
+
+def roll_dice():
+    return random.randint(1, 6)              # integer in [1, 6]
+
+prize  = random.choice(["Gold", "Silver", "Bronze"])  # random list element
+chance = random.random()                     # float in [0.0, 1.0)
+```
+
+Random **values won't match** between the Previewer (Python's `random`) and Android (`java.util.Random`) — and that's correct: unlike arithmetic, the guarantee is "valid random in range on both sides", not "the same number".
+
+---
+
+### 📱 `device(...)` — preview on any screen size
+
+A **Previewer-only** helper to see your app at different phone sizes (or full screen) while you build. It's **ignored on Android** — there the real screen *is* the device — so it's stripped from the build and never changes the generated APK:
+
+```python
+from apkpy_lib import device
+
+device("Pixel 8")         # resize the preview window to that model
+device("fullscreen")      # borderless full screen (press Esc to exit)
+device("maximized")       # maximised window, keeps the title bar (X to close)
+```
+
+Every Pixel from the **Pixel 4 to the Pixel 10 Pro** is accepted (models that share a screen size map to the same dimensions); the default stays Pixel 9. In `fullscreen` / `maximized` the content sits in a centred phone-width column.
+
+---
+
+### 🧬 f-strings — `f"...{value}..."`
+
+Drop variables and inline expressions straight into text — no more `+` / `str()` gluing:
+
+```python
+nome = "Ana"
+preco = 12.5
+recibo.set_value(f"Olá {nome}! Total: {preco:.2f} €")   # "Olá Ana! Total: 12.50 €"
+```
+
+`{a + b}` runs the arithmetic inline; `{preco:.2f}` fixes the decimals (compiles to `String.format(Locale.US, "%.2f", ...)`, matching Python exactly).
+
+---
+
+### 🔁 `while`, `+=` and `.isdigit()` — more real Python
+
+```python
+# while — same conditions as `if`, with break / continue
+i = 0
+total = ""
+while i < 5:
+    total += str(i)        # += / -= / *= augmented assignment
+    i += 1
+
+# .isdigit() — validate before int()/float() so bad input never crashes
+valor = campo.get_value()
+if valor.isdigit():
+    n = int(valor)
+    resultado.set_value(f"O dobro é {n * 2}")
+else:
+    resultado.set_value("Escreve um número válido!")
+```
+
+`while` gets an automatic safety limit on Android, so an accidental infinite loop can't freeze the UI thread. `.isdigit()` compiles to `matches("\\d+")` — the right guard, since `int("")` / `int("abc")` would otherwise force-close the app on Android.
+
+Two more string checks — **`.startswith(x)`** and **`.endswith(x)`** — validate prefixes and suffixes (emails, links, codes, file names) and map **directly** to Java's `.startsWith(...)` / `.endsWith(...)`:
+
+```python
+url = url_in.get_value()
+if not url.startswith("https://"):
+    aviso.set_value("⚠️ Não é seguro")
+elif url.endswith(".pt"):
+    aviso.set_value("✅ Site português 🇵🇹")
+```
+
+---
+
+### 🕐 `datetime` — date & time bundled in apkpy_lib
+
+Like `random`, no stdlib import — everything returns a string and compiles to native `SimpleDateFormat`:
+
+```python
+from apkpy_lib import datetime
+
+datetime.now()    # "2026-06-16 14:30:45"
+datetime.date()   # "2026-06-16"
+datetime.time()   # "14:30:45"
+datetime.hour()   # "14"   (also year/month/day/minute/second)
+
+def atualizar():
+    hora = int(datetime.hour())
+    if hora < 12:
+        saudacao.set_value("Bom dia ☀️")
+    elif hora < 20:
+        saudacao.set_value("Boa tarde 🌤️")
+    else:
+        saudacao.set_value("Boa noite 🌙")
+```
+
+The format is identical on both sides; the exact second won't match (two clocks read a moment apart), just like `random`.
+
+---
+
+### 📦 `from apkpy_lib import *`
+
+```python
+from apkpy_lib import *
+```
+
+Brings every public name — `Screen`, `label`, `button`, `inputs`, `container`, `list_view`, `run`, `storage`, `crypto`, `db`, `https`, `random`, `datetime`, and the rest. (`container` — for grouping/nesting components, and laying them in a row with `display: flex; flex-direction: row` — is now exported too.)
+
+---
+
+### 📦 `apkpy.toml` — your app's name, icon, package id & version
+
+```toml
+[app]
+name = "Link Checker"                         # shown under the icon
+application_id = "com.mycompany.linkchecker"   # unique Play Store id
+version_name = "1.0"
+version_code = 1
+icon = "icon.png"                              # optional square PNG (needs Pillow)
+```
+
+`apkpy init` scaffolds it; `apkpy run` / `apkpy build` apply it automatically — the `name` becomes the launcher label (it used to be hardcoded "ApkPy App"), the `icon` is generated in every density, and `application_id` / `version_*` flow into the build. No `apkpy.toml`? `apkpy run` asks for the name the first time and saves it.
+
+---
+
+### 🔑 `apkpy release` — signed builds for the Play Store
+
+```bash
+apkpy release          # signed .apk (installs on any phone — unsigned ones don't)
+apkpy release --aab    # .aab App Bundle for Google Play
+```
+
+ApkPy creates a signing key the first time and **reuses it for every update** (the Play Store requires the same key). Back up the keystore (`~/.apkpy/keystores/…`) — lose it and you can't ship updates.
+
+> A sideloaded signed `.apk` still shows a Play Protect "unknown developer" warning — that's normal for any app installed outside the store. It goes away once the app is published on Google Play and installed from there.
+
+---
+
+### 🐛 Bug Fixes
+
+- Fixed string literals containing a newline (`"a\nb"`), tab or backslash breaking the Android build with `error: unclosed string literal`. Only quotes were being escaped, so a `\n` ended a Java string mid-line. The fix escapes `\`, `\n`, `\r`, `\t` and quotes across every path — labels, `set_value`, f-strings, comparisons, module constants and `list_view` items.
+- Fixed `type="range"` (SeekBar) generating `setText()`/`getText()` in the compiled Java, which caused Gradle build errors. Now correctly uses `setProgress()` / `getProgress()`.
+- Fixed `list_view` `on_click` toast showing the full item string twice (e.g. `"item: item"`). `item["title"]` and `item["subtitle"]` now correctly extract their respective parts.
+- Fixed `list_view` items always rendering with black text on Android regardless of the CSS `color` property.
+- Fixed `on_click_navigate(screen, data={...})` inside a `list_view` `on_click` lambda generating an empty callback on Android. This pattern now compiles and works correctly:
+  ```python
+  item_list = list_view(
+      items,
+      screen=home,
+      on_click=lambda item: on_click_navigate(detail, data={"title": item["title"]})
+  )
+  ```
+- Fixed `screen.get_param()` values not updating labels in the Hot Previewer. Labels bound with `set_value(screen.get_param(...))` now always show the value that was passed via `data=` — even in the Previewer:
+  ```python
+  lbl_title = label("", screen=detail)
+  lbl_title.set_value(detail.get_param("title"))  # updates automatically when screen opens
+  ```
+- Fixed `list_view` with a fixed `height` CSS value showing a large empty coloured box on Android when fewer items are present. Remove the fixed height to let the list size to its content:
+  ```css
+  /* Before — creates a 400dp coloured box even with 3 items */
+  my_list { background-color: #1E293B; height: 400px; }
+
+  /* After — list wraps to fit its items */
+  my_list { background-color: #1E293B; }
+  ```
 
 ---
 
@@ -150,7 +833,19 @@ db.execute("INSERT INTO users (name) VALUES ('Alice')")
 result = db.query("SELECT * FROM users ORDER BY id DESC")
 first_name = json_get(result, "0.name")   # → "Alice"
 total      = json_get(db.query("SELECT COUNT(*) as n FROM users"), "0.n")
+
+# Get the id the database just generated — no extra SELECT needed
+db.execute("INSERT INTO users (name) VALUES (?)", ["Bob"])
+new_id = db.last_insert_id()              # → e.g. 2
+
+# Transactions — all or nothing (atomic). Ideal for transfers, multi-row writes.
+db.begin()
+db.execute("UPDATE accounts SET balance = balance - 10 WHERE name = ?", ["Ana"])
+db.execute("UPDATE accounts SET balance = balance + 10 WHERE name = ?", ["Bo"])
+db.commit()      # both updates saved together — or db.rollback() to undo everything
 ```
+
+`db.begin()` / `db.commit()` / `db.rollback()` transpile to native `SQLiteDatabase.beginTransaction()` / `setTransactionSuccessful()` / `endTransaction()`; `db.last_insert_id()` to `SELECT last_insert_rowid()` — identical results in the Previewer and on Android.
 
 ### 🌐 HTTPS Network API — Connect to Any REST API
 Make real HTTP requests to any API on the internet. Runs in a **background thread** — the UI never freezes. Supports custom headers for API keys and Bearer tokens.
@@ -194,11 +889,23 @@ json_get(db.query("SELECT * FROM t"), "0.id")  # First row, "id" column
 | Feature | Details |
 | :--- | :--- |
 | 🐍 **Pure Python** | No Java, no Kotlin, no Android SDK knowledge needed |
+| 🧠 **Real Python logic** | User-defined functions with arguments, `<` `>` `<=` `>=` in `if`, and iterating `db.query()` directly in a `for` — all compile to native Java |
+| 🎲 **`random` (bundled)** | `from apkpy_lib import random` → `randint()` / `choice()` / `random()` → native `java.util.Random` / `Math.random()` (no stdlib import) |
+| 🕐 **`datetime` (bundled)** | `from apkpy_lib import datetime` → `now()` / `date()` / `time()` / `hour()`… → native `SimpleDateFormat` (no stdlib import) |
+| 🧬 **f-strings** | `f"{nome}: {preco:.2f} €"` with inline expressions and format specs → native string concat / `String.format` |
+| 🔁 **`while` loops** | native Java loop, same conditions as `if`, with `break` / `continue` and an anti-freeze safety limit |
+| ➕ **Augmented assignment** | `+=` `-=` `*=` `/=` `%=` — numeric maths or string concatenation |
+| ✅ **`.isdigit()`** | validate input before `int()` / `float()` → `matches("\\d+")`, same truth value as Python |
+| 🔤 **`.startswith()` / `.endswith()`** | check prefixes/suffixes in an `if` → native `.startsWith()` / `.endsWith()` |
 | 🎨 **CSS-inspired styling** | `border-radius`, `gap`, `flex-direction`, `padding`, animations — all in a CSS string |
 | 🔄 **Live Previewer** | `python writehere.py` instantly shows your app on your computer (Tkinter) |
+| 📱 **Preview device sizes** | `device("Pixel 8")` / `"fullscreen"` / `"maximized"` resizes the Previewer to any Pixel (4 → 10 Pro); ignored on Android |
 | 📦 **One-command build** | `apkpy build` generates a ready-to-compile Android Studio project as `.zip` |
+| 🚀 **One-command APK** | `apkpy run` compiles straight to an installable `.apk` (no Android Studio); `--qr` installs over Wi-Fi, `--usb` over a cable. `apkpy doctor` / `apkpy setup` manage the toolchain |
+| 📦 **App config (`apkpy.toml`)** | app name, icon, package id & version → applied to the build (`apkpy init` to scaffold) |
+| 🔑 **Signed releases** | `apkpy release` → signed `.apk`; `apkpy release --aab` → Play Store App Bundle; auto-managed per-app keystore |
 | 🎯 **Built-in examples** | `apkpy examples` — pick from 5 ready-made apps and drop them into any folder |
-| 🗄️ **SQLite database** | `db.execute()` / `db.query()` → native `SQLiteDatabase` on Android |
+| 🗄️ **SQLite database** | `db.execute()` / `db.query()`, transactions (`db.begin/commit/rollback`) and `db.last_insert_id()` → native `SQLiteDatabase` on Android |
 | 🌐 **HTTPS requests** | `https.get()` / `https.post()` with headers support → native `HttpURLConnection` |
 | 🔎 **`json_get()`** | Read JSON fields with dot-notation (`"main.temp"`, `"0.name"`) |
 | 💾 **Shared Preferences** | `storage.set()` / `storage.get()` → native `SharedPreferences` |
@@ -218,7 +925,7 @@ json_get(db.query("SELECT * FROM t"), "0.id")  # First row, "id" column
 | 🔢 **Number input** | `type="number"` → numeric keyboard on Android; Preview rejects non-numeric characters; `get_value()` returns a string |
 | 📅 **Date picker** | `type="date"` → native `DatePickerDialog`; Preview shows spinbox dialog; returns `"DD/MM/YYYY"` |
 | 🕐 **Time picker** | `type="time"` → native `TimePickerDialog`; Preview shows spinbox dialog; returns `"HH:MM"` |
-| 📡 **Multi-screen navigation** | Multiple `Screen` objects with `on_click_navigate()` |
+| 📡 **Multi-screen navigation** | Multiple `Screen` objects with `on_click_navigate()` + data passing via `data={}` and `screen.get_param()` |
 
 ---
 
@@ -247,13 +954,16 @@ cd my_app
 # 3. Preview instantly on your computer (no Android needed)
 python writehere.py
 
-# 4. Build the native Android project
-apkpy build
-# → Enter your app name when prompted
-# → A .zip file is generated!
+# 4. Compile straight to an installable APK (no Android Studio)
+apkpy run
+# → Produces <app>-debug.apk in this folder
+# → add --qr to install over Wi-Fi, or --usb to push it over a cable
 
-# 5. Open the .zip in Android Studio → Build → Generate APK
+# (alternative) Generate an Android Studio project instead
+apkpy build            # → produces a .zip you open in Android Studio
 ```
+
+> First time? Run `apkpy doctor` to confirm your toolchain, or `apkpy setup` to install it.
 
 ### 🎯 Prefer a ready-made example?
 
