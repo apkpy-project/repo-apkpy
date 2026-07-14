@@ -13,7 +13,7 @@
 
 ## ✨ What's in v1.0.0
 
-> One-command APK builds, real Python logic (your own functions + comparisons), a bottom navigation bar, scrollable screens, and a native list component.
+> One-command APK builds, automatic encrypted storage, AES-256-GCM + PBKDF2 security, real Python logic, native media playback, rich lists, bottom navigation, and scrollable screens.
 
 ### 🚀 `apkpy run` — Python → installable APK in one command
 
