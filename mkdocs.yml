@@ -1,0 +1,88 @@
+site_name: ApkPy
+site_description: Build native Android applications in pure Python.
+site_author: ApkPy
+
+docs_dir: docs
+site_dir: site
+use_directory_urls: true
+strict: true
+
+theme:
+  name: material
+  language: en
+  font: false
+  logo: assets/logo.svg
+  favicon: assets/favicon.svg
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: deep purple
+      accent: cyan
+      toggle:
+        icon: material/weather-night
+        name: Use dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: deep purple
+      accent: cyan
+      toggle:
+        icon: material/weather-sunny
+        name: Use light mode
+
+plugins:
+  - search:
+      lang: en
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra_css:
+  - stylesheets/extra.css
+
+nav:
+  - Home: index.md
+  - Start:
+      - Installation: getting-started.md
+      - Core concepts: core-concepts.md
+  - Build interfaces:
+      - Components and layouts: ui-components.md
+      - Themes and styling: themes-styling.md
+      - Screens and navigation: navigation.md
+      - Overlays and content states: overlays-states.md
+  - App features:
+      - Audio, playlists and Spotify: media-auth.md
+      - Data, network and security: data-security.md
+      - Native Android features: native-features.md
+  - Ship:
+      - Build and release: build-release.md
+      - Cloudflare Pages: cloudflare-pages.md
+      - Troubleshooting: troubleshooting.md
+  - Reference:
+      - Public API: api-reference.md
+      - Version 1.0.0: version-1.0.0.md
+
+copyright: Copyright &copy; 2026 ApkPy

@@ -7,6 +7,8 @@
 [![License](https://img.shields.io/badge/license-Proprietary-red)](#-license)
 [![Platform](https://img.shields.io/badge/platform-Android-green)](https://developer.android.com)
 
+**Documentation:** [Start here](docs/index.md) · [Installation](docs/getting-started.md) · [Audio, playlists and Spotify](docs/media-auth.md) · [Security](docs/data-security.md) · [Public API](docs/api-reference.md)
+
 **ApkPy** is a closed-source Python-to-Android transpiler. Write your app in pure Python using a clean, CSS-inspired design system. ApkPy parses your Python code, generates native Java + XML Android projects, and either bundles them into a ready-to-compile `.zip` or — with a single `apkpy run` — compiles them straight into an installable `.apk`. **No Java, no Kotlin, no Android Studio.**
 
 ---

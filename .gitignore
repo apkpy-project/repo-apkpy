@@ -1,0 +1,6 @@
+site/
+.venv-docs/
+.cache/
+.pytest_cache/
+__pycache__/
+*.py[cod]
