@@ -1,0 +1,4 @@
+[submodule "apkpy"]
+	path = apkpy
+	url = https://github.com/apkpy-project/apkpy.git
+	update = none
