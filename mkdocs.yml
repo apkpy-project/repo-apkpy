@@ -1,4 +1,5 @@
 site_name: ApkPy
+site_url: https://repo-apkpy.pages.dev/
 site_description: Build native Android applications in pure Python.
 site_author: ApkPy
 
