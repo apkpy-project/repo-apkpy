@@ -6,6 +6,42 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.1.0] — 2026-07-16
+
+### Added
+- **1/9 — Global themes and reusable design tokens**: `Theme(...)` now supplies light/dark mode, primary and secondary colours, background, surface, text, border, error/success colours, radius, spacing and typography to the Previewer and generated Android resources. CSS can reuse the normalized values through `var(--primary)`, `var(--surface)`, `var(--text)`, and the other theme tokens. The cascade is deterministic: Theme → component selector → semantic variant → component ID.
+- **2/9 — Material button variants and vector icons**: `button(..., variant=...)` supports `filled`, `outlined`, `tonal`, `text`, `danger` and `icon`. `icon=` uses matching font-independent geometry in the Previewer and generated Android vector drawables, avoiding missing emoji glyphs. Variant selectors such as `button:outlined` remain customizable through CSS.
+- **3/9 — Responsive layouts**: `responsive(mobile=..., tablet=..., landscape=..., breakpoint=...)`, `row(...)` and `column(...)` arrange one component tree for each viewport. Builds generate native `layout`, `layout-land`, `layout-sw600dp` and `layout-sw600dp-land` resources. Preview presets include phones, tablets, landscape and a freely resizable responsive window.
+- **4/9 — Advanced flex, grid and layered composition**: added `flex-wrap`, grow/shrink/basis, `align-self`, fractional grid tracks, `repeat()`, row/column spans, aspect ratios, absolute offsets and z-index. Simple screens remain ordinary native layouts; the optimized `ApkpyLayout` helper is emitted only for projects that require advanced geometry.
+- **5/9 — Material cards and semantic surfaces**: `card()` supports `elevated`, `filled` and `outlined` surfaces, a ready-made title/subtitle/image/content/actions form, or arbitrary child composition. `card_action()` creates compact card actions, and semantic label variants include title, subtitle, body and overline. Android uses native `MaterialCardView`.
+- **6/9 — Native app bars and collapsible media headers**: `app_bar()`, `sliver_app_bar()` and `action()` generate fixed Material toolbars, menus and collapsible image headers without placing toolbar Views in scrollable content. Android output uses `MaterialToolbar`, `AppBarLayout` and `CollapsingToolbarLayout`.
+- **7/9 — Overlays, menus and pickers**: added `bottom_sheet`, `modal`, `menu`/`popup_menu`, `context_menu`, `snackbar`, `tooltip`, `date_picker` and `time_picker`. Definitions are lightweight until opened, expose callbacks and programmatic close methods, and map to native Material dialogs/menus on Android.
+- **8/9 — Content states**: `skeleton`, `empty_state` and `error_state` share a screen region and switch through `show()`/`hide()` without rebuilding the component tree. Skeleton variants include music card, list, card and text. Animation helpers are generated only for Activities that use them.
+- **9/9 — Smart images and avatars**: `image()` and `avatar()` now support local placeholders, network fallbacks, bounded caching, fade-in, aspect ratio, blur, tint and runtime source changes. Avatars add a circular crop and online/away/busy/offline badge. Network work runs away from the UI thread and stale responses are ignored.
+- **Four English showcase applications**: Lumen (finance), Onda (wellbeing), Northline (travel) and Afterglow (music) demonstrate distinct visual systems rather than template recolours. Together they generate sixteen Android Activities.
+- **Complete 1.1.0 release guide**: `RELEASE_1.1.0.md` documents all nine plan items with executable Python/CSS examples, explains native output and shows how the design system works with SQLite, REST, encryption and background audio.
+
+### Fixed
+- Kept Material button height, padding, corner radius, border, colour, pressed state and narrow-screen wrapping consistent between Previewer and Android.
+- Replaced fragile emoji/font icons with Previewer vector geometry and generated Android vector drawables, including bottom navigation, toolbars and buttons.
+- Prevented card and toolbar Activities from crashing during layout inflation by generating `Theme.App` from `Theme.MaterialComponents.DayNight.NoActionBar`, mapping the ApkPy palette to Material attributes and applying the theme in `AndroidManifest.xml`.
+- Preserved Previewer input state while rebuilding bottom navigation and made tab changes persist correctly across separate Android Activities.
+- Matched rounded corners for cards, containers, inputs, selects and switches across both renderers.
+- Fixed the Previewer bottom sheet replacing the entire window with a black screen; the sheet now appears above the existing content.
+- Reworked Previewer toasts into a compact Material capsule with vector status icon, responsive width and non-blocking placement.
+- Corrected image crop, avatar clipping, aspect ratio, blur/tint handling and fallback behaviour, including the Android colour filter path that previously produced a solid purple block.
+- Matched Android text wrapping for constrained buttons instead of keeping labels on one overflowing Previewer line.
+- Kept generated Material helpers conditional so ordinary projects do not gain unused layout engines, image loaders, overlay helpers or skeleton animation code.
+
+### Validation
+- Installed the 1.1.0 wheel into clean Python environments and verified that `apkpy_lib` was loaded from `site-packages` rather than the development checkout.
+- Generated and compiled four complete projects with JDK 21, Gradle 8.6 and Android SDK 34.
+- Parsed 108 generated XML files, inspected 24 Java files and verified the expected Material theme, application ids, launcher Activities and version metadata.
+- Installed the four APKs on a Pixel 9 Android emulator and opened all 16 Activities through their real bottom navigation without an AndroidRuntime fatal exception.
+- Passed the complete transpiler suite: 146 tests passed, 0 failed.
+
+---
+
 ## [1.0.0] — 2026-06-09
 
 ### Added

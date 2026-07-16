@@ -13,6 +13,100 @@
 
 ---
 
+## ✨ What's new in ApkPy 1.1.0
+
+Version 1.1.0 turns ApkPy's styling layer into a complete native design system.
+The work was delivered as nine connected parts rather than isolated widgets:
+
+1. **Global Theme and design tokens** shared by the Previewer, generated
+   resources, Material components and Android system bars.
+2. **Material buttons and native vector icons** with filled, outlined, tonal,
+   text, danger and accessible icon-only variants.
+3. **Responsive composition** for mobile, tablet and landscape from one Python
+   component tree.
+4. **Flex, grid and layered layouts** with wrapping, grow/shrink, spans, aspect
+   ratios, absolute positioning and z-index.
+5. **Material cards** in ready-made media and freely composable forms.
+6. **Fixed and collapsible app bars** backed by native Material toolbars.
+7. **Overlays** including bottom sheets, dialogs, menus, snackbars, tooltips and
+   date/time pickers.
+8. **Loading, skeleton, empty and error states** that switch without rebuilding
+   the page.
+9. **Smart images and avatars** with placeholders, fallbacks, caching, fade,
+   blur, tint, aspect ratios and presence badges.
+
+The APIs are designed to work together. A themed screen can use a native app
+bar, responsive card layout, overlay actions and smart artwork without giving
+up CSS-level control:
+
+```python
+from apkpy_lib import (
+    Screen, Theme, action, app_bar, button, card, card_action,
+    image, run, snackbar,
+)
+
+home = Screen(id="home", scroll=True)
+app_bar(
+    "Library",
+    actions=[action("search", label="Search")],
+    screen=home,
+)
+
+image(
+    "https://example.com/cover.jpg",
+    placeholder="cover-placeholder.png",
+    fallback="cover-fallback.png",
+    cache=True,
+    fade_in=True,
+    aspect_ratio="16:9",
+    screen=home,
+)
+
+card(
+    title="Nocturne 04",
+    subtitle="43 min · Curated by Mara Vale",
+    actions=[
+        card_action(
+            "Play mix",
+            variant="filled",
+            icon="play_arrow",
+            command=lambda: snackbar("Playing Nocturne 04"),
+        )
+    ],
+    screen=home,
+)
+
+theme = Theme(
+    mode="dark",
+    primary="#8B5CF6",
+    secondary="#22D3EE",
+    background="#09090B",
+    surface="#18181B",
+    text="#FAFAFA",
+)
+
+run(start_screen=home, theme=theme)
+```
+
+The release also improves Previewer/Android parity for button geometry, vector
+icons, rounded surfaces, bottom sheets, compact Material toasts, image crop and
+tint, responsive button wrapping and Material theme compatibility.
+
+The existing native stack remains available alongside the new visual system:
+SQLite and parameterized SQL, the complete REST client, automatic encrypted
+storage, AES-256-GCM, PBKDF2 password hashing, background audio, queues,
+favourites, downloads and editable playlists are all documented below.
+
+| Lumen · finance | Onda · wellbeing |
+| :---: | :---: |
+| <img src="docs/assets/showcase/lumen-finance.png" alt="Lumen finance app" width="260"> | <img src="docs/assets/showcase/onda-wellness.png" alt="Onda wellbeing app" width="260"> |
+| Northline · travel | Afterglow · music |
+| <img src="docs/assets/showcase/northline-travel.png" alt="Northline travel app" width="260"> | <img src="docs/assets/showcase/afterglow-music.png" alt="Afterglow music app" width="260"> |
+
+[Read the complete 1.1.0 guide with code for all nine parts](RELEASE_1.1.0.md)
+
+---
+
 ## ✨ What's in v1.0.0
 
 > One-command APK builds, automatic encrypted storage, AES-256-GCM + PBKDF2 security, real Python logic, native media playback, rich lists, bottom navigation, and scrollable screens.
