@@ -114,6 +114,34 @@ rows = db.query("SELECT title, artist FROM tracks ORDER BY title")
 tracks.set_items(rows, title="title", subtitle="artist")
 ~~~
 
+## Rich text, Markdown and trees
+
+Use `rich_text()` for exact inline spans, `markdown()` for structured documents
+and `tree_view()` for recursive expandable data. Android generates native
+selectable text and a recycled hierarchy rather than a WebView.
+
+~~~ python
+rich_text(
+    [
+        {"text": "Status: ", "bold": True},
+        {"text": "ready", "bold": True, "color": "#22C55E"},
+    ],
+    screen=home,
+)
+
+markdown("## Notes\n\n- [x] Native text", screen=home)
+
+tree_view(
+    [{
+        "title": "Workspace",
+        "children": [{"title": "Release notes"}],
+    }],
+    screen=home,
+)
+~~~
+
+[See the complete native rich-content guide](rich-content.md).
+
 ## Carousels and grids
 
 ~~~ python

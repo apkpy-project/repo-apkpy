@@ -34,6 +34,15 @@ This folder contains complete, runnable ApkPy example apps.
 | `06_background_and_sharing.py` | `service.every()`, `service.once()`, `service.cancel()`, `notify()`, `share()`, `clipboard.copy()` |
 | `07_camera_and_gallery.py` | `camera.capture()`, `gallery.pick()`, async `on_result(success, path)` callbacks |
 | `08_alert_and_confirm.py` | `alert()`, `confirm()`, async `on_result(confirmed)` callback, storage integration |
+| `09_location.py` | `location.get_current()`, async `on_result(success, lat, lng, city)`, GPS + reverse geocoding |
+| `10_network_images.py` | `image("https://...")`, remote images loaded at runtime, same CSS as local images |
+| `11_spinner.py` | `spinner()`, `.show()` / `.hide()`, native loading indicator paired with an `https` request |
+| `12_secure_login.py` | `crypto.hash_password()`, `crypto.verify_password()`, salted password hashing stored via `storage` |
+| `13_rest_client.py` | `https.get/post/put/patch/delete`, full CRUD against a REST API, error-body handling |
+| `14_db_notes_list.py` | `set_items(json, title=..., subtitle=...)` — feeding a `list_view` straight from `db.query()` / `https` JSON |
+| `15_for_loops.py` | `for` loops — lists, `range()`, db rows (`row["col"]`) and API responses, compiled to native Java |
+| `16_knowledge_base.py` | Native `rich_text`, Markdown and an expandable workspace hierarchy without a WebView |
+| `17_discussion_tree.py` | A formatted article and Reddit-style nested discussion using visible tree rows |
 
 ---
 

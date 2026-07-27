@@ -64,13 +64,19 @@ markdown_extensions:
 extra_css:
   - stylesheets/extra.css
 
+extra_javascript:
+  - javascripts/release-12.js
+
 nav:
   - Home: index.md
+  - Showcase: showcase.md
   - Start:
       - Installation: getting-started.md
       - Core concepts: core-concepts.md
+      - How generation works: architecture.md
   - Build interfaces:
       - Components and layouts: ui-components.md
+      - Rich text, Markdown and trees: rich-content.md
       - Themes and styling: themes-styling.md
       - Screens and navigation: navigation.md
       - Overlays and content states: overlays-states.md
@@ -84,6 +90,8 @@ nav:
       - Troubleshooting: troubleshooting.md
   - Reference:
       - Public API: api-reference.md
+      - Version 1.2.0: version-1.2.0.md
+      - Version 1.1.0: version-1.1.0.md
       - Version 1.0.0: version-1.0.0.md
 
 copyright: Copyright &copy; 2026 ApkPy

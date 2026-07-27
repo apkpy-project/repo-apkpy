@@ -6,6 +6,40 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.2.0] — 2026-07-27
+
+### Added and documented
+
+- **Native audio capability baseline**: consolidated the music features that
+  already exist in ApkPy so evaluations do not mistake the player for a
+  foreground-only demo. The current Android output includes a foreground media
+  service, `MediaSession`, notification and lock-screen metadata and transport
+  controls, audio-focus handling, queue navigation, shuffle/repeat, seeking,
+  synchronized full-player bindings, a persistent mini-player, favourites,
+  editable playlists and explicit offline downloads.
+- **Player reliability behaviour**: documented guarded duration/position
+  polling while `MediaPlayer` is unprepared, buffering state, one controlled
+  retry of the same source after a preparation failure and the rule that an
+  error must not trigger a skip storm through the queue.
+- **Clear support boundary**: documented that image/artwork caching and explicit
+  offline file downloads exist, while transparent audio caching, adaptive
+  quality selection, guaranteed gapless playback, crossfade, DRM and resumable
+  downloads with progress do not yet exist. Stream bitrate and quality are
+  determined by the supplied source; ApkPy does not transcode audio.
+- **New 1.2.0 release guide**: `RELEASE_1.2.0.md` begins with a complete
+  native-player example and an implementation-oriented capability matrix.
+- **Native documents without a WebView**: added `rich_text()` for exact inline
+  spans, `markdown()` for headings, emphasis, links, code, quotes, lists,
+  checkboxes and dividers, and `tree_view()` for recursive expandable data.
+  Android emits selectable `Spannable` text and a `RecyclerView` containing
+  only visible hierarchy rows; plain projects do not ship these helpers.
+- **Runnable structured-content applications**:
+  `examples/16_knowledge_base.py` combines rich spans, Markdown and a workspace
+  hierarchy, while `examples/17_discussion_tree.py` demonstrates a formatted
+  article and nested social discussion.
+
+---
+
 ## [1.1.0] — 2026-07-16
 
 ### Added

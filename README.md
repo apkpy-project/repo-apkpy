@@ -107,6 +107,118 @@ favourites, downloads and editable playlists are all documented below.
 
 ---
 
+## ApkPy 1.2.0 makes the native audio foundation explicit
+
+The 1.2.0 release documents the native music capabilities that were already
+implemented but easy to miss when reading individual API entries:
+
+- local-file and URL playback, seeking and a metadata-aware playback queue;
+- a generated Android foreground media service that survives Activity changes,
+  backgrounding and a locked screen;
+- a native `MediaSession` plus notification and lock-screen metadata and
+  previous, play/pause and next controls;
+- native audio-focus pause, duck and resume behaviour;
+- next/previous, shuffle, repeat, synchronized player bindings and a persistent
+  mini-player;
+- favourites, persistent user playlists, playlist editing and explicit offline
+  downloads to app-private storage;
+- buffering state, safe duration/position polling and one retry of the same
+  source after a prepare failure, without advancing through the queue on error.
+
+```python
+audio.play_background(
+    "https://cdn.example.com/night-drive.mp3",
+    title="Night Drive",
+    artist="Nova",
+    art="https://cdn.example.com/night-drive.jpg",
+)
+
+audio.play_playlist(
+    sources,
+    titles=titles,
+    artists=artists,
+    arts=artwork,
+    start=0,
+)
+
+audio.now_playing(progress=seek, time=elapsed, cover=cover,
+                  title=title, artist=artist)
+audio.controls(play_pause=play_pause, shuffle=shuffle, repeat=repeat)
+mini_player(open=player)
+```
+
+This is a capability statement, not inflated marketing. Transparent audio
+caching, adaptive quality selection, guaranteed gapless playback, crossfade,
+DRM and resumable downloads with progress are **not supported yet**. ApkPy
+streams the source supplied by the app without transcoding it; the server and
+source determine its bitrate and quality.
+
+[Read the complete 1.2.0 release guide](RELEASE_1.2.0.md)
+
+### Eight native runtime areas in ApkPy 1.2.0
+
+| Area | Public surface | Android foundation |
+| --- | --- | --- |
+| Large feeds | `virtual_collection()` | recycled `RecyclerView` rows or grid cells |
+| Reactive UI | `state()` and `lifecycle()` | observable fields and Activity lifecycle |
+| Transfers | `uploads` | streaming multipart worker with progress/cancel |
+| Live data | `websocket` | OkHttp WSS, ping/pong, queue and reconnect |
+| Video | `video()` | Media3/ExoPlayer |
+| Push | `push` | conditional Firebase Messaging output |
+| Location | `map_view()`, `routes`, `location` | OpenStreetMap, Fused Location and foreground service |
+| Documents | `rich_text()`, `markdown()`, `tree_view()` | native spans and a visible-row `RecyclerView` |
+
+```python
+from apkpy_lib import Screen, markdown, rich_text, tree_view
+
+knowledge = Screen(id="knowledge", scroll=True)
+
+rich_text(
+    [
+        {"text": "FIELD NOTE\n", "bold": True,
+         "color": "#22D3EE", "size": 12},
+        {"text": "Small interfaces, ", "bold": True, "size": 23},
+        {"text": "deep structure.", "bold": True, "italic": True,
+         "color": "#C4B5FD", "size": 23},
+    ],
+    screen=knowledge,
+)
+
+markdown(
+    """## Build log
+
+> Selectable, structured and native.
+
+- [x] **Bold**, *italic*, ~~strike~~ and `inline code`
+- [x] Lists, links, quotes and dividers
+""",
+    screen=knowledge,
+)
+
+tree_view(
+    [{
+        "key": "workspace",
+        "title": "Workspace",
+        "children": [
+            {"title": "Roadmap", "subtitle": "Q3 planning"},
+            {"title": "Release notes", "subtitle": "12 entries"},
+        ],
+    }],
+    expand_depth=1,
+    row_height=60,
+    screen=knowledge,
+)
+```
+
+Android uses `SpannableStringBuilder` and a recycled `RecyclerView`; no WebView
+or JavaScript runtime is added. The application keeps ownership of storage,
+sync, authentication and moderation.
+
+[Read the native rich-content guide](docs/rich-content.md) ·
+[See the complete 1.2.0 runtime page](docs/version-1.2.0.md)
+
+---
+
 ## ✨ What's in v1.0.0
 
 > One-command APK builds, automatic encrypted storage, AES-256-GCM + PBKDF2 security, real Python logic, native media playback, rich lists, bottom navigation, and scrollable screens.

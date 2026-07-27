@@ -2,6 +2,37 @@
 
 ApkPy provides the building blocks for music and podcast applications: foreground playback, queues, player bindings, favourites, user playlists, downloads and OAuth.
 
+## What "native playback" means here
+
+This is not a player that only works while one screen remains open. When an app
+uses background playback, ApkPy generates an Android foreground media service
+and a `MediaSession`. The service owns the active source, queue and metadata;
+Activities display and control that state instead of creating unrelated players.
+
+| Area | Available today |
+| --- | --- |
+| Sources | Local paths and normal HTTP/HTTPS audio sources accepted by Android's media stack |
+| Background | Playback continues across Activity changes, app backgrounding and a locked screen |
+| System UI | Notification and lock-screen title, artist, artwork, state and transport controls |
+| Focus | Native pause, duck and resume handling when another app needs audio |
+| Queue | Metadata-aware next, previous, shuffle, repeat and start by index or source URL |
+| Player UI | Bound progress, elapsed/duration, cover, title, artist and synchronized controls |
+| Library | Persistent favourites and editable user playlists |
+| Offline | Explicit asynchronous downloads to app-private storage |
+| Preview | The same public playback, queue, binding and playlist calls for desktop testing |
+
+The generated service also guards calls to duration and current position until
+the Android player is prepared, reports buffering while preparing, and retries
+the same source once after a preparation failure. A failed source is not used as
+a reason to skip rapidly through the rest of the queue.
+
+!!! note "Precise support boundary"
+    Artwork can use ApkPy's bounded image cache, and complete audio files can be
+    downloaded explicitly. The current player does not yet promise transparent
+    audio caching, adaptive quality selection, guaranteed gapless playback,
+    crossfade, DRM or resumable downloads with progress. ApkPy does not transcode
+    a stream: its bitrate and quality come from the source selected by the app.
+
 ## Play audio
 
 ~~~ python
