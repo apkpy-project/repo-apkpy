@@ -1,3 +1,8 @@
+---
+title: ApkPy
+description: Build native Android Java, XML and Gradle projects from a supported declarative Python API.
+---
+
 <section class="home-hero">
   <div class="home-hero__copy">
     <span class="eyebrow">APKPY / PYTHON → ANDROID</span>
@@ -5,12 +10,14 @@
     <p>ApkPy is a source-to-source compiler for native Android apps. You describe screens, state and callbacks in Python; ApkPy generates Activities, XML layouts, drawables, resources and manifest entries that Android understands directly.</p>
     <div class="home-hero__actions">
       <a class="md-button md-button--primary" href="getting-started/">Install and build</a>
+      <a class="md-button home-hero__secondary" href="can-apkpy-build-this/">Can it build my app?</a>
       <a class="text-link" href="architecture/">Read how generation works <span>→</span></a>
     </div>
     <div class="hero-facts" aria-label="ApkPy output facts">
       <span><strong>1</strong> Python source tree</span>
       <span><strong>0</strong> Python runtimes in the APK</span>
-      <span><strong>16</strong> Activities in the 1.1 showcase</span>
+      <span><strong>164</strong> transpiler checks</span>
+      <span><strong>16</strong> focused module checks</span>
     </div>
   </div>
   <div class="editor-card" aria-label="Example ApkPy source code">
@@ -35,9 +42,29 @@
 
 <div class="release-line">
   <span class="release-line__pulse"></span>
-  <strong>ApkPy 1.2.0</strong>
-  <span>Live data, media, device runtime and native documents</span>
-  <a href="version-1.2.0/">Explore the update</a>
+  <strong>ApkPy 1.2.2</strong>
+  <span>Keyed feed mutations, live merging and optimistic rollback</span>
+  <a href="production-feeds/">Build a production feed</a>
+</div>
+
+<section class="home-proof">
+  <div>
+    <span>INSPECTABLE OUTPUT</span>
+    <strong>Python in. Native Android out.</strong>
+    <p>Open the generated Java, XML and Gradle project in Android Studio. ApkPy does not hide a web page or Python interpreter inside the APK.</p>
+  </div>
+  <a href="trust-maturity/">See the validation evidence <span>→</span></a>
+</section>
+
+## Start from the product you are building
+
+<div class="guide-path-grid guide-path-grid--home">
+  <a href="guides/feed-api/"><strong>Social or catalog feed</strong><span>Pagination, refresh and optimistic actions.</span></a>
+  <a href="guides/chat-realtime/"><strong>Chat or live activity</strong><span>WebSocket reconnect, queued sends and push.</span></a>
+  <a href="guides/media-player/"><strong>Music or media app</strong><span>Background playback, playlists and lock screen.</span></a>
+  <a href="guides/maps-tracking/"><strong>Delivery or tracking</strong><span>Maps, fused location and calculated routes.</span></a>
+  <a href="guides/knowledge-app/"><strong>Notes or knowledge</strong><span>Native Markdown, rich text, trees and SQLite.</span></a>
+  <a href="can-apkpy-build-this/"><strong>Compare complete app types</strong><span>See what ApkPy owns and what your backend owns.</span></a>
 </div>
 
 ## One source file, two useful feedback loops
@@ -122,6 +149,7 @@ The compiler creates only the helpers a project needs. A simple screen stays sma
   <div><span>Interface</span><strong>Theme · cards · lists · grids · flex · responsive · app bars</strong><p>Compose a reusable hierarchy and override it through component or ID selectors.</p></div>
   <div><span>State</span><strong>Inputs · callbacks · loops · conditions · content states</strong><p>Read and update values using normal supported Python control flow.</p></div>
   <div><span>Data</span><strong>SQLite · REST · encrypted storage · files</strong><p>Keep local data, call APIs and download private app files without a separate plugin layer.</p></div>
+  <div><span>Feeds</span><strong>Pagination · refresh · keyed merge · optimistic rollback</strong><p>Keep long timelines responsive while the application remains in control of cursors and conflict rules.</p></div>
   <div><span>Media</span><strong>Queues · background audio · playlists · mini-player</strong><p>Generate an Android foreground media service, notification controls and persistent libraries.</p></div>
   <div><span>Identity</span><strong>OAuth 2.0 + PKCE · Google · Spotify · GitHub</strong><p>Use browser authorization and generated deep-link handling without embedding a client secret.</p></div>
   <div><span>Device</span><strong>Camera · gallery · location · notifications · app inspection</strong><p>Declare the API and let ApkPy add the matching permission and native Android integration.</p></div>
@@ -238,7 +266,7 @@ plain_text = crypto.decrypt(ciphertext)</code></pre>
 
 ## Four small products used as regression tests
 
-The 1.1 showcase is executable code, not a set of design mockups. Every app has four screens, working navigation and generated Android output. Together they deliberately exercise different palettes and layout choices.
+The showcase is executable code, not a set of design mockups. Every app has four screens, working navigation and generated Android output. Together they deliberately exercise different palettes and layout choices.
 
 <div class="showcase-grid showcase-grid--home">
   <a class="showcase-card" href="showcase/#lumen-personal-finance">
@@ -273,7 +301,7 @@ The 1.1 showcase is executable code, not a set of design mockups. Every app has 
   <details><summary>Does the APK contain Python?</summary><p>No. ApkPy compiles the supported source model into native Android Java, XML and resources. The generated application does not bundle a Python interpreter.</p></details>
   <details><summary>Can I open the result in Android Studio?</summary><p>Yes. <code>apkpy build</code> produces a Gradle project ZIP intended for inspection, emulator testing and normal Android tooling.</p></details>
   <details><summary>Is every Python library supported?</summary><p>No. ApkPy supports a deliberate Python subset plus its own Android-facing APIs. Arbitrary CPython packages cannot automatically become Java. The <a href="api-reference/">API reference</a> is the contract.</p></details>
-  <details><summary>Should I trust only the desktop preview?</summary><p>No. Use the Previewer for fast feedback, then test device-only behavior, permissions, services and final rendering on an emulator or physical Android device.</p></details>
+  <details><summary>Should I trust only the desktop preview?</summary><p>No. Use the Previewer for fast feedback, then test device-only behavior, permissions, services and final rendering on an emulator or physical Android device. <a href="preview-android/">See the renderer comparison.</a></p></details>
 </div>
 
 <section class="closing-panel">

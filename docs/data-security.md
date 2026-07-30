@@ -1,5 +1,8 @@
 # Data, network and security
 
+For an end-to-end local example, start with
+[SQLite and protected local data](guides/sqlite-security.md).
+
 ## Encrypted key/value storage
 
 ~~~ python

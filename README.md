@@ -13,6 +13,82 @@
 
 ---
 
+## ApkPy 1.2.2 - Keyed feed mutations
+
+ApkPy 1.2.2 extends `virtual_collection()` with efficient operations for
+records that are already on screen:
+
+```python
+feed.prepend_items([new_post])
+feed.update_item(
+    "post-42",
+    {"liked": True, "likes": 129},
+    optimistic="like-post-42",
+)
+feed.remove_item("post-19", optimistic="delete-post-19")
+feed.merge_items(websocket_items, key="id")
+
+if request_succeeded:
+    feed.commit("like-post-42")
+else:
+    feed.rollback("like-post-42")
+```
+
+Existing order and scroll position are preserved. Android emits targeted
+adapter notifications for prepend, update and remove, while merges and
+rollbacks use `DiffUtil`. The Previewer follows the same stable-key and
+optimistic-transaction contract.
+
+[Build a production feed](docs/production-feeds.md) ·
+[Compatibility and limits](docs/compatibility.md) ·
+[Read the complete 1.2.2 guide](RELEASE_1.2.2.md)
+
+---
+
+## ApkPy 1.2.1 — Production Feeds
+
+Version 1.2.1 adds application-controlled pagination to
+`virtual_collection()`. Timelines, chats, music libraries, product catalogues
+and delivery lists can now append pages efficiently, request the next page
+before the reader reaches the final row and refresh from the top.
+
+```python
+feed = virtual_collection(
+    [],
+    template={
+        "image": "{avatar}",
+        "title": "{author}",
+        "subtitle": "{message}",
+        "meta": "{time}",
+    },
+    on_end_reached=load_more,
+    on_refresh=reload_feed,
+    prefetch=4,
+    screen=home,
+)
+
+def page_loaded(success, body):
+    if success:
+        feed.append_items(json_get(body, "items"), has_more=True)
+    else:
+        feed.finish_load()  # releases the latch so the request can be retried
+```
+
+The loading latch rejects duplicate end callbacks. `has_more=False` stops
+further page requests until a refresh. `feed.refresh()` starts the same flow as
+the pull gesture, while `set_items(..., has_more=...)` replaces the records and
+completes an active refresh automatically.
+
+On Android this is a native `RecyclerView.OnScrollListener`,
+`notifyItemRangeInserted()` and, only when refresh is requested,
+`SwipeRefreshLayout 1.2.0`. Plain virtual collections receive no new helper
+code or refresh dependency.
+
+[Read the complete 1.2.1 guide](RELEASE_1.2.1.md) ·
+[Open the site release page](docs/version-1.2.1.md)
+
+---
+
 ## ✨ What's new in ApkPy 1.1.0
 
 Version 1.1.0 turns ApkPy's styling layer into a complete native design system.

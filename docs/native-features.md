@@ -1,5 +1,9 @@
 # Native Android features
 
+Task guides: [Firebase push](guides/push-firebase.md),
+[streaming uploads](guides/uploads.md) and
+[maps with continuous location](guides/maps-tracking.md).
+
 ## Permissions
 
 Declare permissions before running the app:

@@ -1,6 +1,6 @@
 site_name: ApkPy
 site_url: https://repo-apkpy.pages.dev/
-site_description: Build native Android applications in pure Python.
+site_description: Generate native Android Java, XML and Gradle projects from a supported declarative Python API.
 site_author: ApkPy
 
 docs_dir: docs
@@ -10,6 +10,7 @@ strict: true
 
 theme:
   name: material
+  custom_dir: docs/overrides
   language: en
   font: false
   logo: assets/logo.svg
@@ -66,16 +67,30 @@ extra_css:
 
 extra_javascript:
   - javascripts/release-12.js
+  - javascripts/production-feeds.js
+  - javascripts/site-guide.js
 
 nav:
   - Home: index.md
+  - Can ApkPy build this?: can-apkpy-build-this.md
   - Showcase: showcase.md
   - Start:
       - Installation: getting-started.md
       - Core concepts: core-concepts.md
       - How generation works: architecture.md
+  - Guides:
+      - Guide index: guides/index.md
+      - API-backed feed: guides/feed-api.md
+      - Real-time chat: guides/chat-realtime.md
+      - Firebase push: guides/push-firebase.md
+      - Background audio: guides/media-player.md
+      - SQLite and security: guides/sqlite-security.md
+      - Streaming uploads: guides/uploads.md
+      - Maps and tracking: guides/maps-tracking.md
+      - Knowledge app: guides/knowledge-app.md
   - Build interfaces:
       - Components and layouts: ui-components.md
+      - Production feeds: production-feeds.md
       - Rich text, Markdown and trees: rich-content.md
       - Themes and styling: themes-styling.md
       - Screens and navigation: navigation.md
@@ -89,7 +104,20 @@ nav:
       - Cloudflare Pages: cloudflare-pages.md
       - Troubleshooting: troubleshooting.md
   - Reference:
-      - Public API: api-reference.md
+      - API overview: api-reference.md
+      - UI and layouts: reference/ui-layouts.md
+      - Feeds and state: reference/feeds.md
+      - Media and files: reference/media.md
+      - Network, data and security: reference/network-data.md
+      - Device and Android: reference/device.md
+      - Rich documents: reference/documents.md
+      - Compatibility and limits: compatibility.md
+      - Trust and maturity: trust-maturity.md
+      - Previewer versus Android: preview-android.md
+      - FAQ: faq.md
+      - Version index: versions.md
+      - Version 1.2.2: version-1.2.2.md
+      - Version 1.2.1: version-1.2.1.md
       - Version 1.2.0: version-1.2.0.md
       - Version 1.1.0: version-1.1.0.md
       - Version 1.0.0: version-1.0.0.md

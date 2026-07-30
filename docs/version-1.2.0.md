@@ -158,6 +158,11 @@ The Previewer calculates the visible window. Android generates a
 `RecyclerView.Adapter` and ViewHolders, so scrolling cost tracks the viewport
 rather than the total record count.
 
+!!! update "Extended in 1.2.1"
+    [Production Feeds](version-1.2.1.md) adds guarded end-of-list pagination,
+    prefetch, efficient page insertion and pull-to-refresh to this component
+    without changing the 1.2.0 template model.
+
 ## 2. Reactive state and screen lifecycle
 
 `state()` returns an observable value. A callback mutates the value once and

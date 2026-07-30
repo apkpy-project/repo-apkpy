@@ -2,6 +2,9 @@
 
 ApkPy provides the building blocks for music and podcast applications: foreground playback, queues, player bindings, favourites, user playlists, downloads and OAuth.
 
+Start with the copyable [Spotify-style background audio guide](guides/media-player.md),
+then return here for the complete capability matrix and limitations.
+
 ## What "native playback" means here
 
 This is not a player that only works while one screen remains open. When an app

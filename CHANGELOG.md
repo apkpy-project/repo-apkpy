@@ -6,6 +6,73 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.2.2] — Unreleased
+
+### Added
+
+- `prepend_items(items)` for stable top insertion without moving the visible
+  record.
+- `update_item(item_id, changes, key="id", optimistic=False)` and
+  `remove_item(item_id, key="id", optimistic=False)` for keyed record changes.
+- `merge_items(items, key="id")` for in-place live reconciliation without
+  duplicate stable IDs.
+- `commit(mutation_id=None)` and `rollback(mutation_id=None)` with first-state
+  snapshots for optimistic transactions.
+
+### Android and Previewer
+
+- Generated RecyclerViews use targeted range/change/remove notifications.
+- Multi-record merges and rollbacks dispatch a native `DiffUtil` result.
+- Mutation helpers are conditionally emitted only when the new API is used.
+- The Previewer preserves virtual scroll position and follows the same keyed
+  transaction rules.
+
+### Validation
+
+- Added runtime tests for keyed merge, removal, commit, rollback and repeated
+  changes in one optimistic transaction.
+- Added generated-source tests for targeted adapter notifications,
+  conditional `DiffUtil` output and optimistic history.
+
+---
+
+## [1.2.1] — Unreleased
+
+### Added
+
+- **Incremental virtual collections**: `virtual_collection()` now accepts
+  `on_end_reached`, `on_refresh` and `prefetch`.
+- **Efficient page insertion**: `append_items(items, has_more=True)` preserves
+  the current records and scroll position while Android uses
+  `notifyItemRangeInserted()`.
+- **Explicit request completion**: `finish_load()` releases the loading latch
+  after an empty response or recoverable error, and `refresh()` starts the same
+  guarded callback as the top pull gesture.
+- **End-of-results state**: `has_more=False` prevents new page requests until a
+  refresh begins a new pagination generation.
+- **Native Android refresh**: generated projects use
+  `RecyclerView.OnScrollListener`; `SwipeRefreshLayout 1.2.0` is emitted only
+  for collections with `on_refresh`.
+- **Production Feeds demo**: the English `playground/writehere.py` example
+  includes a list, grid, prefetch, refresh, deliberate failure, retry and
+  no-more-results path.
+
+### Changed
+
+- The generated Android toolchain baseline is now AGP 8.6.1, Gradle 8.7 and
+  compile SDK 35 so the stable SwipeRefreshLayout 1.2.0 artifact can compile.
+  Projects without refresh keep their dependency graph free of
+  SwipeRefreshLayout.
+
+### Validation
+
+- Added focused feed-state, generated-code and conditional-dependency tests.
+- Verified the generated Java contains the native listener, duplicate-request
+  latch and range insertion.
+- Built the generated Android demo with Gradle successfully.
+
+---
+
 ## [1.2.0] — 2026-07-27
 
 ### Added and documented

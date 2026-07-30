@@ -68,6 +68,10 @@ The showcase is a visual test of the library, not a set of static mockups. Each 
 
 ## Validation snapshot
 
-The current local review generated four Android projects with a total of sixteen screen Activities. Every generated XML file passed parsing, generated Java passed structural checks, and the main transpiler suite completed with 146 passing tests.
+The current local review generated four Android projects with a total of sixteen
+screen Activities. The wider 1.2.2 release-candidate validation completed 164
+transpiler regression checks, 16 focused module checks and a real Gradle debug
+APK build.
 
-The runnable showcase sources are kept with the 1.1 release preparation so they can be reviewed before publication.
+The runnable showcase sources are kept with the project examples so they can be
+reviewed and regenerated instead of being treated as static mockups.

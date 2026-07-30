@@ -1,5 +1,8 @@
 # Native rich content
 
+Build the three components together in the
+[native knowledge app guide](guides/knowledge-app.md).
+
 ApkPy can render styled text, Markdown and expandable hierarchies without
 embedding a browser in the application. The Previewer uses native desktop text
 widgets; the Android build emits `Spannable` text and a `RecyclerView`.

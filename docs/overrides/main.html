@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {{ super() }}
+  {% set social_title = page.title if page else config.site_name %}
+  {% set social_description = page.meta.description if page and page.meta and page.meta.description else config.site_description %}
+  {% set social_url = page.canonical_url if page else config.site_url %}
+  <meta name="robots" content="index,follow,max-image-preview:large">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="ApkPy">
+  <meta property="og:title" content="{{ social_title }}">
+  <meta property="og:description" content="{{ social_description }}">
+  <meta property="og:url" content="{{ social_url }}">
+  <meta property="og:image" content="{{ config.site_url }}assets/apkpy-social-card.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ social_title }}">
+  <meta name="twitter:description" content="{{ social_description }}">
+  <meta name="twitter:image" content="{{ config.site_url }}assets/apkpy-social-card.png">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "ApkPy",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Windows, macOS, Linux",
+    "url": "{{ config.site_url }}",
+    "description": "{{ config.site_description }}",
+    "softwareVersion": "1.2.2",
+    "programmingLanguage": "Python",
+    "image": "{{ config.site_url }}assets/apkpy-social-card.png"
+  }
+  </script>
+{% endblock %}

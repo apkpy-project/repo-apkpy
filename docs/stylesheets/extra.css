@@ -1043,6 +1043,591 @@ body:has(.home-hero) .md-content__inner {
   }
 }
 
+/* Decision, guide and evidence pages */
+
+.home-hero__secondary {
+  border-color: color-mix(in srgb, var(--apkpy-cyan) 46%, transparent) !important;
+  color: var(--md-default-fg-color) !important;
+}
+
+.home-proof {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  margin: 1.2rem 0 3rem;
+  padding: 1.25rem 1.4rem;
+  border: 1px solid color-mix(in srgb, var(--apkpy-cyan) 28%, var(--md-default-fg-color--lightest));
+  border-radius: 0.7rem;
+  background:
+    linear-gradient(100deg, color-mix(in srgb, var(--apkpy-cyan) 8%, transparent), transparent 55%),
+    var(--md-code-bg-color);
+}
+
+.home-proof > div {
+  display: grid;
+  gap: 0.22rem;
+}
+
+.home-proof span,
+.capability-card__status,
+.renderer-compare section > span {
+  color: var(--apkpy-cyan);
+  font: 800 0.58rem/1.4 ui-monospace, Consolas, monospace;
+  letter-spacing: 0.06em;
+}
+
+.home-proof strong {
+  font-size: 1rem;
+}
+
+.home-proof p {
+  max-width: 44rem;
+  margin: 0;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.7rem;
+}
+
+.home-proof > a {
+  flex: 0 0 auto;
+  color: var(--apkpy-cyan);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+.guide-path-grid,
+.guide-hub,
+.api-module-grid,
+.capability-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin: 1rem 0 2.2rem;
+}
+
+.guide-path-grid a,
+.guide-hub a,
+.api-module-grid a {
+  position: relative;
+  display: grid;
+  gap: 0.28rem;
+  min-height: 7rem;
+  padding: 1.15rem 1.2rem;
+  overflow: hidden;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.65rem;
+  background: var(--md-code-bg-color);
+  color: var(--md-default-fg-color);
+  text-decoration: none;
+  transition: border-color 160ms ease, transform 160ms ease, background-color 160ms ease;
+}
+
+.guide-path-grid a::after,
+.guide-hub a::after,
+.api-module-grid a::after {
+  position: absolute;
+  right: 1rem;
+  bottom: 0.8rem;
+  color: var(--apkpy-cyan);
+  content: "→";
+  font-weight: 900;
+}
+
+.guide-path-grid a:hover,
+.guide-hub a:hover,
+.api-module-grid a:hover {
+  border-color: color-mix(in srgb, var(--apkpy-cyan) 62%, transparent);
+  background: color-mix(in srgb, var(--apkpy-cyan) 5%, var(--md-code-bg-color));
+  transform: translateY(-2px);
+}
+
+.guide-path-grid strong,
+.guide-hub strong,
+.api-module-grid strong {
+  font-size: 0.82rem;
+}
+
+.guide-path-grid span,
+.guide-hub p,
+.api-module-grid p {
+  margin: 0;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.66rem;
+  line-height: 1.5;
+}
+
+.guide-hub a > span,
+.api-module-grid a > span {
+  color: var(--apkpy-cyan);
+  font: 800 0.56rem/1.4 ui-monospace, Consolas, monospace;
+}
+
+.guide-path-grid--home {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.capability-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+  margin: 1.2rem 0 1rem;
+}
+
+.capability-filter {
+  padding: 0.42rem 0.7rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--md-default-fg-color--light);
+  cursor: pointer;
+  font: 700 0.64rem/1.2 inherit;
+}
+
+.capability-filter:hover,
+.capability-filter:focus-visible,
+.capability-filter.is-active {
+  border-color: var(--apkpy-cyan);
+  background: color-mix(in srgb, var(--apkpy-cyan) 12%, transparent);
+  color: var(--md-default-fg-color);
+  outline: none;
+}
+
+.capability-card {
+  min-height: 12.4rem;
+  padding: 1.15rem 1.2rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.7rem;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--apkpy-cyan) 5%, transparent), transparent 46%),
+    var(--md-code-bg-color);
+}
+
+.capability-card[hidden] {
+  display: none;
+}
+
+.md-typeset .capability-card h2 {
+  margin: 0.65rem 0 0.4rem;
+  font-size: 1.05rem;
+}
+
+.capability-card p {
+  margin: 0;
+  font-size: 0.7rem;
+}
+
+.capability-card small {
+  display: block;
+  margin-top: 0.8rem;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.61rem;
+  line-height: 1.5;
+}
+
+.capability-card__status--partial {
+  color: #f59e0b;
+}
+
+.capability-result {
+  min-height: 1.2rem;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.64rem;
+}
+
+.proof-band {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 1.1rem 0 2.2rem;
+  overflow: hidden;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.65rem;
+  background: var(--md-default-fg-color--lightest);
+}
+
+.proof-band article {
+  display: grid;
+  gap: 0.22rem;
+  padding: 1.15rem;
+  background: var(--md-code-bg-color);
+}
+
+.proof-band strong {
+  color: var(--apkpy-cyan);
+  font-size: 1.05rem;
+}
+
+.proof-band span {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.61rem;
+}
+
+.renderer-compare {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: stretch;
+  gap: 0.8rem;
+  margin: 1.1rem 0 2.2rem;
+}
+
+.renderer-compare section {
+  padding: 1.3rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.7rem;
+  background: var(--md-code-bg-color);
+}
+
+.md-typeset .renderer-compare h2 {
+  margin: 0.5rem 0 0.35rem;
+}
+
+.renderer-compare p,
+.renderer-compare li {
+  font-size: 0.66rem;
+}
+
+.renderer-arrow {
+  align-self: center;
+  padding: 0.42rem 0.68rem;
+  border: 1px solid color-mix(in srgb, var(--apkpy-cyan) 40%, transparent);
+  border-radius: 999px;
+  color: var(--apkpy-cyan);
+  font: 700 0.55rem/1.2 ui-monospace, Consolas, monospace;
+  white-space: nowrap;
+}
+
+@media screen and (max-width: 52em) {
+  .guide-path-grid--home,
+  .proof-band {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .renderer-compare {
+    grid-template-columns: 1fr;
+  }
+
+  .renderer-arrow {
+    justify-self: start;
+  }
+}
+
+@media screen and (max-width: 36em) {
+  .home-proof {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .guide-path-grid,
+  .guide-hub,
+  .api-module-grid,
+  .capability-grid,
+  .guide-path-grid--home,
+  .proof-band {
+    grid-template-columns: 1fr;
+  }
+
+  .capability-card {
+    min-height: 0;
+  }
+}
+
+/* Production Feeds guide */
+.feed-guide-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(14rem, 0.55fr);
+  gap: clamp(1.5rem, 5vw, 4rem);
+  align-items: end;
+  overflow: hidden;
+  margin: 0 0 2.4rem;
+  padding: clamp(1.5rem, 5vw, 3.6rem);
+  border: 1px solid #2c3440;
+  border-radius: 0.85rem;
+  background:
+    linear-gradient(125deg, rgba(34, 211, 238, 0.08), transparent 38%),
+    #101319;
+  color: #f8fafc;
+}
+
+.feed-guide-hero > div > span,
+.compat-hero > span {
+  color: #67e8f9;
+  font: 750 0.62rem/1.4 ui-monospace, Consolas, monospace;
+  letter-spacing: 0.14em;
+}
+
+.md-typeset .feed-guide-hero h2,
+.md-typeset .compat-hero h2 {
+  max-width: 45rem;
+  margin: 0.7rem 0 0.8rem;
+  color: #f8fafc;
+  font-size: clamp(2rem, 5vw, 3.8rem);
+  line-height: 1.02;
+  letter-spacing: -0.045em;
+}
+
+.feed-guide-hero p,
+.compat-hero p {
+  max-width: 45rem;
+  margin: 0;
+  color: #adb7c6;
+  font-size: 0.82rem;
+  line-height: 1.65;
+}
+
+.feed-guide-hero ol {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid #303946;
+  list-style: none;
+}
+
+.feed-guide-hero li {
+  display: grid;
+  grid-template-columns: 2.4rem 1fr;
+  gap: 0.5rem;
+  padding: 0.8rem 0;
+  border-bottom: 1px solid #303946;
+}
+
+.feed-guide-hero li b {
+  color: #67e8f9;
+  font: 700 0.58rem/1.55 ui-monospace, Consolas, monospace;
+}
+
+.feed-guide-hero li span {
+  color: #f8fafc;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.feed-lab {
+  overflow: hidden;
+  margin: 1.1rem 0 2.8rem;
+  border: 1px solid #313946;
+  border-radius: 0.75rem;
+  background: #0d1015;
+  color: #f8fafc;
+}
+
+.feed-lab > header {
+  display: grid;
+  grid-template-columns: auto minmax(12rem, 1fr);
+  gap: 1.2rem;
+  align-items: center;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid #2d3541;
+  background: #151922;
+}
+
+.feed-lab > header div span,
+.feed-lab > header div strong {
+  display: block;
+}
+
+.feed-lab > header div span {
+  color: #67e8f9;
+  font: 700 0.52rem/1.5 ui-monospace, Consolas, monospace;
+  letter-spacing: 0.12em;
+}
+
+.feed-lab > header div strong {
+  margin-top: 0.1rem;
+  font-size: 0.76rem;
+}
+
+.feed-lab > header p {
+  margin: 0;
+  color: #b9c2cf;
+  font-size: 0.64rem;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.feed-lab__flash {
+  animation: feed-lab-flash 360ms ease-out;
+}
+
+.feed-lab__list {
+  min-height: 14rem;
+  padding: 0.6rem 1rem;
+}
+
+.feed-lab__list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  padding: 0.8rem 0.2rem;
+  border-bottom: 1px solid #29313c;
+  transition: background-color 180ms ease, transform 180ms ease;
+}
+
+.feed-lab__list article:last-child {
+  border-bottom: 0;
+}
+
+.feed-lab__list article.is-changed {
+  border-radius: 0.35rem;
+  background: rgba(34, 211, 238, 0.075);
+  transform: translateX(0.2rem);
+}
+
+.feed-lab__list strong {
+  display: block;
+  font-size: 0.71rem;
+}
+
+.feed-lab__list p {
+  overflow: hidden;
+  margin: 0.22rem 0 0;
+  color: #aab4c2;
+  font-size: 0.63rem;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feed-lab__list article > div:last-child {
+  min-width: 5.6rem;
+  text-align: right;
+}
+
+.feed-lab__list span {
+  display: block;
+  color: #67e8f9;
+  font: 700 0.58rem/1.4 ui-monospace, Consolas, monospace;
+}
+
+.feed-lab__list b {
+  display: inline-block;
+  margin-top: 0.3rem;
+  padding: 0.17rem 0.34rem;
+  border-radius: 0.18rem;
+  background: #7457f6;
+  color: #fff;
+  font: 750 0.5rem/1 ui-monospace, Consolas, monospace;
+}
+
+.feed-lab__controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  border-top: 1px solid #2d3541;
+  background: #2d3541;
+}
+
+.feed-lab__controls button {
+  min-height: 2.55rem;
+  padding: 0.65rem 0.7rem;
+  border: 0;
+  background: #151922;
+  color: #c7baff;
+  cursor: pointer;
+  font: 750 0.58rem/1.25 ui-monospace, Consolas, monospace;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+
+.feed-lab__controls button:hover {
+  background: #1c2230;
+  color: #fff;
+}
+
+.feed-lab__controls button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid #67e8f9;
+  outline-offset: -3px;
+}
+
+.feed-lab__controls button:last-child {
+  color: #fff;
+  background: #26313a;
+}
+
+.compat-hero {
+  margin: 0 0 2.4rem;
+  padding: clamp(1.5rem, 5vw, 3.4rem);
+  border-left: 3px solid #22d3ee;
+  background:
+    radial-gradient(circle at 88% 24%, rgba(139, 92, 246, 0.16), transparent 24%),
+    #101319;
+  color: #f8fafc;
+}
+
+.verification-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  margin: 1rem 0 2.5rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.6rem;
+  background: var(--md-default-fg-color--lightest);
+}
+
+.verification-grid article {
+  min-height: 7.5rem;
+  padding: 1rem;
+  background: var(--md-default-bg-color);
+}
+
+.verification-grid strong,
+.verification-grid span {
+  display: block;
+}
+
+.verification-grid strong {
+  color: var(--apkpy-cyan);
+  font: 800 1.05rem/1 ui-monospace, Consolas, monospace;
+}
+
+.verification-grid span {
+  margin-top: 0.8rem;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.64rem;
+  line-height: 1.5;
+}
+
+@keyframes feed-lab-flash {
+  from { color: #67e8f9; transform: translateY(-0.15rem); }
+  to { color: #b9c2cf; transform: translateY(0); }
+}
+
+@media screen and (max-width: 52em) {
+  .feed-guide-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .verification-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media screen and (max-width: 36em) {
+  .feed-lab > header {
+    grid-template-columns: 1fr;
+  }
+
+  .feed-lab > header p {
+    text-align: left;
+  }
+
+  .feed-lab__controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .verification-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feed-lab__flash,
+  .feed-lab__list article {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
 /* Version 1.2.0 runtime notes --------------------------------------------- */
 
 body:has(.release12-hero) .md-grid {

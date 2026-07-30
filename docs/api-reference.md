@@ -6,6 +6,20 @@ This is the supported surface exported by <code>apkpy_lib</code>. Import individ
 from apkpy_lib import Screen, Theme, button, label, run
 ~~~
 
+## Browse by module
+
+<div class="api-module-grid">
+  <a href="../reference/ui-layouts/"><span>UI</span><strong>Screens, components and layout</strong><p>Theme, navigation, overlays and responsive composition.</p></a>
+  <a href="../reference/feeds/"><span>DATASET</span><strong>Feeds, state and lifecycle</strong><p>Virtual rows, paging, mutations and reactive bindings.</p></a>
+  <a href="../reference/media/"><span>MEDIA</span><strong>Audio, video, uploads and files</strong><p>Background playback, Media3 and streamed transfer.</p></a>
+  <a href="../reference/network-data/"><span>NETWORK</span><strong>HTTP, WebSocket, SQLite and crypto</strong><p>Remote data, local persistence and protected values.</p></a>
+  <a href="../reference/device/"><span>ANDROID</span><strong>Device integrations</strong><p>Push, maps, location, camera, permissions and services.</p></a>
+  <a href="../reference/documents/"><span>CONTENT</span><strong>Native documents</strong><p>Rich spans, Markdown and expandable trees.</p></a>
+</div>
+
+This page remains a compact all-in-one index. The module pages are easier to
+scan and link to complete task guides.
+
 ## App structure
 
 | API | Purpose |
@@ -36,7 +50,7 @@ from apkpy_lib import Screen, Theme, button, label, run
 | <code>card</code> | title, subtitle, image, content, actions and variant |
 | <code>card_action</code> | detached action for semantic cards |
 | <code>list_view</code> | items, click callback and optional rich rows |
-| <code>virtual_collection</code> | virtualized list/grid, reusable template, recycled Android ViewHolders |
+| <code>virtual_collection</code> | virtualized list/grid with reusable template, <code>on_end_reached</code>, <code>on_refresh</code> and <code>prefetch</code> |
 | <code>rich_text</code> | native inline spans with emphasis, colour, size, code and links |
 | <code>markdown</code> | native structured text without a WebView |
 | <code>tree_view</code> | expandable hierarchy backed by visible recycled rows |
@@ -54,7 +68,16 @@ Common component methods:
 | <code>get_value()</code> | Reads the current input/value |
 | <code>set_value(value)</code> | Updates text, image or input state where supported |
 | <code>show()</code> / <code>hide()</code> | Controls visibility |
-| <code>set_items(items, ...)</code> | Replaces list/carousel/grid content |
+| <code>set_items(items, has_more=True)</code> | Replaces collection content and completes an active refresh |
+| <code>append_items(items, has_more=True)</code> | Appends a virtual-collection page without resetting its position |
+| <code>prepend_items(items)</code> | Inserts records at the beginning while preserving the visible item |
+| <code>update_item(item_id, changes, key="id", optimistic=False)</code> | Patches one keyed record and optionally stores a rollback snapshot |
+| <code>remove_item(item_id, key="id", optimistic=False)</code> | Removes one keyed record and optionally stores a rollback snapshot |
+| <code>merge_items(items, key="id")</code> | Updates matching records in place and appends new keys without duplicates |
+| <code>rollback(mutation_id=None)</code> | Restores one optimistic transaction, or the latest pending transaction |
+| <code>commit(mutation_id=None)</code> | Accepts one optimistic transaction and discards its snapshot |
+| <code>finish_load(has_more=True)</code> | Releases a virtual collection after an empty or failed page |
+| <code>refresh()</code> | Starts the guarded <code>on_refresh</code> flow manually |
 
 ## Reactive state and lifecycle
 
@@ -168,5 +191,6 @@ gapless transitions.
 
 For behavior and security notes, use the topic guides rather than relying on this compact index alone.
 
-The full 1.2.0 examples, callback signatures and Previewer/Android differences
-are documented in the [Version 1.2.0 release guide](version-1.2.0.md).
+The [Version 1.2.1 guide](version-1.2.1.md) documents feed pagination,
+prefetch, refresh, retry and generated Android behavior. The wider runtime is
+documented in the [Version 1.2.0 guide](version-1.2.0.md).

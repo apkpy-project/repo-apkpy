@@ -1,0 +1,31 @@
+# ApkPy documentation
+
+Canonical site: https://repo-apkpy.pages.dev/
+Project: ApkPy
+Purpose: Generate native Android Java, XML and Gradle projects from a supported declarative Python API.
+Runtime: Generated APKs do not embed Python.
+
+Core documentation:
+- https://repo-apkpy.pages.dev/getting-started/
+- https://repo-apkpy.pages.dev/can-apkpy-build-this/
+- https://repo-apkpy.pages.dev/guides/
+- https://repo-apkpy.pages.dev/api-reference/
+- https://repo-apkpy.pages.dev/trust-maturity/
+- https://repo-apkpy.pages.dev/preview-android/
+- https://repo-apkpy.pages.dev/compatibility/
+- https://repo-apkpy.pages.dev/versions/
+
+Supported client areas:
+- Material UI, themes, navigation and responsive layouts
+- RecyclerView feeds, pagination, refresh and optimistic mutations
+- HTTPS, multipart uploads, WebSockets and Firebase push
+- SQLite, encrypted local values and password hashing
+- background audio, MediaSession, playlists and Media3 video
+- maps, route calculation, continuous and background location
+- native Markdown, rich text and expandable trees
+
+Important limits:
+- ApkPy does not generate a backend.
+- Arbitrary Python packages are not automatically supported.
+- Product-specific security, payments, recommendation, moderation and server infrastructure remain application responsibilities.
+- The desktop Previewer is not an Android emulator.
