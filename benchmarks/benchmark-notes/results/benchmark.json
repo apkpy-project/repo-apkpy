@@ -1,0 +1,87 @@
+{
+  "benchmark": "Benchmark Notes",
+  "date": "2026-08-17",
+  "dataset": {
+    "rows": 100,
+    "assets": "none",
+    "backend": "none",
+    "features": ["search", "add note", "favorites filter", "scrollable list"]
+  },
+  "method": {
+    "apk": "debug APK size in bytes",
+    "cold_start": "adb shell am force-stop + am start -W; median of 3 runs",
+    "memory": "dumpsys meminfo TOTAL PSS two seconds after launch",
+    "build": "last local source-to-APK command after dependencies were cached"
+  },
+  "source_lines": {
+    "rule": "physical Python entry-file lines; configuration and generated code excluded",
+    "apkpy": {"physical": 83, "nonblank_noncomment": 66},
+    "flet": {"physical": 70, "nonblank_noncomment": 58},
+    "kivy": {"physical": 78, "nonblank_noncomment": 67},
+    "beeware_toga": {"physical": 73, "nonblank_noncomment": 60}
+  },
+  "ui_smoke": {
+    "labels": ["Benchmark Notes", "Search notes", "FAVORITES ONLY", "ADD NOTE"],
+    "apkpy": "4/4 found",
+    "flet": "4/4 found",
+    "beeware_toga": "4/4 found"
+  },
+  "results": [
+    {
+      "framework": "ApkPy",
+      "apk_bytes": 5637396,
+      "apk_mib": 5.38,
+      "sha256": "F645523175C35367C75E4F78A614F963ED12C59501BD9B0EC2A67B344F5BA709",
+      "build_seconds": 20.863,
+      "build_command": "apkpy build + Gradle assembleDebug",
+      "cold_start_ms": [611, 590, 580],
+      "cold_start_median_ms": 590,
+      "pss_kb": [47188, 47494, 47375],
+      "pss_median_kb": 47375,
+      "status": "pass"
+    },
+    {
+      "framework": "Flet",
+      "version": "0.86.5",
+      "apk_bytes": 26505412,
+      "apk_mib": 25.28,
+      "sha256": "587C6AF47A87E395DA77A4700690A5BF2724465A25BB7105EE799DCA70A4A1BE",
+      "build_seconds": 143.009,
+      "build_command": "flet build apk --arch arm64-v8a --android-legacy-packaging",
+      "cold_start_ms": [1824, 1845, 1733],
+      "cold_start_median_ms": 1824,
+      "pss_kb": [208618, 211060, 211081],
+      "pss_median_kb": 211060,
+      "status": "pass",
+      "first_setup_seconds": 822.008
+    },
+    {
+      "framework": "BeeWare/Toga",
+      "briefcase": "0.4.4",
+      "toga": "0.5.6",
+      "apk_bytes": 35634620,
+      "apk_mib": 33.98,
+      "sha256": "D7018218B719DC06E067C05E871BEA80D654885907FE45EA1108F67BD4445A16",
+      "build_seconds": 17.783,
+      "build_command": "briefcase update android + briefcase build android",
+      "cold_start_ms": [2346, 2334, 2327],
+      "cold_start_median_ms": 2334,
+      "pss_kb": [81630, 81371, 81647],
+      "pss_median_kb": 81630,
+      "status": "pass"
+    },
+    {
+      "framework": "Kivy",
+      "version": "2.3.1",
+      "status": "blocked",
+      "reason": "Buildozer/python-for-android was unavailable and WSL had no installed distribution.",
+      "source_smoke": "pass"
+    }
+  ],
+  "ratios": {
+    "flet_apk_vs_apkpy": 4.70,
+    "beeware_apk_vs_apkpy": 6.32,
+    "flet_pss_vs_apkpy": 4.46,
+    "beeware_pss_vs_apkpy": 1.72
+  }
+}

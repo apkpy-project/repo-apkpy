@@ -74,12 +74,15 @@ nav:
   - Home: index.md
   - Can ApkPy build this?: can-apkpy-build-this.md
   - Showcase: showcase.md
+  - Benchmarks: benchmark.md
   - Start:
       - Installation: getting-started.md
+      - End-to-end tutorial: tutorial-end-to-end.md
       - Core concepts: core-concepts.md
       - How generation works: architecture.md
   - Guides:
       - Guide index: guides/index.md
+      - Data Core: data-core.md
       - API-backed feed: guides/feed-api.md
       - Real-time chat: guides/chat-realtime.md
       - Firebase push: guides/push-firebase.md
@@ -103,7 +106,9 @@ nav:
       - Build and release: build-release.md
       - Cloudflare Pages: cloudflare-pages.md
       - Troubleshooting: troubleshooting.md
+      - Community and support: community.md
   - Reference:
+      - Essential API: reference/essential.md
       - API overview: api-reference.md
       - UI and layouts: reference/ui-layouts.md
       - Feeds and state: reference/feeds.md
@@ -116,6 +121,7 @@ nav:
       - Previewer versus Android: preview-android.md
       - FAQ: faq.md
       - Version index: versions.md
+      - Version 1.3.0: version-1.3.0.md
       - Version 1.2.2: version-1.2.2.md
       - Version 1.2.1: version-1.2.1.md
       - Version 1.2.0: version-1.2.0.md

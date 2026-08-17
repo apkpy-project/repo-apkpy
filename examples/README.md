@@ -41,6 +41,7 @@ apkpy build
 | `18_social_feed.py` | Pagination, prefetch, refresh and live prepend |
 | `19_product_catalog.py` | Virtual grid, SKU merge and optimistic removal |
 | `20_chat_history.py` | Older-message prepend, local sends and delivery state |
+| `21_data_core_notes.py` | Typed SQLite, async CRUD, refresh and explicit migration |
 
 ## Practical note
 

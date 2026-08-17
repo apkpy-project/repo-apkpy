@@ -7,19 +7,27 @@ Runtime: Generated APKs do not embed Python.
 
 Core documentation:
 - https://repo-apkpy.pages.dev/getting-started/
+- https://repo-apkpy.pages.dev/tutorial-end-to-end/
 - https://repo-apkpy.pages.dev/can-apkpy-build-this/
 - https://repo-apkpy.pages.dev/guides/
+- https://repo-apkpy.pages.dev/reference/essential/
 - https://repo-apkpy.pages.dev/api-reference/
+- https://repo-apkpy.pages.dev/troubleshooting/
+- https://repo-apkpy.pages.dev/community/
+- https://repo-apkpy.pages.dev/showcase/
 - https://repo-apkpy.pages.dev/trust-maturity/
 - https://repo-apkpy.pages.dev/preview-android/
 - https://repo-apkpy.pages.dev/compatibility/
 - https://repo-apkpy.pages.dev/versions/
+- https://repo-apkpy.pages.dev/data-core/
+- https://repo-apkpy.pages.dev/version-1.3.0/
+- https://repo-apkpy.pages.dev/benchmark/
 
 Supported client areas:
 - Material UI, themes, navigation and responsive layouts
 - RecyclerView feeds, pagination, refresh and optimistic mutations
 - HTTPS, multipart uploads, WebSockets and Firebase push
-- SQLite, encrypted local values and password hashing
+- typed SQLite models, asynchronous CRUD, transactions, migrations, encrypted local values and password hashing
 - background audio, MediaSession, playlists and Media3 video
 - maps, route calculation, continuous and background location
 - native Markdown, rich text and expandable trees
@@ -29,3 +37,22 @@ Important limits:
 - Arbitrary Python packages are not automatically supported.
 - Product-specific security, payments, recommendation, moderation and server infrastructure remain application responsibilities.
 - The desktop Previewer is not an Android emulator.
+- Data Core 1.3.0 does not yet include relations, observable queries or automatic offline synchronization.
+
+Measured Android benchmark (2026-08-17):
+- Same 100-note debug app, same Pixel 9 API 35 emulator.
+- ApkPy: 5.38 MiB APK, 590 ms median cold start, 46.3 MiB median PSS, 83 physical app-source lines.
+- Flet 0.86.5: 25.28 MiB, 1,824 ms, 206.1 MiB, 70 lines.
+- BeeWare/Toga 0.5.6: 33.98 MiB, 2,334 ms, 79.7 MiB, 73 lines.
+- Kivy 2.3.1 source passed, but Android packaging was blocked by missing Buildozer/python-for-Android and WSL.
+- These values describe one small debug app, not every possible application.
+- The complete programs, packaging files, raw measurements and reproduction script are public in benchmarks/benchmark-notes.
+
+Showcase verification:
+- Four complete app programs are public under examples/showcase.
+- Matching historical debug APKs and SHA-256 checksums are linked from the showcase page.
+- Those APKs verify the 1.1.0 showcase run; they are not signed current-release binaries.
+
+Support policy:
+- GitHub Issues is the current public support channel.
+- Separate community forums and starter repositories are deferred until recurring user demand can sustain them.

@@ -6,9 +6,15 @@ This is the supported surface exported by <code>apkpy_lib</code>. Import individ
 from apkpy_lib import Screen, Theme, button, label, run
 ~~~
 
+New to the library? Start with the
+[essential API reference](reference/essential.md). It groups the smallest
+stable surface needed for screens, components, state, feeds, data, networking
+and device integrations, then links here for the broader catalogue.
+
 ## Browse by module
 
 <div class="api-module-grid">
+  <a href="../data-core/"><span>DATA CORE</span><strong>Typed SQLite and migrations</strong><p>Models, constraints, async CRUD, transactions and safe upgrades.</p></a>
   <a href="../reference/ui-layouts/"><span>UI</span><strong>Screens, components and layout</strong><p>Theme, navigation, overlays and responsive composition.</p></a>
   <a href="../reference/feeds/"><span>DATASET</span><strong>Feeds, state and lifecycle</strong><p>Virtual rows, paging, mutations and reactive bindings.</p></a>
   <a href="../reference/media/"><span>MEDIA</span><strong>Audio, video, uploads and files</strong><p>Background playback, Media3 and streamed transfer.</p></a>
@@ -145,11 +151,25 @@ Overlay definitions returned by sheets, modals, menus and pickers expose <code>o
 | --- | --- |
 | <code>storage</code> | <code>set</code>, <code>get</code>, <code>delete</code>, <code>clear</code>, <code>keys</code> |
 | <code>crypto</code> | <code>hash_password</code>, <code>verify_password</code>, <code>encrypt</code>, <code>decrypt</code> |
-| <code>db</code> | <code>execute</code>, <code>query</code>, <code>last_insert_id</code>, <code>begin</code>, <code>commit</code>, <code>rollback</code> |
+| <code>db</code> | Typed models, schema, filters, migrations and transactions; legacy <code>execute</code>, <code>query</code>, <code>last_insert_id</code>, <code>begin</code>, <code>commit</code>, <code>rollback</code> remain available |
 | <code>https</code> | <code>get</code>, <code>post</code>, <code>put</code>, <code>patch</code>, <code>delete</code> |
 | <code>json_get(json_string, path)</code> | Reads a safe dotted JSON path |
 | <code>random</code> | <code>randint</code>, <code>choice</code>, <code>random</code> |
 | <code>datetime</code> | <code>now</code>, <code>date</code>, <code>time</code>, and numeric date/time parts |
+
+### Typed database API (1.3.0)
+
+| Area | Calls |
+| --- | --- |
+| Field declarations | <code>integer</code>, <code>real</code>, <code>text</code>, <code>boolean</code>, <code>datetime</code>, <code>json</code>, <code>blob</code>, <code>now</code> |
+| Schema | <code>model</code>, <code>index</code>, <code>schema</code> |
+| Model operations | <code>insert</code>, <code>insert_many</code>, <code>get</code>, <code>find</code>, <code>update</code>, <code>delete</code>, <code>count</code> |
+| Filters | <code>eq</code>, <code>ne</code>, <code>gt</code>, <code>gte</code>, <code>lt</code>, <code>lte</code>, <code>contains</code>, <code>starts_with</code>, <code>ends_with</code>, <code>in_</code>, <code>is_null</code>, <code>and_</code>, <code>or_</code> |
+| Ordering | <code>asc</code>, <code>desc</code> |
+| Migration | <code>migration</code>, <code>create_table</code>, <code>add_column</code>, <code>rename_column</code>, <code>create_index</code>, <code>rename_index</code>, <code>drop_index</code>, <code>rename_table</code>, <code>sql</code> |
+
+See [Data Core](data-core.md) for signatures, result types, examples and
+migration safety rules.
 
 ## Media, files and identity
 

@@ -47,16 +47,33 @@ ApkPy scans the current application before adding support code:
 
 An application that does not use feeds receives none of this runtime.
 
-## What was validated for 1.2.2
+## Data Core behavior
+
+| Capability | Previewer | Generated Android |
+| --- | --- | --- |
+| Database engine | Python `sqlite3` | Native `SQLiteOpenHelper` |
+| Operation queue | One ordered worker | One ordered `ExecutorService` |
+| Callback thread | Tk interface thread | Android main `Handler` |
+| Batch binding | SQLite parameters in one transaction | Reused `SQLiteStatement` in one transaction |
+| Schema metadata | `apkpy_schema_meta` | `apkpy_schema_meta` |
+| Destructive migration | Private backup, transaction, restore | Private backup, transaction, restore |
+| Model repository | Runtime model object | Generated repository per model |
+
+Projects without `db.model()` receive no typed repositories, data executor,
+schema metadata or migration runtime. Legacy SQL calls remain available.
+
+## What was validated for 1.3.0
 
 <div class="verification-grid">
   <article><strong>164</strong><span>transpiler regression checks passed</span></article>
-  <article><strong>16</strong><span>focused feed and module checks passed</span></article>
+  <article><strong>25</strong><span>focused data, feed and module checks passed</span></article>
   <article><strong>Gradle</strong><span>the generated demo compiled into a debug APK</span></article>
   <article><strong>Strict docs</strong><span>the complete MkDocs site built without warnings treated as errors</span></article>
 </div>
 
-The generated Java was inspected for `OnScrollListener`,
+The generated Java was inspected for `SQLiteOpenHelper`, `SQLiteStatement`,
+the single data executor, main-thread callback handler, repositories, indexes,
+sequential migrations, `OnScrollListener`,
 `notifyItemRangeInserted`, `notifyItemChanged`, `notifyItemRemoved`, `DiffUtil`
 and per-collection optimistic history. A separate plain collection test checks
 that those helpers are omitted when unused.
@@ -110,8 +127,8 @@ the next `apkpy build` replaces it.
 - [ ] Review the generated manifest and dependencies.
 - [ ] Only then create signing material or publish the package.
 
-Start with the [Production Feeds tutorial](production-feeds.md), then inspect
-the complete [1.2.2 release notes](version-1.2.2.md).
+Start with the [Data Core guide](data-core.md), then inspect the complete
+[1.3.0 release notes](version-1.3.0.md).
 
 For broader release evidence and the stability contract, continue to
 [Trust and maturity](trust-maturity.md). For the renderer boundary, use

@@ -1,0 +1,5 @@
+[app]
+name = "Benchmark Notes"
+application_id = "com.apkpy.benchmark.apkpy"
+version_name = "0.1.0"
+version_code = 1

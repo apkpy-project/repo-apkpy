@@ -10,6 +10,7 @@ description: Build native Android Java, XML and Gradle projects from a supported
     <p>ApkPy is a source-to-source compiler for native Android apps. You describe screens, state and callbacks in Python; ApkPy generates Activities, XML layouts, drawables, resources and manifest entries that Android understands directly.</p>
     <div class="home-hero__actions">
       <a class="md-button md-button--primary" href="getting-started/">Install and build</a>
+      <a class="md-button home-hero__secondary" href="tutorial-end-to-end/">Build the tutorial app</a>
       <a class="md-button home-hero__secondary" href="can-apkpy-build-this/">Can it build my app?</a>
       <a class="text-link" href="architecture/">Read how generation works <span>→</span></a>
     </div>
@@ -17,7 +18,7 @@ description: Build native Android Java, XML and Gradle projects from a supported
       <span><strong>1</strong> Python source tree</span>
       <span><strong>0</strong> Python runtimes in the APK</span>
       <span><strong>164</strong> transpiler checks</span>
-      <span><strong>16</strong> focused module checks</span>
+      <span><strong>25</strong> focused module checks</span>
     </div>
   </div>
   <div class="editor-card" aria-label="Example ApkPy source code">
@@ -42,10 +43,19 @@ description: Build native Android Java, XML and Gradle projects from a supported
 
 <div class="release-line">
   <span class="release-line__pulse"></span>
-  <strong>ApkPy 1.2.2</strong>
-  <span>Keyed feed mutations, live merging and optimistic rollback</span>
-  <a href="production-feeds/">Build a production feed</a>
+  <strong>ApkPy 1.3.0</strong>
+  <span>Typed SQLite models, async CRUD, transactions and explicit migrations</span>
+  <a href="data-core/">Explore Data Core</a>
 </div>
+
+<section class="home-proof">
+  <div>
+    <span>MEASURED ON ANDROID</span>
+    <strong>5.38 MiB debug APK in the Benchmark Notes test.</strong>
+    <p>The same 100-note app was built with ApkPy, Flet and BeeWare/Toga, then installed and measured on one emulator. The programs, line counts, raw starts, memory samples and artifact hashes are available for review.</p>
+  </div>
+  <a href="benchmark/">Inspect the benchmark <span>→</span></a>
+</section>
 
 <section class="home-proof">
   <div>
@@ -58,7 +68,13 @@ description: Build native Android Java, XML and Gradle projects from a supported
 
 ## Start from the product you are building
 
+If this is your first project, use the
+[complete Knowledge Vault tutorial](tutorial-end-to-end.md) before choosing a
+feature-specific guide. It ends with a generated Android project you can open
+and inspect.
+
 <div class="guide-path-grid guide-path-grid--home">
+  <a href="data-core/"><strong>Local data and migrations</strong><span>Typed models, indexed queries, transactions and safe upgrades.</span></a>
   <a href="guides/feed-api/"><strong>Social or catalog feed</strong><span>Pagination, refresh and optimistic actions.</span></a>
   <a href="guides/chat-realtime/"><strong>Chat or live activity</strong><span>WebSocket reconnect, queued sends and push.</span></a>
   <a href="guides/media-player/"><strong>Music or media app</strong><span>Background playback, playlists and lock screen.</span></a>

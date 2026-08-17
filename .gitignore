@@ -4,3 +4,4 @@ site/
 .pytest_cache/
 __pycache__/
 *.py[cod]
+.mkdocs-local.*.log

@@ -1043,6 +1043,99 @@ body:has(.home-hero) .md-content__inner {
   }
 }
 
+.benchmark-hero {
+  position: relative;
+  overflow: hidden;
+  margin: 0 0 1.2rem;
+  padding: clamp(1.5rem, 5vw, 3.2rem);
+  border: 1px solid #2c3442;
+  border-radius: 0.75rem;
+  background:
+    radial-gradient(circle at 88% 20%, rgba(80, 227, 194, 0.18), transparent 28%),
+    linear-gradient(135deg, #10141c 0%, #090b10 72%);
+  color: #f5f7fb;
+}
+
+.benchmark-hero::after {
+  position: absolute;
+  right: -4rem;
+  bottom: -5rem;
+  width: 16rem;
+  height: 16rem;
+  border: 1px solid rgba(124, 92, 255, 0.35);
+  border-radius: 50%;
+  content: "";
+}
+
+.benchmark-hero > span {
+  color: #50e3c2;
+  font: 750 0.62rem/1.4 ui-monospace, Consolas, monospace;
+  letter-spacing: 0.12em;
+}
+
+.md-typeset .benchmark-hero h1 {
+  max-width: 48rem;
+  margin: 0.75rem 0 0.8rem;
+  color: #f5f7fb;
+  font-size: clamp(2.25rem, 6vw, 4.6rem);
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+}
+
+.benchmark-hero p {
+  max-width: 46rem;
+  margin: 0;
+  color: #aeb7c7;
+  font-size: 0.82rem;
+  line-height: 1.65;
+}
+
+.benchmark-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin: 0 0 2.4rem;
+}
+
+.benchmark-metrics article {
+  display: flex;
+  min-height: 7rem;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 1rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.55rem;
+  background: var(--md-code-bg-color);
+}
+
+.benchmark-metrics span {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.61rem;
+}
+
+.benchmark-metrics strong {
+  margin: 0.25rem 0 0.1rem;
+  color: var(--md-default-fg-color);
+  font-size: clamp(1.25rem, 2.6vw, 1.8rem);
+}
+
+.benchmark-metrics small {
+  color: var(--apkpy-cyan);
+  font: 650 0.53rem/1.4 ui-monospace, Consolas, monospace;
+}
+
+@media screen and (max-width: 60em) {
+  .benchmark-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media screen and (max-width: 34em) {
+  .benchmark-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Decision, guide and evidence pages */
 
 .home-hero__secondary {

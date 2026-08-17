@@ -1,0 +1,14 @@
+[tool.briefcase]
+project_name = "Benchmark Notes"
+bundle = "com.apkpy.benchmark"
+version = "0.1.0"
+url = "https://example.invalid/benchmark-notes"
+license = "MIT"
+author = "Local benchmark"
+author_email = "benchmark@example.invalid"
+
+[tool.briefcase.app.benchmark_notes]
+formal_name = "Benchmark Notes"
+description = "Identical Benchmark Notes app for the ApkPy framework benchmark"
+sources = ["src/benchmark_notes"]
+requires = ["toga-android==0.5.6"]

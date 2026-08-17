@@ -9,8 +9,8 @@ ApkPy is a young compiler. Trust should come from inspectable output and
 repeatable evidence, not from pretending the project is older than it is.
 
 <section class="proof-band">
-  <article><strong>164</strong><span>transpiler regression checks</span></article>
-  <article><strong>16</strong><span>focused module checks</span></article>
+  <article><strong>167</strong><span>transpiler regression checks</span></article>
+  <article><strong>28</strong><span>focused module checks</span></article>
   <article><strong>Real Gradle</strong><span>generated debug APK compiled</span></article>
   <article><strong>Strict docs</strong><span>warnings fail the build</span></article>
 </section>
@@ -19,17 +19,24 @@ repeatable evidence, not from pretending the project is older than it is.
 
 | Area | Evidence | What it proves |
 | --- | --- | --- |
-| Python compiler | 164 regression checks | supported source patterns continue to produce expected output |
-| Modular runtimes | 16 focused checks | feeds, mutation hooks and conditional modules behave as designed |
+| Python compiler | 167 regression checks | supported source patterns continue to produce expected output |
+| Modular runtimes | 28 focused checks | feeds, mutations, Data Core and conditional modules behave as designed |
+| Data Core | CRUD, transaction and migration tests | typed values, rollback, schema paths and destructive recovery are exercised |
 | Generated Java/XML | structural and XML parsing checks | generated sources are internally consistent |
-| Android toolchain | Gradle debug APK build | the checked release candidate reaches Android bytecode/resources |
+| Android toolchain | Gradle debug APK build | the checked release reaches Android bytecode/resources |
+| Runtime floor | same-app Android benchmark | APK size, cold start and PSS are reported with programs and raw samples |
 | Documentation | `mkdocs build --strict` | navigation, internal links and configuration resolve |
 
-Last documented validation: **ApkPy 1.2.2 release candidate, July 2026**.
+Last documented validation: **ApkPy 1.3.0 release, 17 August 2026**.
 
 These checks do not certify every phone, Android manufacturer, backend or app
 design. They make regressions visible and give a reviewer concrete artifacts to
 inspect.
+
+The [Android benchmark](benchmark.md) is deliberately narrow: one 100-note
+debug app on one emulator. It publishes the competing app programs, line-count
+rule, raw starts, memory samples and hashes instead of presenting a marketing
+number without context.
 
 ## Supported environment
 
@@ -55,6 +62,8 @@ runtime:
 - Media3 and the foreground media service appear only for media features;
 - map, route and location helpers appear only when requested;
 - rich-document helpers appear only for Markdown, rich text or trees.
+- Data Core repositories, executor and migration runtime appear only when
+  `db.model()` is declared.
 
 This keeps generated projects reviewable and reduces unused dependencies.
 

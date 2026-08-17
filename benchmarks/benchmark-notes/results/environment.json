@@ -1,0 +1,24 @@
+{
+  "date": "2026-08-17",
+  "host": "Windows 11 x64",
+  "python": "3.13.12",
+  "frameworks": {
+    "apkpy": "1.3.0 local workspace candidate",
+    "kivy": "2.3.1",
+    "flet": "0.86.5",
+    "briefcase": "0.4.4",
+    "toga": "0.5.6"
+  },
+  "android": {
+    "emulator": "Pixel_9",
+    "model": "sdk_gphone16k_x86_64",
+    "api": 35,
+    "abi": "x86_64"
+  },
+  "notes": [
+    "Debug APKs were used consistently; release signing and shrinking were not enabled.",
+    "Cold start means am force-stop followed by am start -W; the median is from three runs.",
+    "PSS is read two seconds after launch from dumpsys meminfo.",
+    "Kivy source compiled, but Buildozer/python-for-android and a WSL distro were unavailable."
+  ]
+}

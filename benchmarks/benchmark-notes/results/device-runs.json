@@ -1,0 +1,11 @@
+[
+  {"framework": "ApkPy", "run": 1, "cold_start_ms": 611, "pss_kb": 47188},
+  {"framework": "ApkPy", "run": 2, "cold_start_ms": 590, "pss_kb": 47494},
+  {"framework": "ApkPy", "run": 3, "cold_start_ms": 580, "pss_kb": 47375},
+  {"framework": "Flet", "run": 1, "cold_start_ms": 1824, "pss_kb": 208618},
+  {"framework": "Flet", "run": 2, "cold_start_ms": 1845, "pss_kb": 211060},
+  {"framework": "Flet", "run": 3, "cold_start_ms": 1733, "pss_kb": 211081},
+  {"framework": "BeeWare/Toga", "run": 1, "cold_start_ms": 2346, "pss_kb": 81630},
+  {"framework": "BeeWare/Toga", "run": 2, "cold_start_ms": 2334, "pss_kb": 81371},
+  {"framework": "BeeWare/Toga", "run": 3, "cold_start_ms": 2327, "pss_kb": 81647}
+]

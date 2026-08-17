@@ -6,6 +6,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.0] — 2026-08-17
+
+### Added
+
+- Declarative `db.model()` and `db.schema()` definitions with typed integer,
+  real, text, boolean, datetime, JSON and blob fields.
+- Required/optional/default values, keys, uniqueness, numeric and text bounds,
+  choices, and simple or composite indexes.
+- Asynchronous `insert`, `insert_many`, `get`, `find`, `update`, `delete` and
+  `count`, with callbacks delivered on the interface thread.
+- Parameterized comparisons, text matching, null checks, logical groups,
+  ordering and `limit`/`offset` pagination.
+- Atomic `db.transaction()` operations and optimized prepared batch insertion.
+- Explicit migration operations, schema hash/version metadata, downgrade
+  refusal and private backup/restore for destructive migration paths.
+- The English two-screen **Knowledge Vault** application covering indexed
+  search, filters, paging, CRUD, batch work, errors and a v1-to-v2 migration.
+
+### Android and Previewer
+
+- Android generation emits `ApkpyDatabase.java`, one shared single-threaded
+  data executor and one repository per model.
+- Generated repositories use `SQLiteStatement`, bound arguments and
+  main-thread callbacks; they never execute queries on the UI thread.
+- The Previewer uses Python `sqlite3` and a single ordered worker with the same
+  validation and migration contract.
+- Data Core files are conditional; applications without `db.model()` receive
+  no repository, executor, metadata or migration output.
+- The previous `db.execute`, `db.query`, `begin`, `commit` and `rollback` API
+  remains compatible.
+
+### Validation
+
+- Added focused tests for declarations, CRUD, JSON, order, pagination,
+  compound indexes, atomic batches and transaction rollback.
+- Verified v1-to-v2 preservation, missing paths, schema hash mismatches,
+  downgrade refusal and restore after a failed destructive migration.
+- Verified existing feed, rich-content and Gradle-generation tests and built
+  the generated Knowledge Vault Android project successfully.
+- Added the reproducible Benchmark Notes comparison with four application
+  sources, transparent line counts, raw device samples and APK hashes. The
+  benchmark is documented as a scoped debug-app measurement, not a universal
+  framework ranking.
+
+### Deliberate limits
+
+- Relations, observable queries, offline-first synchronization, conflict
+  resolution and persistent background jobs are not included in 1.3.0.
+
+---
+
 ## [1.2.2] — Unreleased
 
 ### Added

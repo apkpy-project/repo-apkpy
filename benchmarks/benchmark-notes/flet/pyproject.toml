@@ -1,0 +1,15 @@
+[project]
+name = "benchmark-notes-flet"
+version = "0.1.0"
+description = "Identical Benchmark Notes app for the ApkPy framework benchmark"
+requires-python = ">=3.9"
+dependencies = ["flet==0.86.5"]
+
+[tool.flet]
+org = "com.apkpy.benchmark"
+product = "Benchmark Notes"
+company = "Local benchmark"
+copyright = "Copyright 2026"
+
+[tool.flet.android]
+min-sdk-version = 24

@@ -7,9 +7,150 @@
 [![License](https://img.shields.io/badge/license-Proprietary-red)](#-license)
 [![Platform](https://img.shields.io/badge/platform-Android-green)](https://developer.android.com)
 
-**Documentation:** [Start here](docs/index.md) · [Installation](docs/getting-started.md) · [Audio, playlists and Spotify](docs/media-auth.md) · [Security](docs/data-security.md) · [Public API](docs/api-reference.md)
+**Documentation:** [Start here](docs/index.md) · [End-to-end tutorial](docs/tutorial-end-to-end.md) · [Essential API](docs/reference/essential.md) · [Troubleshooting](docs/troubleshooting.md) · [Showcase](docs/showcase.md) · [Android benchmark](BENCHMARKS.md)
 
 **ApkPy** is a closed-source Python-to-Android transpiler. Write your app in pure Python using a clean, CSS-inspired design system. ApkPy parses your Python code, generates native Java + XML Android projects, and either bundles them into a ready-to-compile `.zip` or — with a single `apkpy run` — compiles them straight into an installable `.apk`. **No Java, no Kotlin, no Android Studio.**
+
+---
+
+## ApkPy 1.3.0 — Data Core
+
+ApkPy 1.3.0 adds declarative SQLite models, typed constraints, asynchronous
+CRUD, parameterized filters, ordered pagination, batch writes, transactions
+and explicit migrations.
+
+```python
+notes = db.model(
+    "notes",
+    fields={
+        "id": db.integer(primary_key=True, auto_increment=True),
+        "title": db.text(required=True, max_length=120),
+        "favorite": db.boolean(default=False),
+        "metadata": db.json(optional=True),
+        "updated_at": db.datetime(default=db.now()),
+    },
+    indexes=[
+        db.index("idx_notes_favorite_updated", ["favorite", "updated_at"]),
+    ],
+)
+
+schema = db.schema("notes_app", version=1, models=[notes])
+
+notes.find(
+    filters=[db.eq("favorite", True)],
+    order_by=[db.desc("updated_at")],
+    limit=30,
+    on_result=lambda rows: feed.set_items(rows),
+    on_error=show_error,
+)
+```
+
+Android receives a native `SQLiteOpenHelper`, a single ordered background
+executor and a repository per model. Callbacks return to the UI thread; batch
+writes use prepared `SQLiteStatement` bindings in one transaction. Schema
+changes require consecutive migrations, while destructive paths create a
+private backup and restore it after failure.
+
+Projects without typed models receive no Data Core runtime. The previous SQL
+API remains compatible, and no Room or Python runtime is added to the APK.
+
+[Read the complete Data Core guide](docs/data-core.md) ·
+[Version 1.3.0](docs/version-1.3.0.md) ·
+[Release notes](RELEASE_1.3.0.md)
+
+### Data Core by task
+
+Create, search and update records without moving SQLite work onto the UI
+thread:
+
+```python
+def created(note_id):
+    status.set_value("Saved note #" + str(note_id))
+    load_page()
+
+notes.insert(
+    {
+        "title": title_input.get_value(),
+        "content": content_input.get_value(),
+        "favorite": favorite_input.get_value(),
+        "priority": priority_input.get_value(),
+        "metadata": {"source": "editor"},
+    },
+    on_result=created,
+    on_error=show_database_error,
+)
+
+notes.find(
+    filters=[
+        db.contains("title", search_input.get_value()),
+        db.eq("favorite", True),
+    ],
+    order_by=[db.desc("updated_at")],
+    limit=30,
+    offset=0,
+    on_result=lambda rows: feed.set_items(rows),
+    on_error=show_database_error,
+)
+```
+
+Several model operations can share one atomic transaction:
+
+```python
+def seed_workspace(tx):
+    workspace_id = tx.insert(workspaces, {"name": "Research"})
+    tx.insert_many(notes, initial_notes)
+    return workspace_id
+
+db.transaction(
+    run=seed_workspace,
+    on_result=workspace_created,
+    on_error=show_database_error,
+)
+```
+
+The generated Android project contains `ApkpyDatabase.java`,
+`ApkpyDataExecutor.java` and a repository per declared model. The
+**Knowledge Vault** sample covers indexed filters, limit/offset paging,
+create/update/delete, a batch archive, an atomic seed and a v1-to-v2
+migration.
+
+---
+
+## Measured Android benchmark
+
+**Benchmark Notes** implements the same deterministic 100-note app in ApkPy,
+Flet, BeeWare/Toga and Kivy. The application source, packaging files, raw
+device samples and artifact hashes are included in this repository.
+
+| Stack | App source | Debug APK | Cached build | Cold start | PSS |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| ApkPy 1.3.0 candidate | 83 lines | **5.38 MiB** | 20.9 s | **590 ms** | **46.3 MiB** |
+| Flet 0.86.5 | **70 lines** | 25.28 MiB | 143.0 s | 1,824 ms | 206.1 MiB |
+| BeeWare/Toga 0.5.6 | 73 lines | 33.98 MiB | **17.8 s** | 2,334 ms | 79.7 MiB |
+| Kivy 2.3.1 | 78 lines | not produced | not produced | not produced | not produced |
+
+For this one debug app, the ApkPy APK was 4.70x smaller than Flet and 6.32x
+smaller than BeeWare/Toga. That is a scoped observation, not a universal
+framework ranking. All produced APKs were installed on the same Pixel 9
+emulator, force-stopped before three timed launches and checked for the same
+four UI labels.
+
+These are development-build measurements, not store-release claims. The
+repository includes the app contract, packaging files, raw samples and rerun
+script so the result can be reproduced or challenged without relying on the
+summary table.
+
+Exact application programs:
+
+- [ApkPy `writehere.py`](benchmarks/benchmark-notes/apkpy/writehere.py)
+- [Flet `main.py`](benchmarks/benchmark-notes/flet/main.py)
+- [Kivy `main.py`](benchmarks/benchmark-notes/kivy/main.py)
+- [BeeWare/Toga `app.py`](benchmarks/benchmark-notes/beeware/src/benchmark_notes/app.py)
+
+The line count includes blank lines in the primary Python entry files and
+excludes package configuration and generated output. See
+[BENCHMARKS.md](BENCHMARKS.md) for the counting rule, full methodology,
+Kivy's blocked packaging reason, raw measurements and limitations.
 
 ---
 
@@ -1144,7 +1285,7 @@ def on_response(success, response):
         city = json_get(response, "name")
         label_temp.set_value(f"{city}: {temp}°C")
 
-https.get("https://api.openweathermap.org/data/2.5/weather?q=Lisbon&appid=YOUR_KEY&units=metric",
+https.get("https://api.openweathermap.org/data/2.5/weather?q=New%20York&appid=YOUR_KEY&units=metric",
           on_response=on_response)
 
 # POST with headers (e.g., Bearer token auth)
@@ -1405,8 +1546,13 @@ See [`LICENSE`](LICENSE) for full details.
 
 ## 🤝 Community
 
-- **Found a bug or have a feature idea?** [Open an issue on GitHub!](https://github.com/apkpy-project/repo-apkpy/issues)
-- **Want to contribute?** We're looking for contributors to expand the native component library!
+- **Found a reproducible bug or missing capability?** [Open an issue](https://github.com/apkpy-project/repo-apkpy/issues) with a minimal `writehere.py`, versions and the full traceback or Logcat cause.
+- **Need a first project?** Follow the [end-to-end Knowledge Vault tutorial](docs/tutorial-end-to-end.md) or copy a [verified showcase app](examples/showcase/).
+- **Want to share an example?** Read [CONTRIBUTING.md](CONTRIBUTING.md) and submit the complete app, assets, screenshot and tested version through an issue.
+
+GitHub Issues is the current public support channel. Discussions, a chat server
+and separate starter repositories will be opened only when recurring user
+demand can support them; the project does not advertise empty community spaces.
 
 ---
 
