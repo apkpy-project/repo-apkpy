@@ -10,7 +10,7 @@ repeatable evidence, not from pretending the project is older than it is.
 
 <section class="proof-band">
   <article><strong>167</strong><span>transpiler regression checks</span></article>
-  <article><strong>28</strong><span>focused module checks</span></article>
+  <article><strong>21</strong><span>Data Core and Reactive Data checks</span></article>
   <article><strong>Real Gradle</strong><span>generated debug APK compiled</span></article>
   <article><strong>Strict docs</strong><span>warnings fail the build</span></article>
 </section>
@@ -20,14 +20,14 @@ repeatable evidence, not from pretending the project is older than it is.
 | Area | Evidence | What it proves |
 | --- | --- | --- |
 | Python compiler | 167 regression checks | supported source patterns continue to produce expected output |
-| Modular runtimes | 28 focused checks | feeds, mutations, Data Core and conditional modules behave as designed |
+| Reactive Data | 21 focused Data Core and Reactive Data checks | relations, includes, lifecycle, invalidation, rollback and conditional code generation are exercised |
 | Data Core | CRUD, transaction and migration tests | typed values, rollback, schema paths and destructive recovery are exercised |
 | Generated Java/XML | structural and XML parsing checks | generated sources are internally consistent |
 | Android toolchain | Gradle debug APK build | the checked release reaches Android bytecode/resources |
 | Runtime floor | same-app Android benchmark | APK size, cold start and PSS are reported with programs and raw samples |
 | Documentation | `mkdocs build --strict` | navigation, internal links and configuration resolve |
 
-Last documented validation: **ApkPy 1.3.0 release, 17 August 2026**.
+Last documented validation: **ApkPy 1.3.1, published on 20 August 2026**.
 
 These checks do not certify every phone, Android manufacturer, backend or app
 design. They make regressions visible and give a reviewer concrete artifacts to
@@ -64,6 +64,9 @@ runtime:
 - rich-document helpers appear only for Markdown, rich text or trees.
 - Data Core repositories, executor and migration runtime appear only when
   `db.model()` is declared.
+- relation metadata and batched hydration appear only with `db.relation()`;
+- the invalidation tracker and observable-query runtime appear only when
+  `observe()` is used.
 
 This keeps generated projects reviewable and reduces unused dependencies.
 
@@ -76,6 +79,17 @@ generated Android project can be replaced by the next build.
 
 Patch releases should preserve existing declarations. New capabilities are
 documented in a version page and must pass the existing regression suite.
+
+## Ownership and continuity
+
+The compiler core is proprietary while ApkPy is under active development. The
+maintainer may consider open-sourcing it later and commits to releasing the
+core as open source if active development is permanently discontinued. This is
+a continuity commitment, not an open-source licence for current releases.
+
+A temporary pause or slower release cadence does not change the licence. Read
+[Project continuity and source availability](project-continuity.md) for the
+exact boundary and the public transition that would be required.
 
 ## Honest limits
 

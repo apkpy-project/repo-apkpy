@@ -189,6 +189,46 @@ CRUD callbacks:
 Every operation accepts `on_error(message)`. Use parameterized filters and
 values; do not build SQL strings with user input.
 
+### Reactive Data
+
+```python
+folder_notes = db.relation(
+    "folder_notes",
+    parent=folders,
+    child=notes,
+    foreign_key="folder_id",
+    parent_as="folder",
+    children_as="notes",
+    on_delete="cascade",
+)
+
+db.schema(
+    "knowledge_vault_live",
+    version=1,
+    models=[folders, notes],
+    relations=[folder_notes],
+)
+
+live_notes = notes.observe(
+    filters=[db.eq("folder_id", active_folder_id)],
+    include=["folder"],
+    screen=notes_screen,
+    on_change=lambda rows: notes_feed.set_items(rows),
+)
+```
+
+| Area | Public API |
+| --- | --- |
+| Relation | `db.relation(name, parent, child, foreign_key, parent_as, children_as, on_delete)` |
+| Eager read | `get(..., include=None)` and `find(..., include=None)` |
+| Observer | `model.observe(..., screen, on_change, on_error=None)` |
+| Observer control | `refresh()`, `update_query(...)`, `close()` |
+
+`on_delete` accepts `restrict`, `cascade` or `set_null`. Includes are limited
+to one level and are loaded in batches. Observers pause and resume with their
+screen, coalesce rapid invalidations and deliver callbacks on the UI thread.
+See [Reactive Data](../reactive-data.md) for lifecycle and migration rules.
+
 ## HTTP and JSON
 
 ```python

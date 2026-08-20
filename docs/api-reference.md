@@ -157,19 +157,21 @@ Overlay definitions returned by sheets, modals, menus and pickers expose <code>o
 | <code>random</code> | <code>randint</code>, <code>choice</code>, <code>random</code> |
 | <code>datetime</code> | <code>now</code>, <code>date</code>, <code>time</code>, and numeric date/time parts |
 
-### Typed database API (1.3.0)
+### Typed database API (1.3.0–1.3.1)
 
 | Area | Calls |
 | --- | --- |
 | Field declarations | <code>integer</code>, <code>real</code>, <code>text</code>, <code>boolean</code>, <code>datetime</code>, <code>json</code>, <code>blob</code>, <code>now</code> |
-| Schema | <code>model</code>, <code>index</code>, <code>schema</code> |
-| Model operations | <code>insert</code>, <code>insert_many</code>, <code>get</code>, <code>find</code>, <code>update</code>, <code>delete</code>, <code>count</code> |
+| Schema | <code>model</code>, <code>index</code>, <code>relation</code>, <code>schema</code> |
+| Model operations | <code>insert</code>, <code>insert_many</code>, <code>get(include=...)</code>, <code>find(include=...)</code>, <code>observe</code>, <code>update</code>, <code>delete</code>, <code>count</code> |
+| Observer | <code>refresh</code>, <code>update_query</code>, <code>close</code> |
 | Filters | <code>eq</code>, <code>ne</code>, <code>gt</code>, <code>gte</code>, <code>lt</code>, <code>lte</code>, <code>contains</code>, <code>starts_with</code>, <code>ends_with</code>, <code>in_</code>, <code>is_null</code>, <code>and_</code>, <code>or_</code> |
 | Ordering | <code>asc</code>, <code>desc</code> |
 | Migration | <code>migration</code>, <code>create_table</code>, <code>add_column</code>, <code>rename_column</code>, <code>create_index</code>, <code>rename_index</code>, <code>drop_index</code>, <code>rename_table</code>, <code>sql</code> |
 
 See [Data Core](data-core.md) for signatures, result types, examples and
-migration safety rules.
+migration safety rules. See [Reactive Data](reactive-data.md) for relation
+aliases, batched includes, observer lifecycle and invalidation semantics.
 
 ## Media, files and identity
 

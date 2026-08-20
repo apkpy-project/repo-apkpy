@@ -372,12 +372,18 @@ The [cross-framework Android benchmark](benchmark.md) intentionally uses an
 in-memory list. It measures the small application/runtime floor and should not
 be read as a SQLite performance test.
 
-## Current boundary
+## Continue with Reactive Data
 
-Data Core 1.3.0 deliberately does not include relations, observable queries,
-automatic offline synchronization, conflict resolution or persistent network
-jobs. It provides the safe local model, query and migration foundation those
-features will build on.
+Data Core 1.3.0 is the local model, query and migration foundation. ApkPy
+1.3.1 adds one-to-many `db.relation()` declarations, batched `include` reads
+and lifecycle-safe `observe()` queries without changing these CRUD contracts.
+
+Read [Reactive Data](reactive-data.md) before adding relations to an existing
+database: the schema version must increase, and an existing table that needs a
+physical foreign-key clause must be rebuilt through an explicit migration.
+
+Automatic offline synchronization, conflict resolution and persistent network
+jobs remain outside the Data Core and Reactive Data releases.
 
 The runnable **Knowledge Vault** example combines indexed search, favorite
 filters, pagination into `virtual_collection`, create/update/delete, a batch

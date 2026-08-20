@@ -42,6 +42,15 @@ depends on correct key handling, server authorization and threat modeling.
 Yes. Feature helpers and dependencies are emitted only when the source uses the
 matching capability.
 
+## Is ApkPy open source?
+
+Not currently. ApkPy is actively developed as proprietary software. The
+maintainer may choose to open-source the core later and commits to doing so if
+the project is permanently abandoned, allowing others to continue it. A pause
+or slower release cadence does not change the present licence; an open-source
+transition requires an explicit announcement, published source and a named new
+licence. See [Project continuity](project-continuity.md).
+
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -61,6 +70,11 @@ matching capability.
       "@type": "Question",
       "name": "Is the ApkPy Previewer an Android emulator?",
       "acceptedAnswer": {"@type": "Answer", "text": "No. It is a fast desktop renderer. Device APIs and Android lifecycle behavior must be tested on Android."}
+    },
+    {
+      "@type": "Question",
+      "name": "Is ApkPy open source?",
+      "acceptedAnswer": {"@type": "Answer", "text": "Not currently. ApkPy is proprietary while actively developed. The maintainer may open-source it later and commits to releasing the core as open source if active development is permanently discontinued."}
     }
   ]
 }

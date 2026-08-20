@@ -58,22 +58,26 @@ An application that does not use feeds receives none of this runtime.
 | Schema metadata | `apkpy_schema_meta` | `apkpy_schema_meta` |
 | Destructive migration | Private backup, transaction, restore | Private backup, transaction, restore |
 | Model repository | Runtime model object | Generated repository per model |
+| Foreign keys | SQLite foreign keys enabled | `onConfigure()` enables SQLite foreign keys |
+| Relation include | One batched query per relation | One batched query per relation |
+| Observation | Screen lifecycle + snapshot comparison | Activity lifecycle + generated invalidation tracker |
 
 Projects without `db.model()` receive no typed repositories, data executor,
 schema metadata or migration runtime. Legacy SQL calls remain available.
 
-## What was validated for 1.3.0
+## What was validated for 1.3.1
 
 <div class="verification-grid">
-  <article><strong>164</strong><span>transpiler regression checks passed</span></article>
-  <article><strong>25</strong><span>focused data, feed and module checks passed</span></article>
-  <article><strong>Gradle</strong><span>the generated demo compiled into a debug APK</span></article>
+  <article><strong>167</strong><span>transpiler regression checks passed</span></article>
+  <article><strong>21</strong><span>focused Data Core and Reactive Data checks passed</span></article>
+  <article><strong>Gradle</strong><span>the generated Reactive Data demo Java compiled successfully</span></article>
   <article><strong>Strict docs</strong><span>the complete MkDocs site built without warnings treated as errors</span></article>
 </div>
 
 The generated Java was inspected for `SQLiteOpenHelper`, `SQLiteStatement`,
 the single data executor, main-thread callback handler, repositories, indexes,
-sequential migrations, `OnScrollListener`,
+foreign keys, batched includes, observer generations, lifecycle hooks,
+selective post-commit invalidation, sequential migrations, `OnScrollListener`,
 `notifyItemRangeInserted`, `notifyItemChanged`, `notifyItemRemoved`, `DiffUtil`
 and per-collection optimistic history. A separate plain collection test checks
 that those helpers are omitted when unused.
@@ -127,8 +131,9 @@ the next `apkpy build` replaces it.
 - [ ] Review the generated manifest and dependencies.
 - [ ] Only then create signing material or publish the package.
 
-Start with the [Data Core guide](data-core.md), then inspect the complete
-[1.3.0 release notes](version-1.3.0.md).
+Start with the [Data Core guide](data-core.md), continue to
+[Reactive Data](reactive-data.md), then inspect the complete
+[1.3.1 release notes](version-1.3.1.md).
 
 For broader release evidence and the stability contract, continue to
 [Trust and maturity](trust-maturity.md). For the renderer boundary, use

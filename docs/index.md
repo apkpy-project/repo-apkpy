@@ -17,8 +17,8 @@ description: Build native Android Java, XML and Gradle projects from a supported
     <div class="hero-facts" aria-label="ApkPy output facts">
       <span><strong>1</strong> Python source tree</span>
       <span><strong>0</strong> Python runtimes in the APK</span>
-      <span><strong>164</strong> transpiler checks</span>
-      <span><strong>25</strong> focused module checks</span>
+      <span><strong>167</strong> transpiler checks</span>
+      <span><strong>29</strong> focused data + diagnostic checks</span>
     </div>
   </div>
   <div class="editor-card" aria-label="Example ApkPy source code">
@@ -43,10 +43,34 @@ description: Build native Android Java, XML and Gradle projects from a supported
 
 <div class="release-line">
   <span class="release-line__pulse"></span>
-  <strong>ApkPy 1.3.0</strong>
-  <span>Typed SQLite models, async CRUD, transactions and explicit migrations</span>
-  <a href="data-core/">Explore Data Core</a>
+  <strong>ApkPy 1.3.1</strong>
+  <span>One-to-many relations, batched includes and lifecycle-safe observable queries</span>
+  <a href="reactive-data/">Explore Reactive Data</a>
 </div>
+
+<section class="home-errors">
+  <div class="home-errors__copy">
+    <span class="eyebrow">FRIENDLY DIAGNOSTICS</span>
+    <h2>The error should tell you what to change.</h2>
+    <p>Previewer callbacks, imports, Data Core declarations, compilation and Android toolchain checks now share one readable report: a stable code, the useful application line, the original cause and a concrete correction.</p>
+    <div class="home-errors__tags"><span>source location</span><span>did you mean?</span><span>safe debug mode</span></div>
+    <a class="md-button md-button--primary" href="friendly-errors/">Learn to read an ApkPy error</a>
+  </div>
+  <div class="home-errors__terminal" aria-label="Example friendly ApkPy error">
+    <div><span></span><span></span><span></span><small>apkpy preview</small></div>
+    <pre><code><b>APKPY E1102</b> - This import is not available
+
+<i>Where</i>
+  writehere.py:1
+
+<i>Received</i>
+  bottom_nva
+
+<i>How to fix</i>
+  1. Did you mean:
+     <strong>from apkpy_lib import bottom_nav</strong></code></pre>
+  </div>
+</section>
 
 <section class="home-proof">
   <div>
@@ -74,6 +98,7 @@ feature-specific guide. It ends with a generated Android project you can open
 and inspect.
 
 <div class="guide-path-grid guide-path-grid--home">
+  <a href="reactive-data/"><strong>Live relational data</strong><span>Foreign keys, batched includes and queries that follow screen lifecycle.</span></a>
   <a href="data-core/"><strong>Local data and migrations</strong><span>Typed models, indexed queries, transactions and safe upgrades.</span></a>
   <a href="guides/feed-api/"><strong>Social or catalog feed</strong><span>Pagination, refresh and optimistic actions.</span></a>
   <a href="guides/chat-realtime/"><strong>Chat or live activity</strong><span>WebSocket reconnect, queued sends and push.</span></a>
@@ -327,4 +352,4 @@ The showcase is executable code, not a set of design mockups. Every app has four
 </section>
 
 !!! note "Closed source, public contract"
-    ApkPy's compiler implementation can remain private while the documentation exposes the supported API, examples, generated-output model and release behavior.
+    ApkPy's compiler is proprietary while active development continues. Open-sourcing may be considered later; if the project is permanently abandoned, the core source will be released as open source so it can be maintained and continued. Until an explicit source release and new licence are published, the current proprietary licence remains in force. [Read the project continuity policy.](project-continuity.md)

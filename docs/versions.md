@@ -7,6 +7,7 @@ description: ApkPy stable version, release candidates and version history.
 
 | Version | Status | Main addition |
 | --- | --- | --- |
+| 1.3.1 | published | relations, batched includes, observable queries and friendly diagnostics |
 | 1.3.0 | published | typed Data Core, async CRUD, transactions and migrations |
 | 1.2.2 | release candidate | keyed feed mutations and optimistic rollback |
 | 1.2.1 | documented line | incremental pagination, prefetch and refresh |
@@ -26,6 +27,7 @@ and limitations remain explicit.
 
 Use the page matching your installed package:
 
+- [Version 1.3.1](version-1.3.1.md)
 - [Version 1.3.0](version-1.3.0.md)
 - [Version 1.2.2](version-1.2.2.md)
 - [Version 1.2.1](version-1.2.1.md)

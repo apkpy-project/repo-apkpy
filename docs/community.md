@@ -61,6 +61,10 @@ will be opened only when there are enough recurring questions and maintainers
 to keep them useful. Until then, Issues provide searchable decisions and a
 single support history.
 
-The core compiler is closed source. Public contributions are still welcome as
-reproducible reports, documentation corrections and complete example apps; see
+The core compiler is currently proprietary. Public contributions are still
+welcome as reproducible reports, documentation corrections and complete
+example apps; see
 [CONTRIBUTING.md](https://github.com/apkpy-project/repo-apkpy/blob/main/CONTRIBUTING.md).
+The maintainer may open-source the compiler later and will release the core as
+open source if active development is permanently discontinued. Read the
+[project continuity policy](project-continuity.md) for the exact boundary.

@@ -6,6 +6,65 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.1] — 2026-08-20
+
+### Added
+
+- Friendly diagnostics shared by Previewer callbacks, application startup,
+  Data Core, the Android compiler and build-toolchain checks. Reports include
+  stable codes, the relevant application line, the original cause and an
+  ordered correction, with `APKPY_DEBUG=1` retaining the full traceback.
+- `apkpy preview` and `apkpy preview --debug` for startup and syntax failures
+  that occur before the normal Previewer lifecycle begins.
+- Controlled one-to-many `db.relation()` declarations with validated parent
+  keys, foreign-key types, unique aliases and `restrict`, `cascade` or
+  `set_null` delete behavior.
+- `relations=[...]` in `db.schema()` and real SQLite foreign-key constraints
+  with foreign-key enforcement enabled in Previewer and Android.
+- `include=[...]` for typed `find()` and `get()`, loading each relation with
+  one batched bound query instead of one query per record.
+- Lifecycle-safe `model.observe()` queries with `refresh()`,
+  `update_query()` and `close()`.
+- The English **Knowledge Vault Live** demo with folders, related notes,
+  dynamic observed search, CRUD, favorites, cascade and live update counts.
+
+### Android and Previewer
+
+- Added a conditional shared `ApkpyDataInvalidationTracker` and
+  `ApkpyQuerySubscription` runtime.
+- Successful writes invalidate only affected model dependencies after commit;
+  transactions publish one combined invalidation and rollback publishes none.
+- In-flight invalidations are coalesced, stale query generations are ignored
+  and repeated visible snapshots are deduplicated.
+- Activity observers resume, pause and close with their owning screen.
+- Projects without relations or observation do not receive the corresponding
+  metadata, hydration or subscription code.
+
+### Validation
+
+- Added relation validation, foreign-key policy, include hydration, observer
+  lifecycle, dynamic-query and rollback tests.
+- 21 focused Data Core/Reactive Data tests, 8 focused diagnostic tests and 167
+  transpiler checks pass.
+- Compiled the generated Knowledge Vault Live Java with Gradle; this caught
+  and fixed SQL-identifier escaping and cross-screen observer-handle errors.
+
+### Documentation
+
+- Added the complete Reactive Data contract, migration guidance, lifecycle
+  behavior, deliberate limits and a runnable Knowledge Vault Live example.
+- Documented the project's current proprietary status and the commitment to
+  release the core source as open source if active development is permanently
+  discontinued.
+
+### Deliberate limits
+
+- Only one-to-many and one-level eager includes are supported. This version
+  does not add many-to-many, recursive relations, lazy loading, polling,
+  offline synchronization or external SQLite change detection.
+
+---
+
 ## [1.3.0] — 2026-08-17
 
 ### Added

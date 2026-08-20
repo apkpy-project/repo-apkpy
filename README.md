@@ -7,9 +7,86 @@
 [![License](https://img.shields.io/badge/license-Proprietary-red)](#-license)
 [![Platform](https://img.shields.io/badge/platform-Android-green)](https://developer.android.com)
 
-**Documentation:** [Start here](docs/index.md) · [End-to-end tutorial](docs/tutorial-end-to-end.md) · [Essential API](docs/reference/essential.md) · [Troubleshooting](docs/troubleshooting.md) · [Showcase](docs/showcase.md) · [Android benchmark](BENCHMARKS.md)
+**Documentation:** [Start here](docs/index.md) · [End-to-end tutorial](docs/tutorial-end-to-end.md) · [Essential API](docs/reference/essential.md) · [Friendly errors](docs/friendly-errors.md) · [Troubleshooting](docs/troubleshooting.md) · [Showcase](docs/showcase.md) · [Android benchmark](BENCHMARKS.md)
 
 **ApkPy** is a closed-source Python-to-Android transpiler. Write your app in pure Python using a clean, CSS-inspired design system. ApkPy parses your Python code, generates native Java + XML Android projects, and either bundles them into a ready-to-compile `.zip` or — with a single `apkpy run` — compiles them straight into an installable `.apk`. **No Java, no Kotlin, no Android Studio.**
+
+---
+
+## Errors that explain the fix
+
+ApkPy 1.3.1 turns common startup, Previewer callback, Data Core,
+compiler and Android toolchain failures into structured diagnostics. Each
+report keeps the original cause but leads with a stable code, the relevant
+`writehere.py` line and an ordered correction.
+
+```text
+APKPY E1401 - A value has the wrong type
+
+Where:
+  writehere.py:42
+
+How to fix:
+  1. Convert the numeric value first, for example str(percent).
+```
+
+Run `apkpy preview` for friendly startup and syntax diagnostics. Use
+`apkpy preview --debug` or `APKPY_DEBUG=1` when the complete Python traceback
+is needed. See the [Friendly errors guide](docs/friendly-errors.md) for the
+error families, examples and opt-out control.
+
+---
+
+## ApkPy 1.3.1 — Reactive Data
+
+ApkPy 1.3.1 extends Data Core with controlled one-to-many relations, physical
+SQLite foreign keys, batched relation loading and lifecycle-safe observable
+queries.
+
+```python
+folder_notes = db.relation(
+    "folder_notes",
+    parent=folders,
+    child=notes,
+    foreign_key="folder_id",
+    parent_as="folder",
+    children_as="notes",
+    on_delete="cascade",
+)
+
+schema = db.schema(
+    "reactive_vault", 1, [folders, notes],
+    relations=[folder_notes],
+)
+
+notes_live = notes.observe(
+    filters=[db.eq("folder_id", active_folder_id.get())],
+    include=["folder"],
+    order_by=[db.desc("updated_at")],
+    screen=notes_screen,
+    on_change=lambda rows: notes_feed.set_items(rows),
+    on_error=show_database_error,
+)
+```
+
+`find()` and `get()` accept `include=[...]`. ApkPy resolves every included
+relation with one batched bound query, never one query per result row.
+Observers run when their screen resumes, suspend while it is paused and close
+when it is destroyed. Writes notify only dependent queries after commit;
+transactions coalesce all changed tables into one invalidation and rollback
+does not notify.
+
+The observer offers `refresh()`, `update_query()` and `close()`. Stale results
+from an earlier query generation are ignored, rapid invalidations are grouped
+and unchanged snapshots are not delivered twice.
+
+Android still uses `SQLiteOpenHelper` and the ordered Data Core executor. The
+invalidation tracker and subscription runtime are generated only in apps that
+use `observe()`.
+
+[Reactive Data guide](docs/reactive-data.md) ·
+[Version 1.3.1](docs/version-1.3.1.md) ·
+[Release notes](RELEASE_1.3.1.md)
 
 ---
 
@@ -1540,7 +1617,23 @@ Check out the [`examples/`](examples/) folder for complete, runnable apps:
 ApkPy is **proprietary software**. The source code is not open for redistribution or modification.  
 See [`LICENSE`](LICENSE) for full details.
 
-© 2025 ApkPy. All rights reserved.
+### Source availability and project continuity
+
+The core compiler is not open source today, and there is no current plan to
+publish it while ApkPy remains under active development and maintenance.
+Open-sourcing may be considered later. If the maintainer ever decides to
+permanently abandon ApkPy, the core source **will be released as open source**
+so the project can be inspected, maintained and continued by others.
+
+A slower release period or temporary pause does not change the licence. Any
+open-source transition will be announced explicitly and will name the licence
+that applies from that release onward. Until then, the current proprietary
+[`LICENSE`](LICENSE) remains in force; this future commitment does not grant
+redistribution or modification rights today.
+
+Read the complete [project continuity policy](docs/project-continuity.md).
+
+© 2025–2026 ApkPy. All rights reserved.
 
 ---
 

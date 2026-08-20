@@ -83,6 +83,7 @@ nav:
   - Guides:
       - Guide index: guides/index.md
       - Data Core: data-core.md
+      - Reactive Data: reactive-data.md
       - API-backed feed: guides/feed-api.md
       - Real-time chat: guides/chat-realtime.md
       - Firebase push: guides/push-firebase.md
@@ -105,8 +106,10 @@ nav:
   - Ship:
       - Build and release: build-release.md
       - Cloudflare Pages: cloudflare-pages.md
+      - Friendly errors: friendly-errors.md
       - Troubleshooting: troubleshooting.md
       - Community and support: community.md
+      - Project continuity: project-continuity.md
   - Reference:
       - Essential API: reference/essential.md
       - API overview: api-reference.md
@@ -121,6 +124,7 @@ nav:
       - Previewer versus Android: preview-android.md
       - FAQ: faq.md
       - Version index: versions.md
+      - Version 1.3.1: version-1.3.1.md
       - Version 1.3.0: version-1.3.0.md
       - Version 1.2.2: version-1.2.2.md
       - Version 1.2.1: version-1.2.1.md

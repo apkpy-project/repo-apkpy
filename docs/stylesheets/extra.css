@@ -1043,6 +1043,139 @@ body:has(.home-hero) .md-content__inner {
   }
 }
 
+/* Friendly diagnostics --------------------------------------------------- */
+.home-errors {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(22rem, 1.08fr);
+  gap: clamp(1.4rem, 4vw, 3.4rem);
+  align-items: center;
+  margin: 1.25rem 0 2.5rem;
+  padding: clamp(1.4rem, 4vw, 3.2rem);
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--md-accent-fg-color) 28%, transparent);
+  border-radius: 0.85rem;
+  background:
+    radial-gradient(circle at 9% 12%, rgba(34, 211, 238, 0.13), transparent 34%),
+    linear-gradient(145deg, #10141d, #090b11 68%);
+  color: #eef2ff;
+}
+
+.md-typeset .home-errors h2,
+.md-typeset .friendly-hero h2 {
+  margin: 0.55rem 0 0.8rem;
+  color: #f8fafc;
+  font-size: clamp(1.65rem, 3.4vw, 2.75rem);
+  line-height: 1.08;
+}
+
+.home-errors__copy > p,
+.friendly-hero > div > p {
+  color: #aeb8c9;
+  line-height: 1.7;
+}
+
+.home-errors__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 1rem 0 1.25rem;
+}
+
+.home-errors__tags span {
+  padding: 0.3rem 0.55rem;
+  border: 1px solid #2d4050;
+  border-radius: 99rem;
+  color: #9cecf4;
+  font: 700 0.56rem/1.2 ui-monospace, Consolas, monospace;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.home-errors__terminal {
+  overflow: hidden;
+  border: 1px solid #263140;
+  border-radius: 0.7rem;
+  background: #07090e;
+  box-shadow: 0 1.4rem 4rem rgba(0, 0, 0, 0.3);
+}
+
+.home-errors__terminal > div {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  padding: 0.65rem 0.8rem;
+  border-bottom: 1px solid #202836;
+  background: #10141c;
+}
+
+.home-errors__terminal > div span {
+  width: 0.48rem;
+  height: 0.48rem;
+  border-radius: 50%;
+  background: #475569;
+}
+
+.home-errors__terminal > div span:first-child { background: #fb7185; }
+.home-errors__terminal > div span:nth-child(2) { background: #fbbf24; }
+.home-errors__terminal > div span:nth-child(3) { background: #34d399; }
+.home-errors__terminal small { margin-left: auto; color: #7e8a9e; }
+.home-errors__terminal pre { margin: 0; padding: 1.15rem; background: transparent; }
+.home-errors__terminal code { color: #bdc7d8; font-size: 0.67rem; line-height: 1.65; }
+.home-errors__terminal b { color: #67e8f9; }
+.home-errors__terminal i { color: #94a3b8; font-style: normal; }
+.home-errors__terminal strong { color: #c4b5fd; }
+
+.friendly-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(15rem, 0.65fr);
+  gap: clamp(1.2rem, 4vw, 3rem);
+  margin: 0.6rem 0 1.5rem;
+  padding: clamp(1.4rem, 4vw, 3rem);
+  border: 1px solid #2c3544;
+  border-radius: 0.8rem;
+  background: linear-gradient(145deg, #10141d, #090b11);
+  color: #eef2ff;
+}
+
+.friendly-hero aside {
+  align-self: stretch;
+  padding: 1.25rem;
+  border: 1px solid #263747;
+  border-radius: 0.65rem;
+  background: rgba(14, 116, 144, 0.11);
+}
+
+.friendly-hero aside span { color: #67e8f9; font: 700 0.58rem/1.4 ui-monospace, Consolas, monospace; text-transform: uppercase; }
+.friendly-hero aside strong { display: block; margin: 0.65rem 0; color: #f8fafc; font-size: 1rem; }
+.friendly-hero aside p { color: #aeb8c9; font-size: 0.72rem; line-height: 1.65; }
+.friendly-hero__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; align-items: center; margin-top: 1.2rem; }
+.friendly-hero__actions > a:not(.md-button) { color: #a5f3fc; font-weight: 700; }
+.friendly-hero__actions code { color: inherit; background: transparent; }
+
+.friendly-contract {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.7rem;
+  margin: 1rem 0 2.2rem;
+}
+
+.friendly-contract > div {
+  padding: 1rem;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.55rem;
+  background: var(--md-code-bg-color);
+}
+
+.friendly-contract span { color: var(--md-accent-fg-color); font: 800 0.58rem/1 ui-monospace, Consolas, monospace; }
+.friendly-contract strong { display: block; margin: 0.5rem 0 0.3rem; }
+.friendly-contract p { margin: 0; color: var(--md-default-fg-color--light); font-size: 0.69rem; line-height: 1.5; }
+
+@media screen and (max-width: 52em) {
+  .home-errors,
+  .friendly-hero { grid-template-columns: 1fr; }
+  .friendly-contract { grid-template-columns: 1fr; }
+}
+
 .benchmark-hero {
   position: relative;
   overflow: hidden;

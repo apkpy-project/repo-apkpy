@@ -1,5 +1,11 @@
 # Troubleshooting
 
+ApkPy now gives common failures a stable code, the relevant application line
+and an ordered correction. See [Friendly errors](friendly-errors.md) for the
+error families, complete examples, debug mode and opt-out controls. Prefer
+`apkpy preview` over `python writehere.py` when diagnosing startup or syntax
+failures.
+
 Start with the first failing layer instead of changing several things at once:
 
 | Symptom | Check first |
@@ -184,6 +190,37 @@ lifecycle(home, on_mount=load_notes)
 
 Do not expect a return value from asynchronous public CRUD calls. Update the UI
 inside `on_result` or `on_error`.
+
+## An observable query does not run
+
+`observe()` requires its owning `screen`. The first query runs when that
+screen resumes, not while another Activity is visible:
+
+```python
+live_notes = notes.observe(
+    screen=notes_screen,
+    on_change=lambda rows: feed.set_items(rows),
+    on_error=database_failed,
+)
+```
+
+Do not call `close()` if the same observer should resume later. A paused
+observer catches up when the screen returns. `refresh()` is ignored while the
+screen is inactive by design.
+
+## A relation or include fails
+
+- the parent model must have one primary key;
+- the child foreign key must exist and use the same field type;
+- `set_null` requires an optional child foreign key;
+- `include` uses the declared alias, such as `notes` or `folder`, not the
+  relation name;
+- nested includes such as `notes.attachments` are not supported in 1.3.1;
+- add relations only after increasing the schema version.
+
+For an existing SQLite table, declaring a relation does not magically attach a
+foreign-key constraint. Rebuild that table in a reviewed migration as
+described in [Reactive Data](reactive-data.md#migrations-and-existing-databases).
 
 ## Storage cannot decrypt an old/copy value
 
