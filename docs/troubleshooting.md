@@ -302,6 +302,70 @@ a route. Moving the physical computer does not move an emulator's virtual GPS.
 The route line and the current-location dot are separate: calculating a route
 does not fabricate device movement.
 
+## A background job never leaves waiting_network
+
+The Previewer holds a queue with `requires_network=True` until the machine has
+both a route and a reachable host on port 443. A machine carrying Hyper-V,
+WSL, VirtualBox or VPN adapters keeps a route alive with the Wi-Fi switched
+off, so the route alone is not treated as connectivity.
+
+If the queue holds while the browser works, check that outbound port 443 is
+not blocked for Python. On Android the same job is gated by
+`NetworkType.CONNECTED`, which the system decides.
+
+## A job call disappears from the APK
+
+Every job method has to be reachable from a declared job. This is valid
+Python but the declaration must exist:
+
+```python
+def sync_notes():
+    sync_job.progress(20, "Working")   # sync_job is declared below
+
+sync_job = background_job("sync_notes", run=sync_notes)
+```
+
+ApkPy collects job declarations before it reads function bodies, so the order
+above is supported. What is not supported is calling a method on something
+that is never assigned from `background_job(...)`, or assigning the job inside
+a function instead of at module level.
+
+## A job retries forever
+
+`job.retry()` marks the attempt and lets the rest of the function run. If the
+condition that triggered it is true on every attempt, WorkManager keeps
+retrying with a growing backoff. Bound it with the attempt number:
+
+```python
+if upload_job.attempt() == "5":
+    upload_job.fail()
+    return
+```
+
+`attempt()` starts at `"1"` and counts the tries of one queued item, so it
+stays at `"1"` while everything succeeds first time.
+
+## A job body updates nothing on screen
+
+The `run` function executes off the interface thread — on Android it is a
+`Worker` that can run with the app closed, so component calls are ignored.
+Report through `progress()` and read it with `observe()`:
+
+```python
+def deliver():
+    outbox.progress(50, "Uploading")   # reaches the interface
+
+def queue_changed(status):
+    queue_state.set_value(status["state"])
+
+outbox.observe(on_change=queue_changed, screen=home)
+```
+
+Note that `https` is synchronous inside the generated worker and asynchronous
+in the Previewer. Decide the outcome in the job body; calling `job.retry()`
+from an `on_response` callback arrives after the attempt has finished on the
+desktop.
+
 ## A background feature stops after leaving the app
 
 Android applies platform restrictions to location, media, notifications and
@@ -346,3 +410,43 @@ Include:
 
 Do not include API tokens, signing keys, `google-services.json` or private user
 data. Start from the repository's bug-report template.
+
+## A picked file cannot be shown in an image component
+
+`files.pick` and `gallery.pick` return an opaque handle: a `content://` Uri on
+Android, a filesystem path on the desktop. Passing it to an `image` component is
+not supported and does not currently work on Android.
+
+Send it with `uploads.*`, and display the metadata the picker returned:
+
+```python
+def file_chosen(success, path, name, size, mime):
+    if success:
+        chosen.set_value(name + " - " + size + " bytes")
+```
+
+## The type filter let the wrong file through
+
+`types=` is advisory. Many Android document providers ignore
+`EXTRA_MIME_TYPES`, and both runtimes always offer an all-files entry, so the
+Previewer is never stricter than the phone. Validate after the fact:
+
+```python
+if not name.endswith(".pdf"):
+    status.set_value("Choose a PDF")
+    return
+```
+
+## A model with choices= failed to compile
+
+Fixed in 1.3.2. Before that, `db.text(choices=[...])` generated
+`new JSONArray(String)`, whose checked `JSONException` the field initialiser
+neither caught nor declared, so the build stopped with *unreported exception
+JSONException*. Upgrade, or remove `choices=` on older versions.
+
+## Upload progress raised TypeError only on the desktop
+
+Fixed in 1.3.2. The generated Java passed the progress callback three strings
+while the Previewer passed integers, so `"Uploading " + percent + "%"` worked on
+the phone and failed on the desktop. Both runtimes now deliver strings; compare
+with `int(percent)`.

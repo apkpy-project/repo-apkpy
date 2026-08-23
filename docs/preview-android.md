@@ -49,6 +49,7 @@ loop; the generated project uses Android widgets and services.
 | Push | `push.simulate()` | Firebase Cloud Messaging |
 | Location | explicit `preview_route` | fused device location |
 | Routes | compatible HTTP routing endpoint | same request contract from Android |
+| Background jobs | on-disk queue in `~/.apkpy/jobs` | WorkManager `OneTimeWorkRequest` queue |
 
 ## Visual parity is a contract, not pixel identity
 

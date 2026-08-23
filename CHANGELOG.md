@@ -6,6 +6,147 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.3.2] — 2026-08-21
+
+### Added
+
+- One shared icon table: 53 names (71 with aliases) that the Previewer and the
+  Android compiler both read, replacing two unrelated systems that agreed on
+  only 29 of their 48 names. `person` used to render as a ring with a dot on
+  the desktop; `skip_next` as a solid disc on the phone.
+- The Previewer rasterises the shared vector with antialiasing instead of
+  redrawing every icon by hand with canvas primitives Tk cannot smooth.
+- `icon="assets/logo.svg"` accepts your own artwork. Read at build time and
+  turned into an Android vector drawable, with `viewBox`, nested `transform=`,
+  arcs and the common shape elements handled. Shapes painted in a second colour
+  are cut out rather than merged, which is how designers fake a hole.
+- Thirteen navigation names ship an outlined variant. `bottom_nav` fills the
+  active item: a pill lights up behind the icon and the icon goes from outline
+  to solid. `indicator="pill" | "line" | "none"` and `icons_active=`.
+- `Theme(motion=...)`: `none`, `subtle`, `standard`, `expressive`. Four moments
+  scale from one base, and both runtimes resolve every duration from the same
+  module.
+- CSS `transition:` on appearing and disappearing, and `press:` for touch
+  feedback.
+- `on_click_navigate(transition="slide" | "slide_up")`, using
+  `overrideActivityTransition` on API 34+ and `overridePendingTransition`
+  below, because the older call is deprecated at the generated `targetSdk`.
+- Animations honour Android's *Remove animations* accessibility setting.
+- Five diagnostic codes for icons: an unknown name (`U2015`, a warning with the
+  closest match), a missing file, a stroke-only export, an unconvertible
+  element and an unreadable file.
+
+- `files.pick(on_result=, types=)` picks any file type through the Storage
+  Access Framework and reports `(success, path, name, size, mime)` — five
+  strings in both runtimes. No storage permission is declared.
+- `upload_button(...)` picks and uploads in a single call. It is expanded at
+  parse time into an ordinary button plus two callbacks, so the generated Java
+  is identical to the hand-written form; a regression test asserts that.
+- `types=` accepts extensions, complete MIME types and families, resolved in
+  Python at build time so the two runtimes cannot disagree.
+- Diagnostics expanded to 64 codes across eight families, each with a
+  "Why this happened" explanation and a documentation link. 166 of the 167
+  messages the library raises are matched by a specific rule.
+- Gradle failures are diagnosed: eight recognised signatures, and an
+  unrecognised failure still reports Gradle's own reason and the project path.
+- Compiler diagnostics point at the line in `writehere.py` instead of ApkPy's
+  own source, and never report a location inside the library.
+- A search filter that cannot become a `TextWatcher` is reported as `C4002`
+  instead of a one-line note; a background job body that raises is reported
+  with the job name, attempt number and payload keys.
+
+### Added
+
+- `background_job()` declares persistent work that survives backgrounding,
+  network loss, process death and a reboot. Android generates a WorkManager
+  `OneTimeWorkRequest` pipeline; the Previewer runs the same contract against
+  an on-disk queue in `~/.apkpy/jobs`.
+- Constraints `requires_network`, `requires_unmetered`, `requires_charging`
+  and `requires_battery_not_low`, generated as an `androidx.work.Constraints`
+  object.
+- Automatic retries with `retry="exponential"` or `"linear"` and
+  `retry_seconds=`, generated as `setBackoffCriteria` with WorkManager's
+  ten-second floor.
+- Unique work through `unique=True` and `on_conflict="append" | "keep" |
+  "replace"`, generated as `ExistingWorkPolicy`. `"append"` maps to
+  `APPEND_OR_REPLACE` so a queue is not silently cancelled after one failure.
+- `job.enqueue(data)`, `job.cancel()` and `job.observe(on_change=, screen=)`.
+- Inside the job body: `job.input(key)`, `job.attempt()`,
+  `job.progress(percent, message)`, `job.retry()` and `job.fail()`.
+- One JSON status document — `state`, `progress`, `message`, `pending`,
+  `running`, `attempt` — delivered identically by both runtimes.
+- The English **Offline Outbox** demonstration in `playground/writehere.py`,
+  covering queueing, offline hold, drain on reconnection, restart recovery,
+  a deliberate failure with backoff and queue cancellation.
+
+### Android and Previewer
+
+- Conditional `ApkpyJobs.java` runtime with one `enqueue_<job>` entry point
+  per declared job, plus `cancel` and a `status` collector that folds a list of
+  `WorkInfo` into the JSON document.
+- One generated `<Job>JobWorker.java` per job, reusing the existing worker
+  generator rather than duplicating it, extended with `getInputData()`,
+  `setProgressAsync()` and the attempt result.
+- `observe()` attaches to `getWorkInfosByTagLiveData(...)`, so progress
+  survives rotation and resumes with the Activity without polling.
+- Job declarations are collected in a pass that runs before the module is
+  visited. Python requires the run function to be written above the
+  declaration, and without that pass its job calls were dropped in silence.
+- The `androidx.work:work-runtime` dependency, the runtime class and the
+  worker are emitted only when a job is declared.
+- Worker helpers `_jobInput` and `_jobProgress`, and the attempt-result field,
+  are emitted only when the job body uses them.
+
+### Fixed
+
+- `animation-duration: 0.5s` was parsed as 0.5 ms in the Previewer and 5 ms on
+  Android; neither understood seconds. The default duration also differed,
+  600 ms against 1000 ms, and the two easing curves were different.
+- A `@keyframes` fade interpolated towards a hard-coded `#ffffff`, so every
+  fade in a dark app flashed white.
+- `scale` and `margin-left` animated on Android and did nothing in the
+  Previewer.
+- `inputs.set_value("")` cleared the field without restoring its placeholder,
+  so a form that clears itself after submitting went blank and stayed blank.
+- CSS `placeholder-color` was honoured on Android and ignored by the Previewer.
+- Rounded containers re-measured after the first paint, so a freshly rendered
+  screen showed clipped cards for about 250 ms before settling.
+- The bottom bar's active pill used the same colour as the icon behind it,
+  hiding the icon on a device.
+- `render_diagnostic` printed an empty *Technical details* heading.
+- `db.text(choices=[...])` generated `new JSONArray(String)`, whose checked
+  `JSONException` the field initialiser neither caught nor declared, so any
+  model using `choices=` failed the build with *unreported exception
+  JSONException*.
+- Upload progress delivered integers in the Previewer and strings on Android,
+  so `"Uploading " + percent + "%"` worked on the phone and raised `TypeError`
+  on the desktop. Both runtimes now deliver strings.
+- Upload lambdas could shadow a parameter of the enclosing method, producing
+  Java that did not compile.
+- Diagnostic output is normalised to ASCII for legacy Windows code pages.
+- A `return` inside a generated `Worker` emitted `return;` from `doWork()`,
+  which returns `Result` and therefore did not compile. Early returns now
+  produce the correct result. This also affected `service.every` workers and
+  is covered by a regression test.
+- Previewer connectivity for `requires_network` is decided by a route check
+  combined with a reachability check on port 443. A reachability check alone
+  reported offline on machines that block outbound port 53, and a route check
+  alone reported online with the Wi-Fi switched off on machines with Hyper-V,
+  WSL, VirtualBox or VPN adapters.
+- Previewer job status values are strings, matching the generated `_jsonGet`
+  accessor. Numeric keys previously returned integers, so string concatenation
+  worked on Android and raised `TypeError` on the desktop.
+- Observer notifications raised on a worker thread are delivered through an
+  interface-thread pump. Scheduling them directly stalled the worker and left
+  the queue frozen.
+
+### Documentation
+
+- New [Background jobs and offline queue](https://repo-apkpy.pages.dev/background-jobs/)
+  page and [Version 1.3.2](https://repo-apkpy.pages.dev/version-1.3.2/) notes.
+
+---
+
 ## [1.3.1] — 2026-08-20
 
 ### Added

@@ -42,6 +42,13 @@ depends on correct key handling, server authorization and threat modeling.
 Yes. Feature helpers and dependencies are emitted only when the source uses the
 matching capability.
 
+## What happens to work when the app is closed?
+
+Work declared with `background_job()` is handed to WorkManager, which stores
+the queue in its own database. It survives backgrounding, process death and a
+reboot, and runs when the declared constraints allow it. See
+[Background jobs](background-jobs.md).
+
 ## Is ApkPy open source?
 
 Not currently. ApkPy is actively developed as proprietary software. The

@@ -65,10 +65,10 @@ An application that does not use feeds receives none of this runtime.
 Projects without `db.model()` receive no typed repositories, data executor,
 schema metadata or migration runtime. Legacy SQL calls remain available.
 
-## What was validated for 1.3.1
+## What was validated for 1.3.2
 
 <div class="verification-grid">
-  <article><strong>167</strong><span>transpiler regression checks passed</span></article>
+  <article><strong>185</strong><span>transpiler regression checks passed</span></article>
   <article><strong>21</strong><span>focused Data Core and Reactive Data checks passed</span></article>
   <article><strong>Gradle</strong><span>the generated Reactive Data demo Java compiled successfully</span></article>
   <article><strong>Strict docs</strong><span>the complete MkDocs site built without warnings treated as errors</span></article>
@@ -133,7 +133,7 @@ the next `apkpy build` replaces it.
 
 Start with the [Data Core guide](data-core.md), continue to
 [Reactive Data](reactive-data.md), then inspect the complete
-[1.3.1 release notes](version-1.3.1.md).
+[1.3.2 release notes](version-1.3.2.md).
 
 For broader release evidence and the stability contract, continue to
 [Trust and maturity](trust-maturity.md). For the renderer boundary, use

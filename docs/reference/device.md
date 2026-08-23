@@ -12,13 +12,16 @@ description: Permissions, push, maps, location, notifications and Android integr
 | `push` | FCM listeners, token, topics and Preview simulation |
 | `share` | native share sheet |
 | `clipboard` | system clipboard |
-| `camera` / `gallery` | capture and media picker |
+| `camera` / `gallery` | capture and media picker (images) |
+| `files.pick` / `upload_button` | pick any file type, and pick-then-upload |
 | `location` | current, continuous and background location |
 | `map_view` | map tiles, markers, routes and user layer |
 | `routes` / `route_points` | cancellable route calculation and decoding |
 | `service` | periodic and one-shot background work |
+| `background_job` | persistent queue: constraints, retries, cancellation and observable progress |
 | `apps` | installed app inspection |
 
-Use [Firebase push](../guides/push-firebase.md),
+Use [Background jobs](../background-jobs.md),
+[Firebase push](../guides/push-firebase.md),
 [Maps and continuous location](../guides/maps-tracking.md) and
 [Native Android features](../native-features.md).

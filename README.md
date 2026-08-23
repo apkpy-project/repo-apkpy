@@ -37,6 +37,126 @@ error families, examples and opt-out control.
 
 ---
 
+## ApkPy 1.3.2 — One icon table, and motion on one dial
+
+ApkPy used to carry two unrelated icon systems: one hand-drawn for the desktop
+Previewer, one vector for Android. They agreed on 29 of their 48 names. The most
+common name in a bottom bar, `person`, had no drawing on the desktop at all and
+came out as a ring with a dot.
+
+Geometry now lives in one shared table both backends read, and the Previewer
+rasterises it with antialiasing.
+
+![The ApkPy icon catalogue](docs/assets/icon-catalogue.png)
+
+**53 names, 71 with aliases** — and `icon=` also takes your own artwork:
+
+```python
+button("Share", icon="assets/logo.svg", screen=home)
+```
+
+The `.svg` is read at build time and turned into an Android vector drawable, so
+there is no bitmap in the APK and it stays sharp at any size.
+
+Motion moved onto a single dial:
+
+```python
+run(start_screen=home, theme=Theme(motion="standard"))
+```
+
+`none`, `subtle`, `standard`, `expressive`. Components fade instead of popping,
+the bottom bar fills its active item, and screens can slide:
+
+```python
+bottom_nav([home, about], icons=["home", "info"], indicator="pill")
+on_click_navigate(detail, transition="slide")
+```
+
+```css
+receipt  { transition: 240ms; }
+add_item { press: none; }
+```
+
+Both runtimes resolve every duration from the same module, and animations
+honour Android's *Remove animations* accessibility setting.
+
+
+## ApkPy 1.3.2 — Persistent Tasks & Offline Queue
+
+ApkPy 1.3.2 adds work that outlives the screen that started it. A declared job
+keeps running when the app goes to the background, when the network
+disappears, when Android reclaims the process and across a reboot.
+
+```python
+outbox = background_job(
+    "outbox",
+    run=deliver_message,
+    requires_network=True,
+    retry="exponential",
+    unique=True,
+    on_conflict="append",
+)
+
+outbox.enqueue({"text": message_input.get_value()})
+outbox.cancel()
+outbox.observe(on_change=queue_changed, screen=home)
+```
+
+On Android this becomes a WorkManager `OneTimeWorkRequest`:
+
+- **Persistent queue** — WorkManager stores it in its own database, so pending
+  work survives process death and a reboot.
+- **Automatic retry** — `retry="exponential"` or `"linear"` with
+  `retry_seconds=` becomes `setBackoffCriteria`.
+- **Network and battery constraints** — `requires_network`,
+  `requires_unmetered`, `requires_charging` and `requires_battery_not_low`
+  become an `androidx.work.Constraints` object.
+- **Cancellation** — `cancel()` drops the queue and abandons the running
+  attempt.
+- **Observable progress** — `observe()` reads real `WorkInfo` updates through
+  LiveData, so the interface stays correct after a rotation or a restart.
+- **Unique work** — `on_conflict="append" | "keep" | "replace"` maps to
+  `ExistingWorkPolicy`, so a queue really is a queue and duplicates are
+  prevented.
+
+Inside the job the payload, progress and outcome are explicit:
+
+```python
+def deliver_message():
+    outbox.progress(20, "Uploading")
+    storage.set("last_message", outbox.input("text"))
+
+    if outbox.attempt() == "3":
+        outbox.fail()
+        return
+
+    outbox.progress(100, "Delivered")
+```
+
+`on_change` receives one JSON status document — `state`, `progress`,
+`message`, `pending`, `running` and `attempt` — with string values in both
+runtimes, so `"pending " + status["pending"]` behaves identically on the
+desktop and on the phone.
+
+The Previewer runs the same contract: the queue lives in `~/.apkpy/jobs` and is
+restored on the next start, `requires_network` holds it while the machine is
+offline and drains it when the connection returns, and retries use the same
+backoff.
+
+Apps that never call `background_job` receive no runtime class, no worker and
+no `androidx.work` dependency. Measured on the same two-screen app built with
+and without a job: **415,782 bytes** of debug APK, almost entirely the
+WorkManager library.
+
+The English **Offline Outbox** demo in `playground/writehere.py` covers
+queueing, offline hold, drain on reconnection, restart recovery, a deliberate
+failure with backoff and queue cancellation.
+
+Read the [background jobs guide](docs/background-jobs.md) and the
+[1.3.2 release notes](docs/version-1.3.2.md).
+
+---
+
 ## ApkPy 1.3.1 — Reactive Data
 
 ApkPy 1.3.1 extends Data Core with controlled one-to-many relations, physical

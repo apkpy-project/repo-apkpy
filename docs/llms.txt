@@ -4,6 +4,7 @@ Canonical site: https://repo-apkpy.pages.dev/
 Project: ApkPy
 Purpose: Generate native Android Java, XML and Gradle projects from a supported declarative Python API.
 Runtime: Generated APKs do not embed Python.
+Current version: 1.3.2 (background jobs, any-file picker, upload_button, 64 diagnostic codes).
 
 Core documentation:
 - https://repo-apkpy.pages.dev/getting-started/
@@ -30,6 +31,7 @@ Supported client areas:
 - HTTPS, multipart uploads, WebSockets and Firebase push
 - typed SQLite models, asynchronous CRUD, transactions, migrations, encrypted local values and password hashing
 - background audio, MediaSession, playlists and Media3 video
+- persistent background jobs and an offline work queue backed by WorkManager
 - maps, route calculation, continuous and background location
 - native Markdown, rich text and expandable trees
 
@@ -39,6 +41,7 @@ Important limits:
 - Product-specific security, payments, recommendation, moderation and server infrastructure remain application responsibilities.
 - The desktop Previewer is not an Android emulator.
 - Reactive Data 1.3.1 adds one-to-many relations, batched includes and lifecycle-safe observable queries.
+- Persistent jobs 1.3.2 add background_job(): a WorkManager-backed offline queue with constraints, backoff, unique work, cancellation and observable progress.
 - ApkPy does not yet include automatic offline synchronization or conflict resolution.
 
 Measured Android benchmark (2026-08-17):

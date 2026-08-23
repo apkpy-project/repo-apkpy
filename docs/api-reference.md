@@ -180,7 +180,8 @@ aliases, batched includes, observer lifecycle and invalidation semantics.
 | <code>audio</code> | playback, background playback, seek, queue, controls, favourites and playlists |
 | <code>uploads</code> | streaming multipart file, image, audio and video uploads with progress/cancel |
 | <code>websocket</code> | persistent WS/WSS connections, send queue, reconnect and close |
-| <code>files</code> | <code>download</code>, <code>path</code>, <code>exists</code>, <code>delete</code> |
+| <code>files</code> | <code>download</code>, <code>path</code>, <code>exists</code>, <code>delete</code>, <code>pick</code> (any file type) |
+| <code>upload_button</code> | one button that picks a file and uploads it |
 | <code>auth</code> | <code>login</code>, <code>user</code>, <code>token</code>, <code>is_logged_in</code>, <code>logout</code> |
 
 Audio methods:
@@ -209,6 +210,7 @@ gapless transitions.
 | <code>routes</code> | cancellable driving, walking or cycling route calculation |
 | <code>push</code> | FCM listener, device token, topic subscription and Preview simulation |
 | <code>service</code> | Periodic and one-shot background work |
+| <code>background_job</code> | Persistent work queue with constraints, retries, cancellation and observable progress |
 | <code>apps</code> | Installed-app listing, permissions, extraction and hashing |
 
 For behavior and security notes, use the topic guides rather than relying on this compact index alone.

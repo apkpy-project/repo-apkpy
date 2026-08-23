@@ -9,7 +9,7 @@ ApkPy is a young compiler. Trust should come from inspectable output and
 repeatable evidence, not from pretending the project is older than it is.
 
 <section class="proof-band">
-  <article><strong>167</strong><span>transpiler regression checks</span></article>
+  <article><strong>185</strong><span>transpiler regression checks</span></article>
   <article><strong>21</strong><span>Data Core and Reactive Data checks</span></article>
   <article><strong>Real Gradle</strong><span>generated debug APK compiled</span></article>
   <article><strong>Strict docs</strong><span>warnings fail the build</span></article>
@@ -19,7 +19,7 @@ repeatable evidence, not from pretending the project is older than it is.
 
 | Area | Evidence | What it proves |
 | --- | --- | --- |
-| Python compiler | 167 regression checks | supported source patterns continue to produce expected output |
+| Python compiler | 185 regression checks | supported source patterns continue to produce expected output |
 | Reactive Data | 21 focused Data Core and Reactive Data checks | relations, includes, lifecycle, invalidation, rollback and conditional code generation are exercised |
 | Data Core | CRUD, transaction and migration tests | typed values, rollback, schema paths and destructive recovery are exercised |
 | Generated Java/XML | structural and XML parsing checks | generated sources are internally consistent |
@@ -27,7 +27,7 @@ repeatable evidence, not from pretending the project is older than it is.
 | Runtime floor | same-app Android benchmark | APK size, cold start and PSS are reported with programs and raw samples |
 | Documentation | `mkdocs build --strict` | navigation, internal links and configuration resolve |
 
-Last documented validation: **ApkPy 1.3.1, published on 20 August 2026**.
+Last documented validation: **ApkPy 1.3.2, published on 21 August 2026**.
 
 These checks do not certify every phone, Android manufacturer, backend or app
 design. They make regressions visible and give a reviewer concrete artifacts to

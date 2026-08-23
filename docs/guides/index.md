@@ -21,7 +21,8 @@ Previewer validation and Android generation, follow the
   <a href="sqlite-security/"><span>05</span><strong>SQLite and encryption</strong><p>Legacy SQL, protected values and security boundaries.</p></a>
   <a href="uploads/"><span>06</span><strong>Streaming uploads</strong><p>Multipart progress, cancellation and result handling.</p></a>
   <a href="maps-tracking/"><span>07</span><strong>Maps and tracking</strong><p>Device location, preview simulation and calculated routes.</p></a>
-  <a href="knowledge-app/"><span>08</span><strong>Knowledge app</strong><p>Markdown, inline spans, trees and local documents.</p></a>
+  <a href="../background-jobs/"><span>08</span><strong>Offline work queue</strong><p>Persistent jobs, constraints, retries and observable progress.</p></a>
+  <a href="knowledge-app/"><span>09</span><strong>Knowledge app</strong><p>Markdown, inline spans, trees and local documents.</p></a>
 </div>
 
 ## How to use a guide

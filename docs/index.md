@@ -17,8 +17,8 @@ description: Build native Android Java, XML and Gradle projects from a supported
     <div class="hero-facts" aria-label="ApkPy output facts">
       <span><strong>1</strong> Python source tree</span>
       <span><strong>0</strong> Python runtimes in the APK</span>
-      <span><strong>167</strong> transpiler checks</span>
-      <span><strong>29</strong> focused data + diagnostic checks</span>
+      <span><strong>185</strong> transpiler checks</span>
+      <span><strong>83</strong> focused unit tests</span>
     </div>
   </div>
   <div class="editor-card" aria-label="Example ApkPy source code">
@@ -43,9 +43,9 @@ description: Build native Android Java, XML and Gradle projects from a supported
 
 <div class="release-line">
   <span class="release-line__pulse"></span>
-  <strong>ApkPy 1.3.1</strong>
-  <span>One-to-many relations, batched includes and lifecycle-safe observable queries</span>
-  <a href="reactive-data/">Explore Reactive Data</a>
+  <strong>ApkPy 1.3.2</strong>
+  <span>Persistent background jobs that survive backgrounding, network loss and a reboot</span>
+  <a href="background-jobs/">Explore background jobs</a>
 </div>
 
 <section class="home-errors">

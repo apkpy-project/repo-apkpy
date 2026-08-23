@@ -55,6 +55,18 @@ gallery.pick(on_result=image_selected)
 
 The Previewer uses a file picker to simulate the flow. Android opens the native camera or content picker.
 
+<code>camera</code> and <code>gallery</code> are image-only. For documents, archives, audio or anything else use <code>files.pick</code>, or <code>upload_button</code> to pick and send in one step:
+
+~~~ python
+def file_chosen(success, path, name, size, mime):
+    if success:
+        chosen.set_value(name + " - " + size + " bytes")
+
+files.pick(on_result=file_chosen, types=["pdf", "zip"])
+~~~
+
+See [Streaming multipart uploads](guides/uploads.md).
+
 ## Location
 
 ~~~ python
@@ -88,6 +100,26 @@ service.cancel(id="library_sync")
 ~~~
 
 Android compiles scheduled work to WorkManager. The operating system controls the exact execution time, particularly for periodic jobs.
+
+`service.every` is a *schedule*. When you instead need a *queue* — work that is
+handed over once and must survive the app closing, the network dropping or a
+reboot — declare a persistent job:
+
+~~~ python
+outbox = background_job(
+    "outbox",
+    run=deliver_message,
+    requires_network=True,
+    retry="exponential",
+    unique=True,
+)
+
+outbox.enqueue({"text": message_input.get_value()})
+outbox.observe(on_change=queue_changed, screen=home)
+~~~
+
+Read [Background jobs and offline queue](background-jobs.md) for constraints,
+retries, unique-work policies, cancellation and observable progress.
 
 ## App inspection
 
