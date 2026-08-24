@@ -37,6 +37,110 @@ error families, examples and opt-out control.
 
 ---
 
+## ApkPy 1.4.0 — Talking to a model, and an app that looks like yours
+
+Two batches that turned out to be one: an app that can hold a conversation
+with an API, and an app that stops looking like every other app built with the
+same tool. They ship together because they are the same problem seen twice —
+an assistant app is not hard to *build*, it is hard to make **look right**,
+and every shape it needed was missing.
+
+### A dict is a JSON body, with its types intact
+
+```python
+https.post(
+    "https://api.anthropic.com/v1/messages",
+    data={
+        "model": "claude-sonnet-5",
+        "max_tokens": 1024,
+        "messages": [{"role": "user", "content": text}],
+    },
+    headers={"x-api-key": key, "anthropic-version": "2023-06-01"},
+    timeout=120,
+    on_response=answered,
+)
+```
+
+`max_tokens` reaches the far end as the number `1024`, not as `"1024"` — the
+difference between an API accepting the request and rejecting it. Nested
+objects and arrays nest, and because the serialiser writes the body, a quote
+or a newline in what the user typed cannot break the JSON.
+
+`timeout=` is in seconds on every verb, replacing a hard-coded 10 that nothing
+slow could survive. A string body is still sent exactly as written.
+
+### An answer is not a paragraph
+
+```python
+thread = virtual_collection(
+    turns,
+    template={"avatar": "{author}", "title": "{author}", "markdown": "{message}"},
+    item_height="auto",
+    screen=chat,
+)
+
+thread.merge_items([{"id": reply_id, "author": "Ora", "message": ""}])
+thread.scroll_to_end()
+```
+
+```css
+thread { code-copy: button; }
+field  { rows: 1; max-rows: 6; }
+```
+
+- **`markdown`** renders the answer as Markdown — the same renderer the
+  `markdown()` component uses, extracted rather than copied, so a fenced block
+  looks the same in a row as it does on a page.
+- **`item_height="auto"`** lets each row wrap its own content. One fixed
+  height gives `"yes"` the same space as a twenty-line answer.
+- **`avatar`** draws a circle of initials in a colour the name picks — the
+  same colour on the phone and in the Previewer, because one palette decides
+  it and the compiler writes that table into the generated Java.
+- **`scroll_to_end()`** moves the viewport to the newest row, animated over
+  the duration the theme's `motion` preset gives the `nav` moment.
+- **`code-copy: button`** puts a tappable Copy under every fenced block.
+- **`max-rows`** is where a growing composer stops.
+
+### Shape: a drawer, settings rows and your own typeface
+
+```python
+menu = drawer([chat, history, you],
+              labels=["New chat", "History", "You"],
+              icons=["message", "list", "person"],
+              header="Ora")
+
+app_bar("New chat", icon="menu", command=lambda: menu.open(), screen=chat)
+
+key_row = list_row("API key", subtitle="Paste your own; it stays on the phone",
+                   icon="bolt", trailing="Not set",
+                   trailing_icon="chevron_right", screen=you)
+
+font("Ora Serif", regular="fonts/Tiempos-Regular.ttf",
+                  bold="fonts/Tiempos-Bold.ttf")
+```
+
+Plus `divider-color` / `divider-inset` for grouped rows, `text-align` on
+labels, buttons and app bar titles, `letter-spacing` and `line-height`, and
+`flex-grow` inside a stacked column.
+
+### Nothing changes for an app that does not ask
+
+Every addition is gated on being used. No `markdown` slot means the Markdown
+renderer is never written into the project; no `scroll_to_*` means no scroll
+helper; no `font()` means no `res/font`. An app that mentions none of it
+generates byte-identical XML to the one 1.3.2 generated.
+
+**Honest limits, stated up front:** Markdown has no tables and no images in a
+row; `https` still delivers the whole answer at once (no server-sent events);
+and **every row in a collection has the same shape**, so a chat where your
+turn is an inset bubble and the reply is full-width text is not expressible
+yet.
+
+[1.4.0 release notes](RELEASE_1.4.0.md) ·
+[Version 1.4.0, with the generated Java](docs/version-1.4.0.md)
+
+---
+
 ## ApkPy 1.3.2 — One icon table, and motion on one dial
 
 ApkPy used to carry two unrelated icon systems: one hand-drawn for the desktop
@@ -49,7 +153,7 @@ rasterises it with antialiasing.
 
 ![The ApkPy icon catalogue](docs/assets/icon-catalogue.png)
 
-**53 names, 71 with aliases** — and `icon=` also takes your own artwork:
+**62 names, 93 with aliases** — and `icon=` also takes your own artwork:
 
 ```python
 button("Share", icon="assets/logo.svg", screen=home)

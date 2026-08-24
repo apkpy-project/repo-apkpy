@@ -134,6 +134,84 @@ feed = virtual_collection(
 | `rollback(mutation_id=None)` | restore one optimistic snapshot |
 | `finish_load(has_more=True)` | release a failed/empty load latch |
 | `refresh()` | start the guarded refresh callback |
+| `scroll_to_end()` | bring the newest row into view |
+| `scroll_to_top()` | bring the first row into view |
+| `scroll_to_item(id, key="id")` | bring one keyed row into view |
+
+### Rows that take the height they need
+
+`item_height=` accepts a number — every row that height, which is what a feed
+of uniform cards wants — or `"auto"`, where each row wraps its own content:
+
+```python
+thread = virtual_collection(
+    turns,
+    template={"title": "{author}", "markdown": "{message}"},
+    item_height="auto",
+    screen=chat,
+)
+```
+
+A conversation needs `"auto"`: one fixed height gives "yes" the same space as
+a twenty-line answer, so one floats in a void and the other is cut off
+mid-sentence. With `"auto"` the text also stops being clipped to one line
+unless `title-lines` / `subtitle-lines` say otherwise.
+
+### Looking at the message that just arrived
+
+Adding a row does not move the viewport, which is right for a feed and wrong
+for a conversation: you send a question and end up looking at your own
+question while the answer grows below the fold.
+
+```python
+thread.merge_items([{"id": reply_id, "author": "Ora", "message": ""}])
+thread.scroll_to_end()
+```
+
+The scroll is animated over the duration the theme's `motion` preset gives
+the `nav` moment, and `motion="none"` makes it a jump. `scroll_to_item(id)`
+takes the same `key=` the mutations take.
+
+Two honest limits. It moves once, when you call it — it does not follow text
+that keeps arriving, so a long streamed answer still grows past the bottom
+edge. And a very long jump on Android takes longer than the stated duration,
+because the RecyclerView re-aims as it goes and cannot know a row's height
+before laying it out.
+
+### The `avatar` slot
+
+A template slot named `avatar` draws a circle with up to two initials taken
+from its value, over a colour the value itself picks:
+
+```python
+template={"avatar": "{author}", "title": "{author}", "markdown": "{message}"}
+```
+
+The same name lands on the same colour on the phone and in the Previewer —
+one palette, read directly by one and written into the generated Java by the
+other. An empty value hides the circle instead of leaving a coloured hole.
+
+It is a mark for a name, not a picture: for a photo or a remote image, use
+the `image` slot.
+
+### The `markdown` slot
+
+A template slot named `markdown` renders its value as Markdown instead of
+plain text — headings, emphasis, links, lists, quotes and fenced code blocks.
+It is the same renderer the `markdown()` component uses, so a code block looks
+the same in a row as it does on a page.
+
+Put an assistant's answer here rather than in `subtitle`: read as plain text
+with backticks in it, an answer with code in it is not an answer.
+
+Add `code-copy: button;` to the collection's stylesheet — or to a
+`markdown()` component's — and every fenced block gets a tappable **Copy**
+under it that puts exactly that block on the clipboard. A block of code you
+cannot copy is a block of code you retype by hand.
+
+All of these are opt-in. A collection that asks for none of them generates
+the same Java and XML it always did, and never carries the Markdown renderer
+into the APK.
 
 `state(initial, id=None)` returns a reactive value with `get`, `set`,
 `increment`, `decrement`, `toggle`, `bind` and `bind_visibility`.
@@ -244,6 +322,32 @@ https.get("https://api.example.com/note/42", on_response=received)
 `https.get`, `post`, `put`, `patch` and `delete` call
 `on_response(success, body)`. `json_get(json_text, "items.0.title")` safely
 reads a dotted path.
+
+Pass a dict as `data=` and it goes out as JSON with its types intact — a
+number stays a number, and the text a user typed is escaped by the
+serialiser rather than by you:
+
+```python
+https.post(
+    "https://api.example.com/messages",
+    data={
+        "model": "some-model",
+        "max_tokens": 1024,
+        "messages": [{"role": "user", "content": question.get_value()}],
+    },
+    headers={"x-api-key": storage.get("api_key", "")},
+    timeout=120,
+    on_response=answered,
+)
+```
+
+`Content-Type: application/json` is set for you when the body starts with
+`{` or `[` and you did not choose a header yourself. Pass a string as `data=`
+to send anything else — form-encoded bodies, XML — exactly as written.
+
+`timeout=` is in **seconds** and applies to waiting for the response; the
+default is 60 and the ceiling is 600. Raise it when the other end thinks
+before it answers, as a language model does.
 
 ## WebSocket
 

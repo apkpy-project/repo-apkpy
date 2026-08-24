@@ -12,13 +12,14 @@ description: ApkPy screens, components, layouts, themes and navigation reference
 | `Screen(id, background_image=None, scroll=False)` | define an Android screen/Activity |
 | `run(start_screen=None, theme=None)` | start the Previewer and set the app entry |
 | `Theme(...)` | global colors, typography, radius and component defaults |
+| `font(family, regular=, bold=, italic=, bold_italic=)` | register a typeface from `.ttf`/`.otf` files |
 | `device(name)` | Previewer device preset or responsive mode |
 
 ## Components
 
 `label`, `button`, `inputs`, `input_field`, `image`, `video`, `avatar`,
-`container`, `card`, `card_action`, `list_view`, `carousel`, `grid`, `spinner`,
-`skeleton`, `empty_state` and `error_state`.
+`container`, `card`, `card_action`, `list_row`, `list_view`, `carousel`,
+`grid`, `spinner`, `skeleton`, `empty_state` and `error_state`.
 
 Common component operations are `get_value()`, `set_value(value)`, `show()` and
 `hide()`. Images also expose source/effect operations; videos expose playback,
@@ -33,10 +34,11 @@ seek, speed and mute operations.
 | `responsive(...)` | mobile, tablet and landscape alternatives |
 | `container(...)` | styled parent surface |
 | `card(...)` | semantic grouped content and actions |
+| `list_row(...)` | icon, label, subtitle and a trailing element |
 
 ## Navigation and chrome
 
-`on_click_navigate`, `bottom_nav`, `BottomNav`, `app_bar`,
+`on_click_navigate`, `bottom_nav`, `BottomNav`, `drawer`, `app_bar`,
 `sliver_app_bar`, `action` and `mini_player`.
 
 ## Overlays and feedback

@@ -1,5 +1,53 @@
 # Screens and navigation
 
+
+## Navigation drawer
+
+A bottom bar runs out at five destinations. Past that -- and for anything with
+projects, folders or an account behind it -- the panel that slides in from the
+leading edge is the shape people expect:
+
+~~~ python
+chat = Screen(id="chat")
+projects = Screen(id="projects")
+artifacts = Screen(id="artifacts")
+
+menu = drawer(
+    [chat, projects, artifacts],
+    labels=["New chat", "Projects", "Artifacts"],
+    icons=["add", "folder", "description"],
+    header="Ora",
+    subtitle="you@example.com",
+)
+
+app_bar("New chat",
+        leading=action("menu", command=lambda: menu.open()),
+        screen=chat)
+~~~
+
+Declared once for the whole app, like `bottom_nav`. Each item starts the screen
+it names, the open screen stays highlighted, and the back button closes the
+panel before it leaves the screen. `menu.close()` closes it from anywhere.
+
+Style the panel with its `id`:
+
+~~~ css
+menu {
+    background-color: var(--surface);
+    color: var(--text);
+    subtitle-color: var(--text-secondary);
+    active-color: var(--primary);
+}
+~~~
+
+**Declare it after your screens.** A drawer needs every screen to exist, and
+your app bars usually come with those screens -- so the `drawer(...)` call
+naturally lands below the app bars that open it. That is fine: the compiler
+looks for it before it reads any function body. What it cannot do is find a
+drawer built inside a loop or an `if`, because it reads your module rather than
+running it.
+
+
 ## Navigate between screens
 
 ~~~ python

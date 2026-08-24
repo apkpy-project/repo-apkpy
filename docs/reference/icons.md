@@ -10,7 +10,7 @@ Every `icon=` argument — on `button`, `bottom_nav`, `action`, `empty_state`,
 
 ![The ApkPy icon catalogue in light and dark](../assets/icon-catalogue.png)
 
-**53 names, 71 with aliases**, thirteen of them with an outlined variant as
+**62 names, 93 with aliases**, thirteen of them with an outlined variant as
 well. The picture above is rendered by the library itself, through the same
 call the Previewer makes, so it cannot drift from what your app actually draws.
 
@@ -45,7 +45,26 @@ Some familiar names map onto a catalogue entry, so you rarely have to look one
 up: `favorite` → `heart`, `notifications` → `bell`, `photo` → `image`,
 `trash` → `delete`, `play` → `play_arrow`, `retry` → `refresh`,
 `profile`/`account`/`user` → `person`, `replay_5` → `replay`,
-`forward_15` → `forward_media`.
+`forward_15` → `forward_media`, `microphone`/`voice` → `mic`,
+`lightning`/`flash` → `bolt`, `copy` → `content_copy`, `submit` → `send`,
+`chevron_down`/`arrow_drop_down` → `expand_more`.
+
+## Composer controls
+
+`mic`, `send`, `stop`, `bolt`, `expand_more`, `expand_less` and `content_copy`
+are the set a chat-style input bar needs -- record, send, stop, the mode chip,
+a disclosure chevron and copy-to-clipboard. `chevron_right` and `chevron_left`
+are the sideways pair: `chevron_right` is what tells a
+[settings row](../ui-components.md#settings-rows) that tapping it opens
+something, and `navigate_next` / `navigate_before` / `disclosure` are aliases
+for them.
+
+```python
+row = container(id="controls", parent=composer)
+button("+", id="plus", variant="icon", icon="add", parent=row)
+button("Auto", id="mode", variant="tonal", icon="bolt", parent=row)
+button("Dictate", id="mic", variant="icon", icon="mic", parent=row)
+```
 
 ## Outlined variants
 
@@ -123,12 +142,13 @@ reported by code, not silently approximated:
 
 ## Catalogue
 
-`add`, `arrow_back`, `arrow_forward`, `attach_file`, `bell`, `camera`, `chart`,
-`check`, `checklist`, `circle`, `close`, `create_new_folder`, `delete`,
-`delete_sweep`, `description`, `done_all`, `download`, `edit`, `error`,
-`error_outline`, `folder`, `folder_open`, `forward_media`, `heart`, `home`,
-`image`, `inbox`, `info`, `inventory`, `inventory_2`, `library_music`, `list`,
-`menu`, `message`, `more_vert`, `music_off`, `note_add`, `pause`, `person`,
-`play_arrow`, `refresh`, `repeat`, `replay`, `save`, `search`, `settings`,
-`shuffle`, `skip_next`, `skip_previous`, `star`, `upload`, `volume_off`,
+`add`, `arrow_back`, `arrow_forward`, `attach_file`, `bell`, `bolt`, `camera`,
+`chart`, `check`, `checklist`, `circle`, `close`, `content_copy`,
+`create_new_folder`, `delete`, `delete_sweep`, `description`, `done_all`,
+`download`, `edit`, `error`, `error_outline`, `expand_less`, `expand_more`,
+`folder`, `folder_open`, `forward_media`, `heart`, `home`, `image`, `inbox`,
+`info`, `inventory`, `inventory_2`, `library_music`, `list`, `menu`, `message`,
+`mic`, `more_vert`, `music_off`, `note_add`, `pause`, `person`, `play_arrow`,
+`refresh`, `repeat`, `replay`, `save`, `search`, `send`, `settings`, `shuffle`,
+`skip_next`, `skip_previous`, `star`, `stop`, `upload`, `volume_off`,
 `warning`.

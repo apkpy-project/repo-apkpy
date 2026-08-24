@@ -6,11 +6,272 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+Nothing yet.
+
+---
+
+## [1.4.0] — 2026-08-24
+
+Two batches that turned out to be one. An app that can hold a conversation
+with an API -- a request body that keeps its types, a timeout long enough for
+something that thinks first, an answer rendered as Markdown in a row that
+takes the height it needs -- and an app that stops looking like every other
+app built with the same tool: a drawer, a settings row, a typeface of your
+own, and control over tracking, leading and alignment.
+
+They are one release because they are the same problem seen twice. An
+assistant app is not hard to build; it is hard to make look right, and every
+shape it needed was missing.
+
+### Added
+
+- `scroll_to_end()`, `scroll_to_top()` and `scroll_to_item(id, key="id")` on a
+  virtual collection. Adding a row never moved the viewport, which is right for
+  a feed and wrong for a conversation: you send a question and end up looking
+  at your own question while the answer grows below the fold. The scroll is
+  animated over the duration the theme's `motion` preset gives the `nav`
+  moment, out of the table both runtimes read, so `motion="none"` makes it a
+  jump on the desktop and on the phone alike.
+- An `avatar` slot in a collection's `template` draws a circle with up to two
+  initials taken from its value, over a colour that value picks. It is what
+  separates a list of paragraphs from a conversation: two speakers you tell
+  apart at a glance. One palette decides the colour -- read directly by the
+  Previewer, written into the generated Java as a literal by the compiler --
+  so the same name cannot be orange on one side and green on the other. An
+  empty value hides the circle rather than leaving a coloured hole.
+- CSS `code-copy: button` puts a tappable **Copy** under every fenced code
+  block, in a `markdown()` component and in a collection's `markdown` slot. It
+  copies that block and nothing else -- not the paragraph above it, not the
+  whole message. A block of code you cannot copy is a block of code you retype
+  by hand. On Android 13 and later the system shows its own confirmation for
+  every copy, so the app stays quiet rather than talking over it.
+- CSS `max-rows` on a `type="textarea"`: `rows` is where the field starts and
+  `max-rows` is where it stops growing, and between the two it follows the
+  text. One line is the right start for a reply box; two fixed lines are half
+  an empty composer waiting. Without `max-rows` the ceiling is what it always
+  was.
+- `virtual_collection(item_height="auto")`: each row wraps its own content
+  instead of every row taking the same measured-out height. A conversation
+  needs it -- one fixed height gives "yes" the same space as a twenty-line
+  answer, so one floats in a void and the other is cut off mid-sentence. Text
+  also stops being clipped to a single line unless the stylesheet says
+  otherwise. A number still fixes every row, exactly as before.
+- A `markdown` slot in a collection's `template` renders that field as
+  Markdown -- headings, emphasis, links, lists, quotes and fenced code blocks
+  -- rather than as plain text. It is the same renderer the `markdown()`
+  component uses, extracted rather than copied, so a fenced block looks the
+  same in a row as it does on a page. Both runtimes read the same styles for
+  the same reason.
+- A dict passed as `data=` to `https.post` / `put` / `patch` is sent as JSON,
+  with the types of the literal intact: `{"max_tokens": 1024}` arrives as the
+  number and not as `"1024"`, which is the difference between an API accepting
+  a request and rejecting it. Nested lists and objects nest. Because the
+  serialiser writes the body, a quote or a newline in text the user typed is
+  escaped properly rather than breaking the JSON, which is what building the
+  body by concatenation does the first time somebody presses the wrong key.
+- `Content-Type: application/json; charset=utf-8` is set on a body that starts
+  with `{` or `[`, unless the caller chose the header themselves. A string
+  body is still sent exactly as written, so form-encoded and XML bodies are
+  unaffected.
+- `timeout=` on every `https` verb, in seconds, defaulting to 60 and capped at
+  600. It replaces a fixed 10 seconds that no request to anything slow could
+  survive.
+- A module-level constant written by joining text -- `URL = BASE + MODEL +
+  ":generate"`, which is how a URL is naturally written -- is folded into one
+  literal and reaches the app. It used to produce nothing at all, and the name
+  was then used in the generated Java without ever having been declared. A
+  piece it cannot resolve, because the name is declared further down the file,
+  is now `U2027` rather than a `cannot find symbol` from the Android build.
+- `list_row.set_trailing()` and `.set_subtitle()`: a settings row
+  shows three texts, so it needs three ways to change one. The slot has to
+  have been declared -- pass `trailing=""` for one you intend to fill
+  later -- and the lookup is guarded rather than assumed.
+- `flex-grow: 1` on a stacked column child takes whatever its siblings leave,
+  and `justify-content` / `align-items` place the children along and across the
+  column. Together they are the empty state every assistant app opens on: the
+  greeting in the middle, the composer pinned under it. A column that names
+  neither still centres horizontally, which it always did.
+- `label.stream(text, speed=)` and `collection.stream_item(id, field, text)`:
+  text arriving a few characters at a time, the way an answer does. The rate
+  lives in one table both runtimes read, so the phone and the desktop type at
+  the same speed; `instant`, and a theme with `motion="none"`, put the whole
+  thing there at once. The Android side is a Handler on the main looper and the
+  Previewer a Tk `after` -- a few characters per tick rather than one every few
+  milliseconds, because neither clock is accurate below about 10ms.
+- The streaming helpers are emitted only for screens that carry the widget they
+  touch. Commands come from the whole module, so a collection helper on a
+  screen with no collection is a "cannot find symbol" at build time.
+- `drawer(screens, labels=, icons=, header=, subtitle=)`: the navigation panel
+  that slides in from the leading edge, and the last shape on the list that was
+  outright impossible rather than merely unstyled. Declared once for the whole
+  app the way `bottom_nav` is; each item starts the screen it names, the open
+  screen stays checked, and `menu.open()` from an app bar's leading icon is
+  what finally gives the hamburger something to open. Back closes the panel
+  before it leaves the screen, which DrawerLayout does not do on its own.
+- The compiler looks for the drawer before it reads any function body, because
+  a drawer needs every screen to exist and the app bars that open it are
+  written above it. Parsing strictly top to bottom would have met `menu.open()`
+  before `menu` was anything and dropped it in silence.
+- `list_row(text, subtitle, icon, trailing, trailing_icon, command)`: the
+  settings row, and the one shape a button could never be. Its label starts at
+  the leading edge with the icon beside it, it carries a second line, and it
+  keeps room on the right for a value, a plan or a chevron. The text block
+  takes what the icon and the trailing pieces leave, so a long label is cut
+  with an ellipsis instead of pushing the chevron off the screen. Tapped like
+  a button -- same `command=`, same navigation.
+- `divider-color` on a container groups rows with hairlines, drawn between
+  them and never at the edges (`android:showDividers="middle"`).
+  `divider-width` sets the thickness and `divider-inset` starts the line past
+  the icon column. Opt-in, so no container already written changes shape, and
+  it works on any container rather than only ones holding rows.
+- Rows stacked in a container sit flush against each other. The 6dp baseline
+  gap between stacked children would have lifted every hairline off the seam
+  it belongs on -- visible only once the APK was on a phone.
+- `text-align: left | center | right` on labels and buttons. A button centred
+  its label and nothing could move it, so three stacked rows read as three fat
+  pills instead of a settings list. Written to Android as `start` / `center` /
+  `end` so a right-to-left locale mirrors for free, and an aligned button pins
+  its icon to the leading edge (`app:iconGravity="start"`) rather than grouping
+  it with the label. `justify` is reported as `U2022` instead of half-done: it
+  needs `android:justificationMode`, which arrived at API 26 while the
+  generated app targets 24.
+- `text-align: center` on an app bar centres its title
+  (`app:titleCentered`). Android centres it in the whole toolbar and the
+  Previewer does the same -- packing centred it in the gap the actions left
+  over, which drifted left as soon as one appeared.
+- `letter-spacing` and `line-height`, in `px`, `em` or -- for `line-height` --
+  a bare multiple, the way CSS reads them. Both resolve through one shared
+  module, so the em Android is handed and the pixels the Previewer measures
+  come from the same arithmetic. `letter-spacing: 0px` is written out even
+  though it is zero, because a MaterialButton tracks its label at ~0.089em on
+  its own and silence would have left the phone spaced out while the Previewer
+  sat tight.
+- `font(family, regular=, bold=, italic=, bold_italic=)`: your own typeface,
+  from `.ttf` or `.otf` files beside your code. The Android build copies them
+  into `res/font`, writes the `<font-family>` that maps weights onto them, and
+  reaches them through `app:fontFamily` -- the AppCompat attribute, because the
+  framework one only learned to take a font resource at API 26 and ApkPy
+  targets 24. The Previewer loads the same files into the session without
+  installing anything. `Theme(font_family="Tiempos")` or
+  `font-family: "Tiempos"` in CSS then reaches them, and the app bar title
+  carries it too, through a generated text appearance.
+- Four font slots and no more, because four is what both sides can address: Tk
+  has a family plus `bold` and `italic`, Android expresses the same four as
+  `fontWeight`/`fontStyle` pairs. A `medium` would render on the phone and not
+  on the desktop, so it is reported as `U2024` rather than half-done. A slot
+  you leave out is synthesised by both renderers alike.
+- A missing font file or a web font format is reported at build time (`U2025`,
+  `U2026`) and that slot is dropped. The family still ships with whatever
+  survived, and a family left with nothing is never named by a layout --
+  referencing a resource that was never written is an AAPT link failure, which
+  is a much worse way to find out.
+- `chevron_right` and `chevron_left` in the icon catalogue, with
+  `navigate_next`, `navigate_before` and `disclosure` as aliases. The
+  catalogue had no sideways chevron at all, and a right chevron is what tells
+  a row that tapping it opens something. **62 names, 93 with aliases.**
+- An app that mentions none of these generates byte-identical XML.
+
+### Fixed
+
+- A `type="textarea"` grew with its text on Android and never grew in the
+  Previewer, so the same composer was one line on the desktop and three on the
+  phone. Both now start at `rows` and stop at the same ceiling.
+- A dict as the body of an `https` request compiled to an empty string. The
+  request went out with nothing in it, in silence, and `body = {...}` on a line
+  of its own generated no Java at all -- the name was then used without ever
+  having been declared, so the build failed somewhere else entirely. The
+  Previewer, which runs the Python, saw the whole dictionary: the divergence
+  this compiler pays the most for.
+- A list of objects became a list of strings. `[{"role": "user"}]` was written
+  as `["{\"role\":\"user\"}"]`, so `{"messages": msgs}` handed the far end a
+  quoted blob where an array belonged.
+- An `https` body was read back with `readLine()` into a `StringBuilder`, which
+  dropped every line break in the response, and both the body and the answer
+  used the platform charset instead of UTF-8.
+- The read timeout was 10 seconds on both sides, hard-coded. Anything that
+  takes longer to answer than an ordinary endpoint -- a model, a report, a cold
+  start -- died before replying, and the error that surfaced was a bare timeout
+  that said nothing about why.
+- The Previewer form-encoded a dict body while Android sent nothing at all, and
+  disabled TLS certificate verification for every request. It now sends JSON
+  like the phone does, verifies certificates by default, and only falls back to
+  an unverified context when the system has no CA store -- saying so once, in
+  the console, rather than quietly downgrading a request carrying an API key.
+- `label.stream()` written inside a named function referred to the view by its
+  local name, which only exists inside `onCreate`: a `cannot find symbol` at
+  build time. It reaches the view through `findViewById` now, like every other
+  setter does.
+- `Theme(primary=...)` left `on_primary` at the Material baseline dark purple,
+  so a filled button on any custom primary carried a label nobody could read.
+  It is now derived from the primary's luminance unless you set it yourself.
+- `storage.get(key, default)` used **inside** an expression -- as an argument
+  rather than on a line of its own -- compiled to an empty string in silence.
+  The Previewer read the stored value and the phone read nothing, which is the
+  failure this compiler's own notes call class number one. It now reaches
+  `_apkpyStorageGet` from both copies of the expression translator.
+- `set_value()` on a `list_row` emitted `setText` on the row itself, which is a
+  LinearLayout: a `cannot find symbol` at build time. It targets the row's
+  label now, and `set_trailing()` / `set_subtitle()` reach the other two slots.
+- The Previewer's app bar read its stylesheet for two colours and nothing
+  else, so a custom typeface or size reached the title on the phone and not on
+  the desktop.
+- `item-background-color: #00000000` on a collection took the Previewer down
+  with an `E1999` at startup. Tk has no per-widget alpha, so every colour a
+  collection reads now resolves to whatever sits behind it -- which is how a
+  chat turn asks to be text on the page rather than a card.
+- A collection drew a scrollbar down the Previewer even with one item in it. A
+  RecyclerView draws none until you drag it, so the rail is now shown only when
+  there is something to scroll.
+
+### Known limits
+
+- A collection row with a `markdown` slot renders the whole answer, but the
+  Markdown it understands is the same subset the `markdown()` component
+  understands: no tables and no images inside a row. A fenced block is
+  monospace on a tinted background with a Copy under it, not a widget.
+- Row heights in the Previewer are measured after a row is drawn, so a long
+  row is estimated once before it settles into its real height. The phone has
+  no such pass -- RecyclerView measures as it lays out -- which is the usual
+  trade: the shape matches, the first frame may not.
+- `scroll_to_end()` moves once, when it is called. It does not follow text
+  that keeps arriving, so a long streamed answer still grows past the bottom
+  edge after the jump. On Android a very long jump also takes longer than the
+  stated duration: the RecyclerView re-aims as it goes, because it cannot know
+  a row's height before laying it out.
+- `https` still delivers the whole answer at once. There is no server-sent
+  events reader yet, so an API that streams its reply token by token is read to
+  the end before the callback fires. `label.stream()` types text that has
+  already arrived; it is not the same thing.
+- Every row in a collection has the same shape. The adapter has one view type,
+  so a row cannot change its alignment, its surface or its width based on its
+  own data. A chat where your turn is an inset bubble and the reply is
+  full-width text is not expressible yet -- which is what still separates a
+  thread built with ApkPy from the assistant apps it is modelled on.
+- Nothing keeps the conversation for you. Sending the history back with each
+  turn is your `data=` dict to build.
+- An `on_response=` callback must be a named function, and it cannot see
+  variables from the function that started the request -- the compiler reads
+  your module rather than running it. Hand the value over through `storage`.
+- Tk has no tracking and no line spacing on a label, so the Previewer shows the
+  right words at the right size without the gaps between them.
+  `letter-spacing` still changes where a button's label wraps and how wide it
+  asks to be, and `line-height` still adds the leading above and below, so one
+  line takes the height it takes on the phone. A paragraph that wraps comes out
+  shorter in the Previewer, by the leading of each line after the first.
+- Loading a font file into Tk is platform-specific. Windows and Linux work;
+  macOS declines, falls back to the nearest system family and says so once in
+  the console. The APK is unaffected.
+- Text Android draws rather than your layout does not pick a custom family up
+  yet: `bottom_nav` labels and `virtual_collection` rows stay on the system
+  font. The app bar title does carry it.
+
 ## [1.3.2] — 2026-08-21
 
 ### Added
 
-- One shared icon table: 53 names (71 with aliases) that the Previewer and the
+- One shared icon table: 60 names (88 with aliases) that the Previewer and the
   Android compiler both read, replacing two unrelated systems that agreed on
   only 29 of their 48 names. `person` used to render as a ring with a dot on
   the desktop; `skip_next` as a solid disc on the phone.
@@ -35,6 +296,63 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Five diagnostic codes for icons: an unknown name (`U2015`, a warning with the
   closest match), a missing file, a stroke-only export, an unconvertible
   element and an unreadable file.
+- `subtitle-lines` and `title-lines` on a list or collection: one line is
+  still the default, and a chat message needs more than one to be readable at
+  all. Both runtimes read the same two numbers.
+- Composer controls in the catalogue: `mic`, `send`, `stop`, `bolt`,
+  `expand_more`, `expand_less` and `content_copy` — the set a chat-style input
+  bar needs.
+- `text-transform: none` on a button label. Material shouts them and ApkPy
+  always has, so the default is unchanged and an app that never mentions the
+  property generates byte-identical XML; `none` is the opt-out a chip or a pill
+  wants. `uppercase` and `none` are the two values offered, because they are
+  the two Android expresses as `android:textAllCaps`; anything else is reported
+  as `U2021` rather than half-done.
+- `U2020` reports a colour Android cannot parse, at build time instead of as an
+  `IllegalArgumentException` while the screen is created.
+
+### Fixed
+
+- `background-color: #00000000` on an input took the whole Previewer down with
+  an `E1999` at startup. Tk has no per-widget alpha, so a transparent surface
+  now resolves to whatever sits behind it — which is what transparency means on
+  screen — everywhere a CSS colour can reach a Tk option.
+- `border-width: 0px` drew a hairline anyway on an input with a radius, and
+  focus grew it to 2px. Android emitted no `<stroke>` for the resting state but
+  did for the focused one. Both sides now draw nothing, in both states.
+- A variable first assigned inside an `if` branch was declared inside that
+  branch in Java, so the next line could not see it. Python has no block
+  scope; the app failed to compile with "cannot find symbol" after running
+  fine in the Previewer.
+- `merge_items([{...}])` accepted only fully literal rows. A row built from
+  what the user just typed — the normal case for a chat — was dropped in
+  silence, and the generated Java compiled, ran and added nothing.
+- A `rich=True` list row with no image still reserved its thumbnail, which
+  showed as an empty blue square on the phone and nowhere else.
+- A child of a flex row asked the Previewer for the full row width instead of
+  its own content width, so a row only looked right because `flex-shrink`
+  squeezed it back. `flex-shrink: 0` then pushed the last controls off the
+  edge. Children now measure like Android's `wrap_content`.
+- A hidden child still reserved its box in a Previewer flex row, a gap the
+  phone never had — `ApkpyLayout` has always skipped a `GONE` view.
+- `popup_menu(anchor=...)` and `context_menu(target=...)` written as bare
+  statements — the natural way to write them, since they attach to another
+  component — were parsed only in their assigned form, so the menu opened in
+  the Previewer and the button did nothing on the phone.
+- `component.hide()` at module level set the starting state in the Previewer
+  and was dropped entirely for Android, which showed every control at launch.
+  It is now emitted as an instant `setVisibility`, not an animated one.
+- Emptying a textarea with `set_value("")` left it blank instead of bringing
+  the placeholder back; the single-line field already did the right thing, and
+  `android:hint` does it by itself.
+- `button(text=...)`, `label(text=...)` and `inputs(placeholder=...)` passed by
+  name never reached the generated XML — the parser read only the positional
+  argument, so the label or hint showed in the Previewer and came out empty on
+  the phone.
+- `#111` reached `Color.parseColor`, which accepts only `#RRGGBB` and
+  `#AARRGGBB`, and closed the app the moment it opened. The `#RGB` and `#ARGB`
+  shorthands are expanded; four digits are the shorthand of eight, matching the
+  `#AARRGGBB` convention the rest of the project uses.
 
 - `files.pick(on_result=, types=)` picks any file type through the Storage
   Access Framework and reports `(success, path, name, size, mime)` — five

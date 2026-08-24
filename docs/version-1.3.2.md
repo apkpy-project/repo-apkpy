@@ -329,7 +329,7 @@ primitives that Tk could never smooth.
 The picture is rendered by the library itself, through the call the Previewer
 makes. It cannot drift from what your app draws.
 
-**53 names, 71 with aliases.** The regression suite walks every one and asserts
+**60 names, 88 with aliases.** The regression suite walks every one and asserts
 both backends resolve the same path data, so an icon cannot mean one thing on
 the desktop and another on the phone.
 

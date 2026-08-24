@@ -81,6 +81,78 @@ location.get_current(on_result=location_result)
 
 Declare and request the appropriate location permission before reading the device position.
 
+## Talking to an API
+
+`https` sends the request off the UI thread and hands the answer back on it,
+so nothing you write here can freeze the screen. The `INTERNET` permission is
+added to the manifest for you.
+
+~~~ python
+def answered(success, response):
+    if success:
+        reply.set_value(json_get(response, "content.0.text"))
+    else:
+        reply.set_value("That did not go through. " + response)
+
+
+def ask():
+    https.post(
+        "https://api.example.com/v1/messages",
+        data={
+            "model": "some-model",
+            "max_tokens": 1024,
+            "messages": [{"role": "user", "content": question.get_value()}],
+        },
+        headers={"x-api-key": storage.get("api_key", "")},
+        timeout=120,
+        on_response=answered,
+    )
+~~~
+
+Three things worth knowing:
+
+**A dict is JSON, and keeps its types.** `max_tokens` arrives as the number
+`1024`, not the string `"1024"` — an API that validates its input rejects the
+second. Nested lists and objects survive too. And because the serialiser does
+the writing, a quote or a newline in what the user typed is escaped properly
+instead of breaking the body, which is what string concatenation would do.
+
+**`timeout=` is in seconds, and the default is 60.** Most endpoints answer in
+under a second, but anything that thinks before it replies does not. Raise it
+rather than discovering the ceiling in the field.
+
+**The callback needs a name.** `on_response=answered` compiles;
+`on_response=lambda ok, body: ...` does not. The callback also cannot see
+variables from the function that started the request — ApkPy reads your module
+rather than running it, so a value set at call time does not exist for the
+generated code. Hand it over through `storage` instead:
+
+~~~ python
+def ask():
+    storage.set("pending_row", row_id)
+    https.post(URL, data=body, on_response=answered)
+
+
+def answered(success, response):
+    thread.stream_item(storage.get("pending_row", ""), "message",
+                       json_get(response, "content.0.text"))
+~~~
+
+### About API keys
+
+Anything inside an APK is readable by whoever installs it. Unzipping one takes
+about thirty seconds, and no amount of obfuscation changes that — the app has
+to be able to read the key to use it, so anyone holding the app can too.
+
+There are two honest shapes:
+
+- **The user brings their own key**, pasted into a settings screen and kept in
+  `storage` (which is encrypted at rest). Right for a personal app, a developer
+  tool, or anything where the user already has an account.
+- **Your server holds the key** and the app talks to your server. Necessary the
+  moment the app speaks on *your* account, because that is the only way the key
+  never ships.
+
 ## Background work
 
 ~~~ python

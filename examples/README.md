@@ -42,6 +42,9 @@ apkpy build
 | `19_product_catalog.py` | Virtual grid, SKU merge and optimistic removal |
 | `20_chat_history.py` | Older-message prepend, local sends and delivery state |
 | `21_data_core_notes.py` | Typed SQLite, async CRUD, refresh and explicit migration |
+| `22_chat_composer.py` | Borderless field, a flex row of pills and a send/stop swap |
+| `23_settings_rows.py` | Grouped rows with hairlines, tracked section headers and readable leading |
+| `24_ask_an_api.py` | A JSON body, a long timeout, a user-supplied key and a Markdown answer |
 
 ## Practical note
 

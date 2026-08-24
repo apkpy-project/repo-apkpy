@@ -61,6 +61,10 @@ def send_message():
             }]
         )
         composer.set_value("")
+        # Adding a row does not move the viewport by itself. In a feed that
+        # is right; in a conversation it means writing a message and then
+        # looking at the one above it.
+        thread.scroll_to_end()
         status.set_value("Local message visible while the server responds")
 
 

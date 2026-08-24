@@ -81,11 +81,264 @@ The ID rule changes the background of <code>save_button</code> without losing th
 | Area | Properties |
 | --- | --- |
 | Colour | <code>color</code>, <code>background-color</code>, <code>border-color</code>, <code>pressed-color</code> |
-| Type | <code>font-size</code>, <code>font-weight</code>, <code>font-family</code>, <code>text-align</code> |
+| Type | <code>font-size</code>, <code>font-weight</code>, <code>font-family</code>, <code>text-align</code>, <code>text-transform</code>, <code>letter-spacing</code>, <code>line-height</code> |
 | Shape | <code>border-width</code>, <code>border-radius</code>, <code>box-shadow</code> |
-| Space | <code>padding</code>, <code>margin</code>, <code>gap</code> |
-| Size | <code>width</code>, <code>height</code>, <code>min-width</code>, <code>max-width</code> |
-| Layout | <code>display</code>, flex/grid properties, positioning and z-index |
+| Space | <code>padding</code>, <code>margin</code>, <code>gap</code>, <code>divider-color</code>, <code>divider-width</code>, <code>divider-inset</code> |
+| Size | <code>width</code>, <code>height</code>, <code>min-width</code>, <code>max-width</code>, <code>rows</code>, <code>max-rows</code> |
+| Layout | <code>display</code>, flex/grid properties, <code>justify-content</code>, <code>align-items</code>, <code>flex-grow</code>, positioning and z-index |
+
+### Button labels
+
+Material shouts button labels, so ApkPy uppercases them -- `"Opus 5"` reaches
+the screen as `OPUS 5`. `text-transform: none` opts out, which is what a chip,
+a pill or a chat composer wants:
+
+~~~ css
+model_chip {
+    text-transform: none;
+    border-radius: 999px;
+}
+~~~
+
+`uppercase` and `none` are the two values offered, because they are the two
+Android can express as a display attribute (`android:textAllCaps`).
+`capitalize` and `lowercase` would mean rewriting the label at build time and
+would then not apply to text you set while the app runs -- so ApkPy reports
+them as `U2021` instead of half-doing them. Write the label with the casing you
+want and use `text-transform: none`.
+
+### A settings row instead of a fat pill
+
+A button centres its label, and three of them stacked read as three pills, not
+as a list. `text-align: left` moves the label to the leading edge and brings
+the icon with it -- on Android that is `android:gravity="start"` plus
+`app:iconGravity="start"`, which is the difference between Material's
+icon-and-label-in-the-middle and a settings row:
+
+~~~ css
+pref_model, pref_theme, pref_bell {
+    background-color: var(--surface);
+    text-align: left;
+    text-transform: none;
+    letter-spacing: 0px;
+    padding: 0px 18px;
+    min-height: 52px;
+    border-radius: 16px;
+    width: 100%;
+}
+~~~
+
+`left`, `center` and `right` are the three values, and they are written to
+Android as `start` / `center` / `end` so a right-to-left locale mirrors the row
+without the app asking. `justify` is reported as `U2022` rather than half-done:
+it needs `android:justificationMode`, which arrived at API 26 while ApkPy
+targets 24, so it would be an effect only newer phones ever showed.
+
+Alignment needs room to move something. A label in a `display: flex` row is
+sized to its own content -- the same as a shrink-to-fit box in CSS -- so give
+it `width: 100%` if you want the alignment to bite.
+
+`text-align: center` on the app bar centres its title, the way a settings
+screen or a chat header usually wants it:
+
+~~~ css
+app_bar { text-align: center; font-family: "Tiempos"; }
+~~~
+
+Android centres it in the whole toolbar rather than in what the leading icon
+and the actions leave over, and the Previewer copies that -- otherwise the
+title drifted left as soon as an action appeared.
+
+### Tracking and leading
+
+`letter-spacing` opens or tightens the gaps between letters, and `line-height`
+sets how tall one line of text stands. They are what makes a small-caps section
+header read as a header and a paragraph read as prose:
+
+~~~ css
+kicker  { font-size: 11px; font-weight: bold; letter-spacing: 1.2px; }
+name    { font-size: 24px; letter-spacing: -0.4px; }
+blurb   { font-size: 14px; line-height: 1.6; }
+~~~
+
+`letter-spacing` takes `px` or `em` (`0.08em` and `1.28px` mean the same thing
+at 16px) and negative values, which is what a large heading usually wants.
+`line-height` follows CSS: a bare number is a multiple of the font size, a
+length is the height of the line itself. `normal` on either one leaves the
+component's own spacing alone.
+
+Write `letter-spacing: 0px` on a button when you mean it. Material tracks
+button labels at about `0.089em` on its own, so a row that says nothing keeps
+that spacing on the phone.
+
+**What the Previewer does not do.** Tk has no tracking and no line spacing on a
+label, so the Previewer shows the right words at the right size without the
+gaps between them. What it does honour is the measuring: `letter-spacing`
+changes where a button's label wraps and how wide the button asks to be, and
+`line-height` adds the leading above and below the text, so a single line takes
+the same height it takes on the phone. A paragraph that wraps comes out shorter
+in the Previewer than on the device, by the leading of each line after the
+first. Check that one on a phone.
+
+### Your own typeface
+
+Everything above is spacing. The font is the part that makes an app stop
+looking like every other app built with the same tool. Point `font()` at the
+files and name the family in CSS:
+
+~~~ python
+from apkpy_lib import font
+
+font("Tiempos",
+     regular="fonts/Tiempos-Regular.ttf",
+     bold="fonts/Tiempos-Bold.ttf",
+     italic="fonts/Tiempos-Italic.ttf")
+
+theme = Theme(font_family="Tiempos")
+~~~
+
+~~~ css
+app_bar     { font-family: "Tiempos"; }   /* the title, in the serif */
+account_name { font-family: "Tiempos"; font-size: 26px; }
+body        { font-family: sans-serif; }  /* and the reading, in the sans */
+~~~
+
+The Android build copies the files into `res/font`, writes the `<font-family>`
+that maps weights onto them, and reaches them through `app:fontFamily` -- the
+AppCompat attribute, because the framework one only learned to take a font
+resource at API 26 and ApkPy targets 24. The Previewer loads the same files
+into the session without installing anything on your machine.
+
+Serif for the things that carry the name and sans for the things people read
+is most of what makes a screen look designed, and it costs two declarations.
+
+**Four slots, and no more.** `regular`, `bold`, `italic` and `bold_italic` are
+what both sides can address: Tk has a family plus the two modifiers, and
+Android expresses the same four as `fontWeight`/`fontStyle` pairs. A `medium`
+or a `semibold` would render on the phone and not on the desktop, so `font()`
+refuses them (`U2024`) rather than half-doing it. If you need a third weight,
+register it as its own family and name it where you want it.
+
+A slot you leave out is synthesised -- faux bold, a sheared italic -- by
+Android and by Tk alike, so the two agree about what they are faking. A file
+that is missing or is not a `.ttf`/`.otf` is reported at build time (`U2025`,
+`U2026`) and that slot is dropped; the family still ships with whatever
+survived, and a family with nothing left is never referenced by a layout.
+
+**What the Previewer does not do.** Loading a font file into Tk is
+platform-specific. Windows and Linux work. macOS declines, falls back to the
+nearest system family and says so once in the console -- driving CoreText
+through ctypes without a Mac to test on is how you put a crash in someone
+else's Previewer. The APK is unaffected either way.
+
+Text drawn by Android rather than by your layout does not pick the family up
+yet: the labels in a `bottom_nav` and the rows of a `virtual_collection` stay
+on the system font. The app bar title does carry it, through a generated text
+appearance.
+
+### Borderless surfaces
+
+`border-width: 0` means no border, focused or not, and `background-color:
+#00000000` is a transparent surface -- an input that sits directly on the
+container behind it, with no box of its own. Both work in the Previewer and on
+the phone.
+
+~~~ css
+composer {
+    background-color: var(--surface);
+    border-color: var(--border);
+    border-width: 1px;
+    border-radius: 28px;
+    padding: 16px;
+}
+
+field {
+    background-color: #00000000;
+    border-width: 0px;
+    placeholder-color: var(--text-secondary);
+}
+~~~
+
+Colours are written the way Android reads them: `#RRGGBB` or `#AARRGGBB`, and
+the `#RGB` / `#ARGB` shorthands expand to those. Anything else is reported as
+`U2020` at build time rather than throwing while the screen is created.
+
+### A composer that grows with what you write
+
+On a `type="textarea"`, `rows` is the height it starts at and `max-rows` is
+where it stops growing. Between the two it follows the text:
+
+~~~ css
+field {
+    rows: 1;
+    max-rows: 6;
+}
+~~~
+
+One line is the right start for a reply box -- two fixed lines are half an
+empty composer waiting -- and six is where a draft stops eating the thread.
+Past the ceiling the field scrolls instead of growing.
+
+Without `max-rows` the ceiling stays what it always was: twice `rows`, and
+never less than eight.
+
+### Copying a code block
+
+`code-copy: button` puts a tappable **Copy** under every fenced block a
+`markdown()` component or a collection's `markdown` slot renders. It copies
+that block and nothing else -- not the paragraph above it, not the whole
+message.
+
+~~~ css
+thread { code-copy: button; }
+~~~
+
+On Android 13 and later the system shows its own confirmation, so the app
+stays quiet; below that it says "Copied" itself.
+
+### A row of controls
+
+`display: flex; flex-direction: row` lays children across, and an empty
+`flex-grow: 1` container is the spacer that pushes the rest to the far edge:
+
+~~~ css
+controls {
+    display: flex; flex-direction: row; align-items: center;
+    gap: 8px; width: 100%;
+}
+spacer  { flex-grow: 1; }
+chip    { flex-grow: 0; flex-shrink: 0; }
+~~~
+
+Each child asks for the width of its own content, the same as Android's
+`wrap_content`. When the row is wider than the screen, `flex-shrink` decides
+what gives: the default of `1` squeezes the children, and Android answers a
+squeezed button by wrapping its label mid-word. `flex-shrink: 0` keeps a pill
+at its natural width instead — and then a row that still does not fit is
+clipped rather than wrapped. Neither is a good look, so count the row: on a
+400dp phone, four or five controls is the ceiling.
+
+A hidden child takes no space in either runtime, so swapping one control for
+another with `show()` / `hide()` re-flows the row rather than leaving a gap.
+
+### Rows that hold more than a line
+
+A list or collection row shows one line of title and one of subtitle, and cuts
+the rest off. That is right for a list and wrong for a chat, where the message
+*is* the content:
+
+~~~ css
+thread {
+    height: 430px;
+    subtitle-lines: 4;
+    item-background-color: var(--surface);
+    title-color: var(--text);
+    subtitle-color: var(--text-secondary);
+}
+~~~
+
+`title-lines` does the same for the title. The row's own height still does the
+cutting off, so raise `item_height=` alongside it.
 
 ## Responsive style rules
 
