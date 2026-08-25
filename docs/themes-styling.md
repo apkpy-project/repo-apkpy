@@ -54,7 +54,57 @@ danger_action {
 
 Available tokens:
 
-<code>primary</code>, <code>secondary</code>, <code>background</code>, <code>surface</code>, <code>text</code>, <code>text_secondary</code>, <code>on_primary</code>, <code>error</code>, <code>success</code>, <code>border</code>, <code>radius</code>, <code>spacing</code> and <code>font-family</code>.
+<code>primary</code>, <code>secondary</code>, <code>background</code>, <code>surface</code>, <code>text</code>, <code>text_secondary</code>, <code>on_primary</code>, <code>error</code>, <code>success</code>, <code>border</code>, <code>radius</code>, <code>spacing</code>, <code>motion</code>, <code>nav_indicator</code> and <code>font-family</code>.
+
+A dash reads as an underscore, so <code>var(--text-secondary)</code> and
+<code>var(--text_secondary)</code> are the same token.
+
+### Tokens work without a theme
+
+An app that never calls <code>run(theme=...)</code> still has a theme: the
+generated <code>apkpy_theme.xml</code> is written from ApkPy's default
+Material palette. <code>var(--primary)</code> reads that palette and
+resolves to <code>#6750A4</code>, which is the same colour the built app
+uses for a filled button.
+
+~~~ python
+from apkpy_lib import Screen, button, label, run
+
+home = Screen(id="home")
+label("Welcome", id="title", screen=home)
+button("Continue", id="go", variant="filled", screen=home)
+run(start_screen=home)          # no theme named
+
+style = """
+title { color: var(--primary); }
+"""
+~~~
+
+Declaring a theme changes what the token resolves to, never whether it
+resolves.
+
+### A name with no token behind it
+
+<code>var(--muted)</code> is not a token, so it is reported as
+<strong>U2028</strong> the moment the stylesheet is read -- by the
+Previewer and by <code>apkpy build</code> alike, since both resolve
+tokens through the same module:
+
+~~~ text
+APKPY U2028 - This stylesheet asks for a theme token that does not exist
+
+Received:
+  title { color: var(--muted); }
+
+How to fix:
+  1. Did you mean var(--text_secondary)?
+  2. The tokens are: background, border, error, font-family, motion,
+     nav_indicator, on_primary, primary, radius, secondary, spacing,
+     success, surface, text, text_secondary.
+~~~
+
+A colour of your own goes in as itself -- <code>#C96442</code> -- rather
+than through <code>var()</code>.
 
 ## Cascade
 

@@ -124,6 +124,16 @@ quoted in an issue.
 | `U2012` | A structural limit was exceeded (nesting depth, payload size) |
 | `U2013` | A feed operation that requires `virtual_collection()` |
 | `U2014` | An argument that needs a specific ApkPy object, such as a `Theme` |
+| `U2015` | An icon name that is not in the ApkPy catalogue |
+| `U2020` | A colour Android cannot parse (only `#RGB`, `#RGBA`, `#RRGGBB`, `#AARRGGBB`) |
+| `U2021` | A `text-transform` ApkPy cannot express on both sides |
+| `U2022` | A `text-align` ApkPy cannot express on both sides (`justify`) |
+| `U2023` | A `font()` family declared with no files |
+| `U2024` | A font slot beyond the four both runtimes can address |
+| `U2025` | A font file that is not `.ttf` or `.otf` |
+| `U2026` | A font file named by `font()` that is not on disk |
+| `U2027` | A module constant joined from a name declared further down |
+| `U2028` | `var(--name)` naming a theme token that does not exist |
 
 ### D2001 Data Core
 

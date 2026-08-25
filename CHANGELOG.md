@@ -27,6 +27,12 @@ shape it needed was missing.
 
 ### Added
 
+- `U2028`: a stylesheet asking for a theme token that does not exist is
+  reported by name, with the closest match and the full list of tokens. It
+  used to resolve to *itself* -- the literal text `var(--muted)` travelled
+  into the layout XML and surfaced forty seconds later as an AAPT link failure
+  whose stated cause is about stale generated files. Raised in the one module
+  both runtimes read, so whichever you run first is the one that tells you.
 - `scroll_to_end()`, `scroll_to_top()` and `scroll_to_item(id, key="id")` on a
   virtual collection. Adding a row never moved the viewport, which is right for
   a feed and wrong for a conversation: you send a question and end up looking
@@ -175,6 +181,14 @@ shape it needed was missing.
 
 ### Fixed
 
+- `var(--primary)` resolved to `#6750A4` in an app that declared a `Theme` and
+  to the literal text `var(--primary)` in an app that did not, which failed the
+  Android build. The generated `apkpy_theme.xml` is written from that same
+  default palette either way, so the token was never wrong -- only unresolved,
+  and whether it worked came down to a keyword the stylesheet has nothing to do
+  with. An app that never names a theme now reads the same tokens as one that
+  does. No theme stylesheet is merged into it, so nothing else about its output
+  moves.
 - A `type="textarea"` grew with its text on Android and never grew in the
   Previewer, so the same composer was one line on the desktop and three on the
   phone. Both now start at `rows` and stop at the same ceiling.
@@ -224,6 +238,17 @@ shape it needed was missing.
 - A collection drew a scrollbar down the Previewer even with one item in it. A
   RecyclerView draws none until you drag it, so the rail is now shown only when
   there is something to scroll.
+
+### Verified, not changed
+
+- A field at the bottom of a screen stays above the soft keyboard. Three
+  shapes were checked on a Pixel 9 Pro (API 36) -- a plain `LinearLayout` with
+  no scrolling view, a screen with an `app_bar()`, and a column with a
+  composer pinned by `flex-grow` -- and Android resized the window correctly
+  in all three without ApkPy declaring `windowSoftInputMode`. The attribute
+  was not added: it would change the manifest of every app to no observable
+  effect. What Android does, and the two things it does not promise, are in
+  [Previewer versus Android](docs/preview-android.md).
 
 ### Known limits
 

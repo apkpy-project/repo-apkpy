@@ -187,6 +187,33 @@ buttons and app bar titles.
 
 ---
 
+## Two fixes worth naming
+
+**A theme token only worked half the time.** `var(--primary)` resolved to
+`#6750A4` in an app that declared a `Theme` and to the literal text
+`var(--primary)` in an app that did not, which failed the Android build with
+an AAPT error about something else. The generated `apkpy_theme.xml` writes
+that same colour either way, so the token was never wrong -- only unresolved.
+It reads the same tokens now, theme or no theme.
+
+**A token that does not exist is `U2028`.** `var(--muted)` used to resolve to
+itself and travel into the layout XML. It is now reported by name, with the
+closest match and the full list, in the one module both runtimes read.
+
+---
+
+## The soft keyboard, measured
+
+ApkPy does not declare `windowSoftInputMode`. Whether it should was settled on
+a Pixel 9 Pro rather than by reading the manifest: across all three shapes a
+generated screen takes, Android's default resolved to a window resize and the
+field stayed above the keyboard. The attribute was not added.
+
+A `virtual_collection` does not follow the keyboard, so call `scroll_to_end()`
+when the field takes focus if the screen is a conversation.
+
+---
+
 ## What an app that uses none of this gets
 
 The same bytes it got from 1.3.2. Every feature is gated on the app asking for
@@ -198,8 +225,8 @@ scroll helper; no `font()` means no `res/font`.
 
 ## Verification
 
-- 254 transpiler-harness checks
-- 325 feature tests
+- 256 transpiler-harness checks
+- 341 feature tests
 - 21 core tests
 - all 24 examples transpile with balanced braces in every generated Java file
 - exercised end to end on a Pixel 9 Pro emulator: a real API call with a

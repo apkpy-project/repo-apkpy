@@ -471,6 +471,86 @@ A column that names neither still centres horizontally, which it always did.
 
 ---
 
+## A token that only worked half the time
+
+`var(--primary)` resolved to `#6750A4` in an app that declared a `Theme`, and
+to the literal text `var(--primary)` in an app that did not. The second one
+failed the Android build -- forty seconds in, with an AAPT link error whose
+stated cause is that the project folder holds files from an earlier
+generation. It does not.
+
+The token was never wrong. The generated `apkpy_theme.xml` writes that same
+`#6750A4` either way:
+
+```xml
+<color name="apkpy_primary">#6750A4</color>
+```
+
+So whether a stylesheet worked came down to a keyword the stylesheet has
+nothing to do with. It reads the same tokens now, theme or no theme:
+
+```python
+from apkpy_lib import Screen, button, label, run
+
+home = Screen(id="home")
+label("Welcome", id="title", screen=home)
+button("Continue", id="go", variant="filled", screen=home)
+run(start_screen=home)          # no theme named
+
+style = """
+title { color: var(--primary); }
+"""
+```
+
+Declaring a theme changes what a token resolves to, never whether it resolves.
+Nothing else moved: the theme's default stylesheet is still not merged into an
+app that never asked for one, so the rest of its XML is unchanged.
+
+### And a name with nothing behind it
+
+`var(--muted)` is not a token. It used to resolve to itself and travel into
+the layout the same way. It is now **`U2028`**, raised where both runtimes
+resolve tokens -- so the Previewer catches it in a second, and `apkpy build`
+catches it before Gradle starts:
+
+```text
+APKPY U2028 - This stylesheet asks for a theme token that does not exist
+
+Received:
+  title { color: var(--muted); }
+
+How to fix:
+  1. Did you mean var(--text_secondary)?
+  2. The tokens are: background, border, error, font-family, motion,
+     nav_indicator, on_primary, primary, radius, secondary, spacing,
+     success, surface, text, text_secondary.
+```
+
+---
+
+## The soft keyboard: measured, and left alone
+
+ApkPy does not declare `windowSoftInputMode`, and the question of whether it
+should was settled by testing rather than by reading the manifest. On a
+Pixel 9 Pro (API 36), across the three shapes a generated screen takes:
+
+| Screen | Root the generator writes | Keyboard opens |
+| --- | --- | --- |
+| No app bar, `scroll=False` | `LinearLayout` | window resizes; content stays visible |
+| With an `app_bar()` | `RelativeLayout` over a `NestedScrollView` | window resizes; the bar stays put |
+| `Screen(scroll=True)` | `NestedScrollView` | window resizes; the field scrolls into view |
+
+Android's default resolved to a resize in all three, so the attribute was not
+added: it would change the manifest of every app to no observable effect.
+
+Two things this does not promise. A `virtual_collection` **does not follow the
+keyboard** -- it keeps its scroll position when the window shrinks, so call
+`scroll_to_end()` when the field takes focus if the screen is a conversation.
+And it was measured on one API level: on API 24-29 a screen with no scrolling
+view can resolve to `adjustPan` instead, which slides the whole window up.
+
+---
+
 ## What an app that uses none of this gets
 
 The same bytes it got from 1.3.2.
@@ -568,8 +648,8 @@ Stated plainly, because finding them yourself is worse.
 
 | Suite | Count |
 | --- | ---: |
-| Transpiler harness (`playground/transpile_tests.py`) | 254 |
-| Feature tests (`tests/features`) | 325 |
+| Transpiler harness (`playground/transpile_tests.py`) | 256 |
+| Feature tests (`tests/features`) | 341 |
 | Core tests (`tests`) | 21 |
 
 Every one of the 24 examples in `examples/` transpiles with balanced braces in

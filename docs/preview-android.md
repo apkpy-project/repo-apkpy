@@ -50,6 +50,40 @@ loop; the generated project uses Android widgets and services.
 | Location | explicit `preview_route` | fused device location |
 | Routes | compatible HTTP routing endpoint | same request contract from Android |
 | Background jobs | on-disk queue in `~/.apkpy/jobs` | WorkManager `OneTimeWorkRequest` queue |
+| Soft keyboard | none: the desktop keyboard is always there | the window resizes and the layout moves up |
+
+## The soft keyboard
+
+The Previewer has no soft keyboard. A desktop window is never covered by one,
+so a screen that looks right there tells you nothing about what happens on a
+phone when a field is focused. This is the one gap in the map above that
+cannot be closed by making the Previewer better -- there is nothing to
+simulate that would be true.
+
+What Android does, measured on a Pixel 9 Pro (API 36) across the three shapes
+a generated screen takes:
+
+| Screen | Root the generator writes | Keyboard opens |
+| --- | --- | --- |
+| No app bar, `scroll=False` | `LinearLayout` | window resizes; content stays visible |
+| With an `app_bar()` | `RelativeLayout` wrapping a `NestedScrollView` | window resizes; the bar stays put |
+| `Screen(scroll=True)` | `NestedScrollView` | window resizes; the focused field scrolls into view |
+
+ApkPy does **not** declare `windowSoftInputMode` in the generated manifest.
+Android's default, `adjustUnspecified`, resolved to a resize in all three
+cases, and adding the attribute would change the manifest of every app to no
+observable effect.
+
+Two things this does *not* promise:
+
+- **A list does not follow the keyboard.** A `virtual_collection` keeps its
+  scroll position when the window shrinks, so the newest row can end up above
+  the fold. Call `scroll_to_end()` after the field gains focus if the screen
+  is a conversation.
+- **It was measured on one API level.** On API 24-29 a screen with no
+  scrolling view in it can resolve to `adjustPan` instead, which slides the
+  whole window up rather than resizing it. If your app supports those levels
+  and puts a field near the bottom of a non-scrolling screen, check it there.
 
 ## Visual parity is a contract, not pixel identity
 
