@@ -8,7 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- An app bar's back arrow did nothing in the Previewer. `action("arrow_back")`
+  with no `command=` of its own compiles to `finish()` on Android, so the same
+  screen was one tap from leaving on a phone and a dead end on the desktop --
+  a settings screen you could open and not get out of. The Previewer keeps a
+  history now and the arrow walks it back, on exactly the icon name the
+  generator tests for, so neither side can start answering differently.
+- The Previewer had no equivalent of the system Back gesture at all, so a
+  screen that draws no arrow of its own was a dead end even after the fix
+  above. **Alt+Left** is that equivalent, and it follows Android's order: an
+  open drawer closes first, and only then does Back leave the screen. Escape
+  is deliberately left alone -- overlays bind it themselves, and a modal that
+  both closed and navigated would be worse than no shortcut.
+- A screen already open behind you is brought forward rather than stacked
+  twice, which is what `FLAG_ACTIVITY_REORDER_TO_FRONT` does for a
+  `bottom_nav`. Without it, hopping between two tabs grew the history for as
+  long as you kept tapping.
 
 ---
 

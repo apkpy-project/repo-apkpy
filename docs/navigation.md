@@ -114,6 +114,33 @@ app_bar(
 
 Accessibility labels describe icon-only actions on Android.
 
+### Getting back out
+
+A leading `arrow_back` with no `command=` of its own means "leave this
+screen". It needs no wiring:
+
+~~~ python
+model_screen = Screen(id="model_screen")
+
+app_bar(
+    "Default model",
+    leading=action("arrow_back", label="Back"),
+    screen=model_screen,
+)
+~~~
+
+On Android that compiles to `finish()`, which returns to whichever screen
+started this one. The Previewer keeps the same history and the arrow walks it
+back, so a settings screen behaves the same in both.
+
+Give the arrow a `command=` and it does that instead -- useful when leaving
+has to save a draft first, though you then own the navigation too.
+
+**Alt+Left** stands in for the phone's Back gesture in the Previewer, which
+matters for a screen that draws no arrow of its own. On both, an open
+`drawer()` closes before Back leaves the screen, and Back at the first screen
+does nothing.
+
 ## Collapsible app bar
 
 Use a sliver bar with a scrollable screen:

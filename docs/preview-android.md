@@ -51,6 +51,40 @@ loop; the generated project uses Android widgets and services.
 | Routes | compatible HTTP routing endpoint | same request contract from Android |
 | Background jobs | on-disk queue in `~/.apkpy/jobs` | WorkManager `OneTimeWorkRequest` queue |
 | Soft keyboard | none: the desktop keyboard is always there | the window resizes and the layout moves up |
+| Leaving a screen | the app bar's back arrow, or **Alt+Left** | the arrow, the Back gesture or the hardware key |
+
+## Leaving a screen
+
+On Android every `Screen` is an Activity, so there are always two ways out: an
+app bar's back arrow, and the system Back gesture. `action("arrow_back")` with
+no `command=` of its own compiles to `finish()`.
+
+The Previewer swaps one widget tree for another. It keeps a history of the
+screens behind the current one and offers the same two ways out:
+
+- the app bar's back arrow, on the same `arrow_back` icon name the generator
+  tests for;
+- **Alt+Left**, standing in for the Back gesture a desktop window does not
+  have.
+
+Both follow Android's order: an open `drawer()` closes first, and only then
+does Back leave the screen. At the first screen, Back does nothing -- on a
+phone that is where it would close the app, and the Previewer stays put rather
+than shutting its own window.
+
+A screen already open behind you is brought forward rather than stacked a
+second time, which is what `FLAG_ACTIVITY_REORDER_TO_FRONT` does for the tabs
+of a `bottom_nav`.
+
+~~~ python
+model_screen = Screen(id="model_screen")
+app_bar("Default model",
+        leading=action("arrow_back", label="Back"),
+        screen=model_screen)
+~~~
+
+Escape is not bound: overlays bind it themselves, and a modal that both closed
+and navigated would be worse than no shortcut.
 
 ## The soft keyboard
 
