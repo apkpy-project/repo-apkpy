@@ -51,7 +51,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   twice, which is what `FLAG_ACTIVITY_REORDER_TO_FRONT` does for a
   `bottom_nav`. Without it, hopping between two tabs grew the history for as
   long as you kept tapping.
-
+- The Previewer's signal, wifi and battery symbols were the string
+  `▮▮▮  ▲  ▮▮▮` -- three block characters, an arrowhead, three more --
+  borrowed from whatever the system font happened to carry. At 24px that read
+  as a row of dashes, and nothing in it said "battery". They are vectors now,
+  on the icon catalogue's 24x24 grid and through the same antialiasing
+  rasteriser every icon goes through, and they follow the app bar's palette
+  the way the clock beside them always did.
 - `?attr/...` in a colour position was reported as an unreadable colour. It
   is a reference to whatever the theme in force says, which is exactly right
   for a ripple, and it now passes through like `@color/...` always did.
