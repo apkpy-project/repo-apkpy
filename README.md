@@ -153,7 +153,7 @@ rasterises it with antialiasing.
 
 ![The ApkPy icon catalogue](docs/assets/icon-catalogue.png)
 
-**62 names, 93 with aliases** — and `icon=` also takes your own artwork:
+**65 names, 96 with aliases** — and `icon=` also takes your own artwork:
 
 ```python
 button("Share", icon="assets/logo.svg", screen=home)

@@ -10,7 +10,7 @@ Every `icon=` argument — on `button`, `bottom_nav`, `action`, `empty_state`,
 
 ![The ApkPy icon catalogue in light and dark](../assets/icon-catalogue.png)
 
-**62 names, 93 with aliases**, thirteen of them with an outlined variant as
+**65 names, 96 with aliases**, thirteen of them with an outlined variant as
 well. The picture above is rendered by the library itself, through the same
 call the Previewer makes, so it cannot drift from what your app actually draws.
 
@@ -58,6 +58,24 @@ are the sideways pair: `chevron_right` is what tells a
 [settings row](../ui-components.md#settings-rows) that tapping it opens
 something, and `navigate_next` / `navigate_before` / `disclosure` are aliases
 for them.
+
+## Appearance
+
+`dark_mode`, `light_mode` and `contrast` -- a crescent moon, a sun with rays,
+and a circle filled down one side. They are the three rows an appearance
+screen has, and the catalogue had none of them:
+
+```python
+list_row("Dark", icon="dark_mode", command=lambda: appearance.set("dark"),
+         parent=group)
+list_row("Light", icon="light_mode", command=lambda: appearance.set("light"),
+         parent=group)
+list_row("Follow the system", icon="contrast",
+         command=lambda: appearance.set("system"), parent=group)
+```
+
+See [switching appearance](../themes-styling.md#switching-appearance-while-the-app-runs)
+for what those calls do.
 
 ```python
 row = container(id="controls", parent=composer)

@@ -8,6 +8,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- `appearance.set("dark" | "light" | "system")` and `appearance.get()`: the
+  app changes its colours while it runs, and opens the way it was left.
+  Android reads `values/` or `values-night/` and `AppCompatDelegate` picks;
+  the Previewer swaps the theme and re-renders. Different machinery, and the
+  same two palettes, because both are built from the one `Theme` the app
+  declared.
+- A colour that came from a theme token is written into layouts, drawables and
+  the generated Java as a **resource reference** rather than as a literal. A
+  two-screen app went from 472 literal colours to 98, and what is left is what
+  should be left: mixed shades, transparents, and the colours the author wrote
+  by hand.
+- `Theme.counterpart()`: the same theme in the other mode. The accent carries
+  over and the surfaces flip -- a background chosen at `#1B1B19` was chosen
+  *because* the mode was dark, so carrying it into light would produce a light
+  mode that is still dark, which is a switch that appears to do nothing.
+- The status bar's clock and battery follow the mode. They are drawn by the
+  system over whatever the app puts behind them, and deciding light-on-dark at
+  build time left them invisible the moment the app switched. The answer comes
+  from the same resource qualifier the colours do.
+- `dark_mode`, `light_mode` and `contrast` in the icon catalogue -- an
+  appearance screen needs a moon, a sun and a half-filled circle, and the
+  catalogue had none of the three. **65 names, 96 with aliases.**
+
 ### Fixed
 
 - An app bar's back arrow did nothing in the Previewer. `action("arrow_back")`
@@ -26,6 +51,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   twice, which is what `FLAG_ACTIVITY_REORDER_TO_FRONT` does for a
   `bottom_nav`. Without it, hopping between two tabs grew the history for as
   long as you kept tapping.
+
+- `?attr/...` in a colour position was reported as an unreadable colour. It
+  is a reference to whatever the theme in force says, which is exactly right
+  for a ripple, and it now passes through like `@color/...` always did.
+
+### Note on existing apps
+
+- An app that declares `Theme(mode="dark")` still opens dark on a phone set to
+  light, and the other way round: the declared mode is pinned at startup.
+  Without that, `values-night/` would have made every existing app follow the
+  system, which is a behaviour change nobody asked for.
+- The generated XML *does* change: colours that came from tokens are now
+  references. The app looks the same, and the project is easier to read and to
+  edit by hand, which the generator has always aimed for.
 
 ---
 

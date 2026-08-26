@@ -83,6 +83,58 @@ title { color: var(--primary); }
 Declaring a theme changes what the token resolves to, never whether it
 resolves.
 
+### Switching appearance while the app runs
+
+```python
+from apkpy_lib import appearance
+
+appearance.set("light")     # "dark", "light" or "system"
+appearance.get()            # what is in force
+```
+
+The choice is remembered, so the app opens the way it was left.
+
+What makes this possible is that a colour which came from a token is not
+written into the layout at all -- a reference to it is:
+
+```xml
+<!-- res/layout/activity_screen_chat.xml -->
+<TextView android:textColor="@color/apkpy_text" ... />
+```
+
+```xml
+<!-- res/values/apkpy_theme.xml -->
+<color name="apkpy_text">#1D1B20</color>
+
+<!-- res/values-night/apkpy_theme.xml -->
+<color name="apkpy_text">#F5F4EF</color>
+```
+
+Android answers that reference from one table or the other depending on the
+mode in force. Switching costs nothing at run time: the resource system does
+the work while the layout inflates.
+
+**A colour you wrote by hand is left exactly as you wrote it.**
+`#C96442` in a stylesheet was a decision, not a default, and a decision that
+changes on its own is a bug. Only tokens move.
+
+#### Where the second palette comes from
+
+You declare one appearance; ApkPy builds the other from the same `Theme`. The
+accent carries over and the surfaces flip:
+
+| Token | In the counterpart |
+| --- | --- |
+| `primary`, `secondary`, `on_primary`, `error`, `success` | kept |
+| `background`, `surface`, `text`, `text_secondary`, `border` | from the opposite palette |
+
+A background you chose at `#1B1B19` was chosen *because* the mode was dark.
+Carrying it into light mode would give a light mode that is still dark -- a
+switch that appears to do nothing.
+
+An app that never calls `appearance.set(...)` is pinned to the mode it
+declared, on a phone set either way, exactly as before.
+
 ### A name with no token behind it
 
 <code>var(--muted)</code> is not a token, so it is reported as
