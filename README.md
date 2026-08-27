@@ -123,6 +123,55 @@ Plus `divider-color` / `divider-inset` for grouped rows, `text-align` on
 labels, buttons and app bar titles, `letter-spacing` and `line-height`, and
 `flex-grow` inside a stacked column.
 
+### An app that changes its colours while it runs
+
+```python
+from apkpy_lib import appearance
+
+appearance.set("light")     # "dark", "light" or "system"
+appearance.get()            # what is in force
+
+list_row("Dark", icon="dark_mode",
+         command=lambda: appearance.set("dark"), parent=group)
+list_row("Light", icon="light_mode",
+         command=lambda: appearance.set("light"), parent=group)
+list_row("Follow the system", icon="contrast",
+         command=lambda: appearance.set("system"), parent=group)
+```
+
+The choice is remembered, so the app opens the way it was left.
+
+Colours used to be written into the layouts as literals — **472 of them across
+115 files** in a two-screen app — and nothing at run time rewrites a compiled
+layout. A colour that came from a theme token is a **resource reference** now:
+
+```xml
+<!-- res/layout/activity_screen_you.xml -->
+<TextView android:textColor="@color/apkpy_text" ... />
+```
+
+```xml
+<!-- res/values/apkpy_theme.xml -->
+<color name="apkpy_text">#1D1B20</color>
+
+<!-- res/values-night/apkpy_theme.xml -->
+<color name="apkpy_text">#E6E1E5</color>
+```
+
+Android answers that reference from one table or the other, so switching costs
+nothing at run time: the resource system does the work while the layout
+inflates. The same app carries **98 literals** now, and the ones left are the
+ones that should be left.
+
+**A colour you wrote by hand stays exactly as you wrote it.** `#C96442` in a
+stylesheet was a decision, not a default, and a decision that changes on its
+own is a bug. You declare one mode and `Theme.counterpart()` builds the other:
+the accent carries over, the surfaces flip — a background chosen at `#1B1B19`
+was chosen *because* the mode was dark.
+
+An app that declares `Theme(mode="dark")` and never calls `appearance.set(...)`
+still opens dark on a phone set to light, exactly as before.
+
 ### Nothing changes for an app that does not ask
 
 Every addition is gated on being used. No `markdown` slot means the Markdown

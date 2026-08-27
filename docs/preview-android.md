@@ -130,6 +130,17 @@ When a mismatch is a library bug, fix both the Previewer renderer and the
 generator. Editing only generated Java is temporary because a later
 `apkpy build` regenerates it.
 
+### The strip along the top
+
+The Previewer draws a clock and the signal, wifi and battery marks so a screen
+is composed against the same 24dp the phone takes. It is scenery -- there is no
+carrier, no network and no battery behind it -- and the phone draws its own.
+
+The marks are vectors on the icon catalogue's 24x24 grid, rasterised by the
+same antialiasing pass every `icon=` goes through, and they take the app bar's
+colours. They used to be block characters borrowed from the system font, which
+at that size read as a row of dashes.
+
 ## Release test
 
 1. Exercise every primary action in the Previewer.

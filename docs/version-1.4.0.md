@@ -59,7 +59,16 @@ byte-identical XML to the one 1.3.2 generated.
 - `letter-spacing` and `line-height`;
 - `font()` — your own `.ttf` or `.otf`, four slots;
 - `flex-grow`, `justify-content` and `align-items` inside a stacked column;
-- `chevron_right` / `chevron_left` — **62 icon names, 93 with aliases**.
+- `chevron_right` / `chevron_left` — **65 icon names, 96 with aliases**.
+
+**Appearance**
+
+- `appearance.set("dark" | "light" | "system")` and `appearance.get()` — the
+  app changes its colours while it runs, and opens the way it was left;
+- a colour that came from a theme token is written as a **resource reference**,
+  answered by `values/` by day and `values-night/` by night;
+- `Theme.counterpart()` — the same theme in the other mode;
+- `dark_mode`, `light_mode` and `contrast` in the icon catalogue.
 
 ---
 
@@ -528,6 +537,160 @@ How to fix:
 
 ---
 
+## Appearance, at run time
+
+```python
+from apkpy_lib import appearance
+
+appearance.set("light")     # "dark", "light" or "system"
+appearance.get()            # what is in force
+```
+
+The choice is remembered, so the app opens the way it was left. Three rows are
+the whole screen:
+
+```python
+group = container(id="modes", screen=you)
+
+list_row("Dark", icon="dark_mode",
+         command=lambda: choose("dark"), parent=group)
+list_row("Light", icon="light_mode",
+         command=lambda: choose("light"), parent=group)
+list_row("Follow the system", icon="contrast",
+         command=lambda: choose("system"), parent=group)
+
+
+def choose(mode):
+    appearance.set(mode)
+    for name, row in rows.items():
+        row.set_trailing("Selected" if name == mode else "")
+```
+
+### What made this impossible before
+
+Colours were written into the layouts as literals — **472 of them across 115
+files** in a two-screen app — and nothing at run time rewrites a compiled
+layout.
+
+A colour that came from a theme token is no longer written into the layout.
+A reference to it is:
+
+```xml
+<!-- res/layout/activity_screen_you.xml -->
+<TextView android:textColor="@color/apkpy_text" ... />
+```
+
+```xml
+<!-- res/values/apkpy_theme.xml -->
+<color name="apkpy_primary">#C96442</color>
+<color name="apkpy_background">#FFFBFE</color>
+<color name="apkpy_text">#1D1B20</color>
+
+<!-- res/values-night/apkpy_theme.xml -->
+<color name="apkpy_primary">#C96442</color>
+<color name="apkpy_background">#1B1B19</color>
+<color name="apkpy_text">#E6E1E5</color>
+```
+
+Android answers that reference from one table or the other. Switching costs
+nothing at run time: the resource system does the work while the layout
+inflates. The same app now carries **98 literal colours**, and the ones left
+are the ones that should be left — mixed shades, transparents, and the colours
+you wrote by hand.
+
+### The rule that decides every colour
+
+**A token becomes a reference. A colour written by hand stays exactly as
+written.** `#C96442` in a stylesheet was a decision, not a default, and a
+decision that changes on its own is a bug.
+
+Comparing hex would not do it — two colours that happen to match are not the
+same colour. Provenance travels with the value instead, so nothing downstream
+had to learn a new type.
+
+### Where the second palette comes from
+
+You declare one appearance; ApkPy builds the other from the same `Theme`:
+
+| Token | In the counterpart |
+| --- | --- |
+| `primary`, `secondary`, `on_primary`, `error`, `success` | kept |
+| `background`, `surface`, `text`, `text_secondary`, `border` | from the opposite palette |
+
+A background you chose at `#1B1B19` was chosen *because* the mode was dark.
+Carrying it into light mode would give a light mode that is still dark — a
+switch that appears to do nothing.
+
+### What it compiles to
+
+```java
+private void _apkpyApplyAppearance(String mode) {
+    int night;
+    if ("light".equals(mode)) {
+        night = androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO;
+    } else if ("dark".equals(mode)) {
+        night = androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES;
+    } else {
+        night = androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM;
+    }
+    if (androidx.appcompat.app.AppCompatDelegate.getDefaultNightMode()
+            != night) {
+        // AppCompat recreates the started activities itself; calling
+        // recreate() here as well would run onCreate twice.
+        androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(night);
+    }
+}
+```
+
+### Three things only a phone showed
+
+**A screen waiting in the back stack came back wearing the old colours.**
+AppCompat recreates the activities that are *started*; one that is stopped is
+not. Each Activity records the appearance it was built with and checks on the
+way back in:
+
+```java
+protected void onResume() {
+    super.onResume();
+    String _apkpyMode = _apkpyStorageGet("__apkpy_appearance", "dark");
+    if (!_apkpyMode.equals(_apkpyAppearanceShown)) {
+        _apkpyApplyAppearance(_apkpyMode);
+        recreate();
+        return;
+    }
+}
+```
+
+That check is written only for an app that calls `appearance.set(...)`.
+
+**The clock and the battery went invisible.** They are drawn by the system over
+whatever the app puts behind them, and deciding light-on-dark at build time
+left them white on white the moment the app switched. The answer comes from the
+same qualifier the colours do:
+
+```xml
+<!-- res/values/themes.xml -->
+<item name="android:windowLightStatusBar">true</item>
+
+<!-- res/values-night/themes.xml -->
+<item name="android:windowLightStatusBar">false</item>
+```
+
+**The declared mode has to be pinned at startup.** Without that, adding
+`values-night/` would make every existing app start following the phone — a
+behaviour change nobody asked for:
+
+```java
+_apkpyAppearanceShown = _apkpyStorageGet("__apkpy_appearance", "dark");
+_apkpyApplyAppearance(_apkpyAppearanceShown);
+super.onCreate(savedInstanceState);
+```
+
+An app that declares `Theme(mode="dark")` and never calls `appearance.set(...)`
+opens dark on a phone set to light, and the other way round, exactly as before.
+
+---
+
 ## The soft keyboard: measured, and left alone
 
 ApkPy does not declare `windowSoftInputMode`, and the question of whether it
@@ -641,6 +804,13 @@ Stated plainly, because finding them yourself is worse.
   text is not expressible yet.
 - **No conversation memory helper.** Sending the history is your `data=` dict
   to build; nothing in ApkPy keeps it for you.
+- **The counterpart palette is Material's, with your accent.** You declare one
+  mode and describe its surfaces; the other mode's surfaces come from the
+  built-in palette. There is no way to hand-pick both — a cream light mode
+  next to your own dark one is not expressible yet.
+- **A hand-written colour does not follow the switch**, by design. That is the
+  rule working, but it means a stylesheet full of literals switches only its
+  themed parts. Reach for `var(--token)` where you want the colour to move.
 
 ---
 
@@ -649,15 +819,19 @@ Stated plainly, because finding them yourself is worse.
 | Suite | Count |
 | --- | ---: |
 | Transpiler harness (`playground/transpile_tests.py`) | 256 |
-| Feature tests (`tests/features`) | 341 |
+| Feature tests (`tests/features`) | 380 |
 | Core tests (`tests`) | 21 |
 
-Every one of the 24 examples in `examples/` transpiles with balanced braces in
+Every one of the 25 examples in `examples/` transpiles with balanced braces in
 every generated Java file, and the release was exercised end to end on a
 Pixel 9 Pro emulator: a request to a real API with a user-supplied key, the
 answer rendered as Markdown in a row that fits it, a code block copied to the
 clipboard and pasted back to prove the round trip, and the composer growing
 and shrinking with its text.
+
+Appearance was exercised on the same device in all three modes, including the
+case the emulator is there for: a screen left waiting in the back stack, which
+has to come forward wearing the colours chosen while it was away.
 
 ---
 

@@ -187,6 +187,57 @@ buttons and app bar titles.
 
 ---
 
+## Part 3 — Appearance, at run time
+
+```python
+from apkpy_lib import appearance
+
+appearance.set("light")     # "dark", "light" or "system"
+appearance.get()            # what is in force
+```
+
+The choice is remembered, so the app opens the way it was left.
+
+### Why it could not be done before
+
+Colours were written into the layouts as literals — **472 of them across 115
+files** in a two-screen app. Nothing at run time rewrites a compiled layout.
+
+A colour that came from a theme token is a resource reference now, answered by
+`values/` by day and `values-night/` by night, and switching is
+`AppCompatDelegate` choosing between the two tables. It costs nothing while the
+app runs: the resource system does the work as the layout inflates.
+
+**A colour written by hand is left exactly as written.** Provenance travels
+with the value, so the rule is not "does this hex match a token" — two colours
+that happen to match are not the same colour.
+
+### The second palette
+
+You declare one mode; the other is built from the same `Theme`. The accent
+carries over and the surfaces flip, because a background chosen at `#1B1B19`
+was chosen *because* the mode was dark, and carrying it into light would give a
+light mode that is still dark.
+
+### Three things only a phone showed
+
+1. **A screen waiting in the back stack came back in the old colours.**
+   AppCompat recreates started activities; a stopped one is not. Each Activity
+   records what it was built with and checks in `onResume`.
+2. **The clock and the battery went invisible.** They are drawn by the system
+   over whatever the app puts behind them; deciding light-on-dark at build time
+   left them white on white. `values-night/themes.xml` answers it now.
+3. **The declared mode is pinned at startup.** Without that, adding
+   `values-night/` would have made every existing app follow the phone.
+
+### Also
+
+`dark_mode`, `light_mode` and `contrast` joined the icon catalogue — an
+appearance screen needs a moon, a sun and a half-filled circle, and there were
+none. **65 names, 96 with aliases.**
+
+---
+
 ## Two fixes worth naming
 
 **A theme token only worked half the time.** `var(--primary)` resolved to
@@ -226,9 +277,9 @@ scroll helper; no `font()` means no `res/font`.
 ## Verification
 
 - 256 transpiler-harness checks
-- 341 feature tests
+- 380 feature tests
 - 21 core tests
-- all 24 examples transpile with balanced braces in every generated Java file
+- all 25 examples transpile with balanced braces in every generated Java file
 - exercised end to end on a Pixel 9 Pro emulator: a real API call with a
   user-supplied key, a Markdown answer, a code block copied to the clipboard
   and pasted back, and the composer growing and shrinking with its text

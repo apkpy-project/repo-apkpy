@@ -6,7 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased]
+## [1.4.0] — 2026-08-27
+
+Two batches that turned out to be one. An app that can hold a conversation
+with an API -- a request body that keeps its types, a timeout long enough for
+something that thinks first, an answer rendered as Markdown in a row that
+takes the height it needs -- and an app that stops looking like every other
+app built with the same tool: a drawer, a settings row, a typeface of your
+own, and control over tracking, leading and alignment.
+
+They are one release because they are the same problem seen twice. An
+assistant app is not hard to build; it is hard to make look right, and every
+shape it needed was missing.
+
+And an app that looks like yours has to keep looking like yours in the other
+mode, so the release ends where it had to: colours that stop being literals
+in a compiled layout, and a switch that changes them while the app runs.
 
 ### Added
 
@@ -32,62 +47,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `dark_mode`, `light_mode` and `contrast` in the icon catalogue -- an
   appearance screen needs a moon, a sun and a half-filled circle, and the
   catalogue had none of the three. **65 names, 96 with aliases.**
-
-### Fixed
-
-- An app bar's back arrow did nothing in the Previewer. `action("arrow_back")`
-  with no `command=` of its own compiles to `finish()` on Android, so the same
-  screen was one tap from leaving on a phone and a dead end on the desktop --
-  a settings screen you could open and not get out of. The Previewer keeps a
-  history now and the arrow walks it back, on exactly the icon name the
-  generator tests for, so neither side can start answering differently.
-- The Previewer had no equivalent of the system Back gesture at all, so a
-  screen that draws no arrow of its own was a dead end even after the fix
-  above. **Alt+Left** is that equivalent, and it follows Android's order: an
-  open drawer closes first, and only then does Back leave the screen. Escape
-  is deliberately left alone -- overlays bind it themselves, and a modal that
-  both closed and navigated would be worse than no shortcut.
-- A screen already open behind you is brought forward rather than stacked
-  twice, which is what `FLAG_ACTIVITY_REORDER_TO_FRONT` does for a
-  `bottom_nav`. Without it, hopping between two tabs grew the history for as
-  long as you kept tapping.
-- The Previewer's signal, wifi and battery symbols were the string
-  `▮▮▮  ▲  ▮▮▮` -- three block characters, an arrowhead, three more --
-  borrowed from whatever the system font happened to carry. At 24px that read
-  as a row of dashes, and nothing in it said "battery". They are vectors now,
-  on the icon catalogue's 24x24 grid and through the same antialiasing
-  rasteriser every icon goes through, and they follow the app bar's palette
-  the way the clock beside them always did.
-- `?attr/...` in a colour position was reported as an unreadable colour. It
-  is a reference to whatever the theme in force says, which is exactly right
-  for a ripple, and it now passes through like `@color/...` always did.
-
-### Note on existing apps
-
-- An app that declares `Theme(mode="dark")` still opens dark on a phone set to
-  light, and the other way round: the declared mode is pinned at startup.
-  Without that, `values-night/` would have made every existing app follow the
-  system, which is a behaviour change nobody asked for.
-- The generated XML *does* change: colours that came from tokens are now
-  references. The app looks the same, and the project is easier to read and to
-  edit by hand, which the generator has always aimed for.
-
----
-
-## [1.4.0] — 2026-08-24
-
-Two batches that turned out to be one. An app that can hold a conversation
-with an API -- a request body that keeps its types, a timeout long enough for
-something that thinks first, an answer rendered as Markdown in a row that
-takes the height it needs -- and an app that stops looking like every other
-app built with the same tool: a drawer, a settings row, a typeface of your
-own, and control over tracking, leading and alignment.
-
-They are one release because they are the same problem seen twice. An
-assistant app is not hard to build; it is hard to make look right, and every
-shape it needed was missing.
-
-### Added
 
 - `U2028`: a stylesheet asking for a theme token that does not exist is
   reported by name, with the closest match and the full list of tokens. It
@@ -243,6 +202,33 @@ shape it needed was missing.
 
 ### Fixed
 
+- An app bar's back arrow did nothing in the Previewer. `action("arrow_back")`
+  with no `command=` of its own compiles to `finish()` on Android, so the same
+  screen was one tap from leaving on a phone and a dead end on the desktop --
+  a settings screen you could open and not get out of. The Previewer keeps a
+  history now and the arrow walks it back, on exactly the icon name the
+  generator tests for, so neither side can start answering differently.
+- The Previewer had no equivalent of the system Back gesture at all, so a
+  screen that draws no arrow of its own was a dead end even after the fix
+  above. **Alt+Left** is that equivalent, and it follows Android's order: an
+  open drawer closes first, and only then does Back leave the screen. Escape
+  is deliberately left alone -- overlays bind it themselves, and a modal that
+  both closed and navigated would be worse than no shortcut.
+- A screen already open behind you is brought forward rather than stacked
+  twice, which is what `FLAG_ACTIVITY_REORDER_TO_FRONT` does for a
+  `bottom_nav`. Without it, hopping between two tabs grew the history for as
+  long as you kept tapping.
+- The Previewer's signal, wifi and battery symbols were the string
+  `▮▮▮  ▲  ▮▮▮` -- three block characters, an arrowhead, three more --
+  borrowed from whatever the system font happened to carry. At 24px that read
+  as a row of dashes, and nothing in it said "battery". They are vectors now,
+  on the icon catalogue's 24x24 grid and through the same antialiasing
+  rasteriser every icon goes through, and they follow the app bar's palette
+  the way the clock beside them always did.
+- `?attr/...` in a colour position was reported as an unreadable colour. It
+  is a reference to whatever the theme in force says, which is exactly right
+  for a ripple, and it now passes through like `@color/...` always did.
+
 - `var(--primary)` resolved to `#6750A4` in an app that declared a `Theme` and
   to the literal text `var(--primary)` in an app that did not, which failed the
   Android build. The generated `apkpy_theme.xml` is written from that same
@@ -300,6 +286,16 @@ shape it needed was missing.
 - A collection drew a scrollbar down the Previewer even with one item in it. A
   RecyclerView draws none until you drag it, so the rail is now shown only when
   there is something to scroll.
+
+### Note on existing apps
+
+- An app that declares `Theme(mode="dark")` still opens dark on a phone set to
+  light, and the other way round: the declared mode is pinned at startup.
+  Without that, `values-night/` would have made every existing app follow the
+  system, which is a behaviour change nobody asked for.
+- The generated XML *does* change: colours that came from tokens are now
+  references. The app looks the same, and the project is easier to read and to
+  edit by hand, which the generator has always aimed for.
 
 ### Verified, not changed
 
