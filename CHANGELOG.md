@@ -6,6 +6,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- `U2029`: a stylesheet property no renderer reads is reported by name, with
+  the closest match and a link to the table. `frobnicate: 3px` used to
+  transpile clean, and so did `elevation`, `transform`, `overflow` and
+  `background` -- four names a person reaches for out of browser habit, all of
+  them dropped when the layout was written. That looks like the *value* not
+  working rather than the *name* not existing, which is why it goes unnoticed:
+  designing is a loop -- try, look, adjust -- and half the loop returning
+  nothing with no message turns it into guessing. It is a warning, not a
+  failure, the way an unknown icon name is.
+- The full stylesheet vocabulary is now a table in the docs, generated from
+  the same set the two renderers read, so it cannot drift from what actually
+  works. **97 properties.**
+
+### Fixed
+
+- `box-shadow` on a `container` drew a shadow in the Previewer and nothing on
+  the phone. The container branch never asked for `android:elevation` -- the
+  card and the image did -- so the same declaration meant two different things
+  depending on which runtime read it.
+- And asking was only half of it: a `ViewGroup` clips its children to its
+  padding box, so a shadow was drawn and then cut off exactly where it starts.
+  The parents of anything that asks for a shadow, and the screen root, stop
+  clipping. **Cards have carried `box-shadow` in the theme defaults since the
+  beginning and have been having their shadow clipped away all along**, so an
+  app that uses `card` will look slightly different -- it now gets the shadow
+  it always asked for. An app with no shadow anywhere generates the XML it
+  always generated.
+- `padding` with three or four values reached the Previewer whole and the
+  compiler truncated it to two: `padding: 0 20 24 20` came out as
+  `0 20 0 20` on the phone, and the bottom silently disappeared. Both sides
+  now read one, two, three and four values the way CSS reads them.
+- `padding-top`, `padding-right`, `padding-bottom` and `padding-left` were
+  read by neither renderer, despite appearing in the shipped examples. They
+  are read by both now, and overlay the shorthand.
+
+---
+
 ## [1.4.0] — 2026-08-27
 
 Two batches that turned out to be one. An app that can hold a conversation

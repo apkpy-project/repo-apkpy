@@ -134,6 +134,7 @@ quoted in an issue.
 | `U2026` | A font file named by `font()` that is not on disk |
 | `U2027` | A module constant joined from a name declared further down |
 | `U2028` | `var(--name)` naming a theme token that does not exist |
+| `U2029` | A stylesheet property no renderer reads, so nothing applied it |
 
 ### D2001 Data Core
 

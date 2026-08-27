@@ -178,16 +178,64 @@ save_button {
 
 The ID rule changes the background of <code>save_button</code> without losing the shared button radius.
 
-## Useful properties
+## The whole vocabulary
+
+An ApkPy stylesheet is not a browser stylesheet. It reads **97 properties**,
+and a name outside this table is reported as
+[`U2029`](friendly-errors.md#u2001-components-and-arguments) and ignored:
 
 | Area | Properties |
 | --- | --- |
-| Colour | <code>color</code>, <code>background-color</code>, <code>border-color</code>, <code>pressed-color</code> |
-| Type | <code>font-size</code>, <code>font-weight</code>, <code>font-family</code>, <code>text-align</code>, <code>text-transform</code>, <code>letter-spacing</code>, <code>line-height</code> |
-| Shape | <code>border-width</code>, <code>border-radius</code>, <code>box-shadow</code> |
-| Space | <code>padding</code>, <code>margin</code>, <code>gap</code>, <code>divider-color</code>, <code>divider-width</code>, <code>divider-inset</code> |
-| Size | <code>width</code>, <code>height</code>, <code>min-width</code>, <code>max-width</code>, <code>rows</code>, <code>max-rows</code> |
-| Layout | <code>display</code>, flex/grid properties, <code>justify-content</code>, <code>align-items</code>, <code>flex-grow</code>, positioning and z-index |
+| Colour | <code>color</code>, <code>background-color</code>, <code>border-color</code>, <code>border-left-color</code>, <code>border-top-color</code>, <code>pressed-color</code>, <code>focus-color</code>, <code>focus-border-color</code>, <code>accent-color</code>, <code>active-color</code>, <code>hint-color</code>, <code>icon-color</code>, <code>placeholder-color</code>, <code>secondary-color</code>, <code>subtitle-color</code>, <code>title-color</code>, <code>trailing-color</code>, <code>meta-color</code>, <code>badge-color</code>, <code>badge-background-color</code>, <code>item-background-color</code>, <code>item-border-color</code>, <code>divider-color</code>, <code>indicator-color</code>, <code>tint</code> |
+| Type | <code>font-size</code>, <code>font-weight</code>, <code>font-family</code>, <code>font-style</code>, <code>text-align</code>, <code>text-transform</code>, <code>letter-spacing</code>, <code>line-height</code>, <code>title-lines</code>, <code>subtitle-lines</code>, <code>subtitle-size</code>, <code>trailing-size</code>, <code>rows</code>, <code>max-rows</code> |
+| Shape | <code>border-width</code>, <code>border-left-width</code>, <code>border-top-width</code>, <code>border-radius</code>, <code>box-shadow</code> |
+| Space | <code>padding</code>, <code>padding-top</code>, <code>padding-right</code>, <code>padding-bottom</code>, <code>padding-left</code>, <code>margin</code>, <code>margin-top</code>, <code>margin-right</code>, <code>margin-bottom</code>, <code>margin-left</code>, <code>gap</code>, <code>divider-width</code>, <code>divider-inset</code> |
+| Size | <code>width</code>, <code>height</code>, <code>min-width</code>, <code>min-height</code>, <code>max-width</code>, <code>max-height</code>, <code>aspect-ratio</code>, <code>icon-size</code>, <code>item-size</code> |
+| Layout | <code>display</code>, <code>flex-direction</code>, <code>flex-grow</code>, <code>flex-shrink</code>, <code>flex-basis</code>, <code>flex-wrap</code>, <code>justify-content</code>, <code>align-items</code>, <code>align-self</code>, <code>align-content</code>, <code>grid-template-columns</code>, <code>grid-column</code>, <code>grid-row</code>, <code>position</code>, <code>top</code>, <code>right</code>, <code>bottom</code>, <code>left</code>, <code>z-index</code> |
+| Effects | <code>opacity</code>, <code>object-fit</code>, <code>filter</code>, <code>scale</code> |
+| Behaviour | <code>transition</code>, <code>press</code>, <code>code-copy</code>, <code>animation</code>, <code>animation-name</code>, <code>animation-duration</code>, <code>animation-delay</code>, <code>animation-iteration-count</code> |
+
+It is a warning, not a failure -- the build carries on, the way it does for an
+icon name the catalogue does not have. What it buys you is the difference
+between "that value did not work" and "that name does not exist", which is the
+difference between adjusting and guessing.
+
+```css
+card { elevation: 4px; }     /* U2029: did you mean box-shadow? */
+card { background: #fff; }   /* U2029: did you mean background-color? */
+```
+
+### Depth
+
+`box-shadow` is written to Android as `android:elevation`, and the first pixel
+value in the declaration is the depth:
+
+```css
+card { box-shadow: 0 6px 16px #00000030; }   /* 6dp */
+```
+
+Android draws that shadow *outside* the view's own box, and a `ViewGroup`
+clips its children to its padding. ApkPy stops the clipping on the parents of
+anything that asks for a shadow, which is the other half of why `box-shadow`
+used to look like it did nothing. Only a screen that asks for one is touched.
+
+The Previewer approximates -- Tk has no blurred shadow, so it offsets two
+rounded layers. What matches is the presence and the ordering, not the blur.
+
+### Padding, all four ways
+
+`padding` reads the way CSS reads: one value, two, three or four, and the long
+names on top of them.
+
+```css
+card { padding: 16px; }              /* every side */
+card { padding: 8px 16px; }          /* vertical, horizontal */
+card { padding: 4px 8px 12px; }      /* top, horizontal, bottom */
+card { padding: 0 20px 24px 20px; }  /* top, right, bottom, left */
+card { padding: 10px; padding-bottom: 30px; }
+```
+
+## The ones worth a paragraph
 
 ### Button labels
 
