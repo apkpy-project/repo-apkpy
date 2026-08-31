@@ -7,7 +7,8 @@ description: ApkPy stable version, release candidates and version history.
 
 | Version | Status | Main addition |
 | --- | --- | --- |
-| 1.4.0 | prepared | typed JSON bodies and timeouts, Markdown answers in rows that fit them, a drawer, settings rows and your own typeface |
+| 1.5.0 | prepared | the fingerprint check, a shared vocabulary for sizes and surfaces, and the places where the two renderers had picked different numbers |
+| 1.4.0 | published | typed JSON bodies and timeouts, Markdown answers in rows that fit them, a drawer, settings rows and your own typeface |
 | 1.3.2 | published | persistent background jobs, offline queue, any-file picker, `upload_button` and 64 diagnostic codes |
 | 1.3.1 | published | relations, batched includes, observable queries and friendly diagnostics |
 | 1.3.0 | published | typed Data Core, async CRUD, transactions and migrations |
@@ -29,6 +30,7 @@ and limitations remain explicit.
 
 Use the page matching your installed package:
 
+- [Version 1.5.0](version-1.5.0.md)
 - [Version 1.4.0](version-1.4.0.md)
 - [Version 1.3.2](version-1.3.2.md)
 - [Version 1.3.1](version-1.3.1.md)

@@ -37,6 +37,85 @@ error families, examples and opt-out control.
 
 ---
 
+## ApkPy 1.5.0 — The same words on both sides
+
+Two things that turned out to be one: **the fingerprint check**, and **the two
+renderers agreeing** about the words they share.
+
+```python
+def unlocked(ok, reason):
+    if ok:
+        on_click_navigate(vault)
+    else:
+        toast(reason)
+
+biometrics.unlock(title="Unlock the vault", subtitle="Use your fingerprint",
+                  cancel_text="Use password", on_result=unlocked)
+```
+
+![The biometric prompt in the Previewer, in dark and light mode](docs/assets/biometric-prompt.png)
+
+**Android draws this dialog itself.** `BiometricPrompt` is a system surface: an
+app supplies the title, the subtitle and the words on the cancel button, and
+the platform draws the rest — shape, colours, sensor, typeface. That is why
+those three strings are the whole API, and why a typeface declared with
+`font()` does not apply here on either runtime.
+
+`on_result` receives `(success, reason)`. `reason` is `"ok"`, or one of
+`cancelled`, `no_hardware`, `not_enrolled`, `unavailable`, `lockout`,
+`failed` — **never an empty string**, so an app always has something to say.
+Both runtimes read one table, and the generated Java's `switch` is emitted
+*from* that table, so they cannot drift.
+
+- the status is checked **before** the dialog is built, so a phone with no
+  sensor gets `no_hardware` rather than a prompt that cannot succeed;
+- `allow_pin=True` adds the device PIN, pattern or password, and drops the
+  cancel button — Android's `PromptInfo.Builder` throws if a negative button
+  and `DEVICE_CREDENTIAL` are both set;
+- a scan that simply does not match is **not** a result: the prompt stays open
+  and the person tries again, on both runtimes;
+- in the Previewer, click the fingerprint to scan, right-click it for a bad
+  scan, `Esc` to cancel.
+
+Verified on a Pixel 9 Pro emulator: all four outcomes — `not_enrolled` with no
+finger registered, the PIN sheet, a real fingerprint, and the cancel button.
+
+**A vocabulary for size and depth**
+
+- `--text-xs` … `--text-3xl` — seven steps (**11 / 12 / 14 / 16 / 20 / 24 /
+  32** at the default theme), scaling with `Theme(font_size=)`, plus
+  `--leading-tight` / `-normal` / `-loose`;
+- `--surface-low`, `--surface-high`, `--border-subtle` — derived from the
+  colours the app declared, not from Material's palette, and written as
+  resource references so `values-night/` answers them.
+
+**Two renderers that disagreed**
+
+- `label("...")` with no stylesheet was **14px on the desktop and 16sp on the
+  phone** — two literals in two files, invisible because "body text" had no
+  shared name to disagree about. The phone's number wins, so no compiled app
+  changes;
+- the bottom bar's active label was **bold in the Previewer and normal on the
+  phone**. Material points the active and inactive text appearances at the
+  same 12sp caption, so only the tint changes.
+
+**Guard rails**
+
+- `U2031` — a token in a slot of the wrong kind (`--text` is a colour,
+  `--text-lg` is a size, three characters apart);
+- `U2029` — a stylesheet property no renderer reads;
+- the full stylesheet vocabulary is now a table in the docs, generated from the
+  same set both renderers read. **87 properties.**
+
+**Also fixed:** `box-shadow` on a `container` and the clipping that cut shadows
+off; `padding` with three or four values, and the four longhands.
+
+Full notes: [Version 1.5.0](https://repo-apkpy.pages.dev/version-1.5.0/) ·
+[Biometrics guide](https://repo-apkpy.pages.dev/native-features/#biometrics) ·
+[Example](examples/26_biometric_lock.py)
+
+---
+
 ## ApkPy 1.4.0 — Talking to a model, and an app that looks like yours
 
 Two batches that turned out to be one: an app that can hold a conversation

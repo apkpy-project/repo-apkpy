@@ -19,6 +19,7 @@ description: Permissions, push, maps, location, notifications and Android integr
 | `routes` / `route_points` | cancellable route calculation and decoding |
 | `service` | periodic and one-shot background work |
 | `background_job` | persistent queue: constraints, retries, cancellation and observable progress |
+| `biometrics` | the system fingerprint or face prompt, and why a check ended |
 | `apps` | installed app inspection |
 
 Use [Background jobs](../background-jobs.md),

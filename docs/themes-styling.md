@@ -54,10 +54,83 @@ danger_action {
 
 Available tokens:
 
-<code>primary</code>, <code>secondary</code>, <code>background</code>, <code>surface</code>, <code>text</code>, <code>text_secondary</code>, <code>on_primary</code>, <code>error</code>, <code>success</code>, <code>border</code>, <code>radius</code>, <code>spacing</code>, <code>motion</code>, <code>nav_indicator</code> and <code>font-family</code>.
+<code>primary</code>, <code>secondary</code>, <code>background</code>, <code>surface</code>, <code>text</code>, <code>text_secondary</code>, <code>on_primary</code>, <code>error</code>, <code>success</code>, <code>border</code>, <code>radius</code>, <code>spacing</code>, <code>motion</code>, <code>nav_indicator</code>, <code>font-family</code>, <code>surface_low</code>, <code>surface_high</code>, <code>border_subtle</code>, the seven steps <code>text-xs</code> to <code>text-3xl</code> and the three <code>leading-*</code> multipliers.
 
 A dash reads as an underscore, so <code>var(--text-secondary)</code> and
 <code>var(--text_secondary)</code> are the same token.
+
+### A ramp instead of a number
+
+Seven steps, so a heading and a caption are two names rather than two guesses.
+They are multiples of `Theme(font_size=14)`, and they resolve to Material's
+own sp values rather than to a geometric series -- one ratio lands on 29.3
+where the platform says 32, and the two renderers round it differently.
+
+| Token | Default | Typical use |
+| --- | --- | --- |
+| `--text-xs` | 11px | overline, timestamps, a tab label |
+| `--text-sm` | 12px | captions, helper text under a field |
+| `--text-base` | 14px | dense list rows |
+| `--text-lg` | 16px | body text -- what `label()` uses when asked nothing |
+| `--text-xl` | 20px | a section heading |
+| `--text-2xl` | 24px | a screen title |
+| `--text-3xl` | 32px | a number to be read across the room |
+
+~~~ css
+title   { font-size: var(--text-2xl); line-height: var(--leading-tight); }
+body    { font-size: var(--text-lg);  line-height: var(--leading-normal); }
+caption { font-size: var(--text-sm);  color: var(--text-secondary); }
+~~~
+
+`--leading-tight`, `--leading-normal` and `--leading-loose` are 1.2, 1.45 and
+1.7. `line-height` reads a bare number as a multiple of the font size on both
+sides, so the multipliers work anywhere a length does.
+
+Raising the base moves all seven together:
+
+~~~ python
+run(start_screen=home, theme=Theme(font_size=18))
+~~~
+
+A heading that was 20sp becomes 26sp, body text 21sp, a display number 41sp --
+proportional, in one edit rather than seventeen.
+
+### Planes between the background and the surface
+
+A card has to sit *on* a surface. A well has to sit *under* one. A divider
+should separate without shouting.
+
+~~~ css
+sheet { background-color: var(--surface-high); }
+well  { background-color: var(--surface-low); }
+group { divider-color: var(--border-subtle); divider-width: 1px; }
+~~~
+
+When the app declares its own `surface`, `background` or `border`, the three
+are **derived from those colours** rather than from Material's palette -- so a
+warm theme does not grow a cold grey slab in the middle of it.
+
+| Token | How it is derived |
+| --- | --- |
+| `--surface-high` | the surface, 6% toward the text |
+| `--surface-low` | 55% of the way from the surface to the background |
+| `--border-subtle` | 35% from the surface toward the border |
+
+Like every other theme colour, all three are written into layouts and
+drawables as resource references, so `values-night/` answers them and
+`appearance.set()` moves them while the app runs.
+
+!!! warning "A subtle divider is not always the better one"
+    If a theme's `border` already sits close to its surface, it is already
+    playing the quiet role and there is no room underneath it. Render it and
+    look before you swap a working divider for `--border-subtle`.
+
+### A token in the wrong kind of slot
+
+`--text` is a colour and `--text-lg` is a size, three characters apart. Using
+one where the other belongs raises **`U2031`** instead of failing quietly --
+a colour in a size slot would otherwise turn `#211F26` into 21px and simply
+look wrong. A composite value such as `0 3px 8px var(--border)` is left alone.
 
 ### Tokens work without a theme
 
@@ -180,20 +253,20 @@ The ID rule changes the background of <code>save_button</code> without losing th
 
 ## The whole vocabulary
 
-An ApkPy stylesheet is not a browser stylesheet. It reads **97 properties**,
+An ApkPy stylesheet is not a browser stylesheet. It reads **87 properties**,
 and a name outside this table is reported as
 [`U2029`](friendly-errors.md#u2001-components-and-arguments) and ignored:
 
 | Area | Properties |
 | --- | --- |
-| Colour | <code>color</code>, <code>background-color</code>, <code>border-color</code>, <code>border-left-color</code>, <code>border-top-color</code>, <code>pressed-color</code>, <code>focus-color</code>, <code>focus-border-color</code>, <code>accent-color</code>, <code>active-color</code>, <code>hint-color</code>, <code>icon-color</code>, <code>placeholder-color</code>, <code>secondary-color</code>, <code>subtitle-color</code>, <code>title-color</code>, <code>trailing-color</code>, <code>meta-color</code>, <code>badge-color</code>, <code>badge-background-color</code>, <code>item-background-color</code>, <code>item-border-color</code>, <code>divider-color</code>, <code>indicator-color</code>, <code>tint</code> |
+| Colour | <code>color</code>, <code>background-color</code>, <code>border-color</code>, <code>pressed-color</code>, <code>focus-color</code>, <code>focus-border-color</code>, <code>accent-color</code>, <code>active-color</code>, <code>hint-color</code>, <code>icon-color</code>, <code>placeholder-color</code>, <code>secondary-color</code>, <code>subtitle-color</code>, <code>title-color</code>, <code>trailing-color</code>, <code>meta-color</code>, <code>badge-color</code>, <code>badge-background-color</code>, <code>item-background-color</code>, <code>item-border-color</code>, <code>divider-color</code>, <code>indicator-color</code>, <code>tint</code> |
 | Type | <code>font-size</code>, <code>font-weight</code>, <code>font-family</code>, <code>font-style</code>, <code>text-align</code>, <code>text-transform</code>, <code>letter-spacing</code>, <code>line-height</code>, <code>title-lines</code>, <code>subtitle-lines</code>, <code>subtitle-size</code>, <code>trailing-size</code>, <code>rows</code>, <code>max-rows</code> |
-| Shape | <code>border-width</code>, <code>border-left-width</code>, <code>border-top-width</code>, <code>border-radius</code>, <code>box-shadow</code> |
+| Shape | <code>border-width</code>, <code>border-radius</code>, <code>box-shadow</code> |
 | Space | <code>padding</code>, <code>padding-top</code>, <code>padding-right</code>, <code>padding-bottom</code>, <code>padding-left</code>, <code>margin</code>, <code>margin-top</code>, <code>margin-right</code>, <code>margin-bottom</code>, <code>margin-left</code>, <code>gap</code>, <code>divider-width</code>, <code>divider-inset</code> |
-| Size | <code>width</code>, <code>height</code>, <code>min-width</code>, <code>min-height</code>, <code>max-width</code>, <code>max-height</code>, <code>aspect-ratio</code>, <code>icon-size</code>, <code>item-size</code> |
-| Layout | <code>display</code>, <code>flex-direction</code>, <code>flex-grow</code>, <code>flex-shrink</code>, <code>flex-basis</code>, <code>flex-wrap</code>, <code>justify-content</code>, <code>align-items</code>, <code>align-self</code>, <code>align-content</code>, <code>grid-template-columns</code>, <code>grid-column</code>, <code>grid-row</code>, <code>position</code>, <code>top</code>, <code>right</code>, <code>bottom</code>, <code>left</code>, <code>z-index</code> |
+| Size | <code>width</code>, <code>height</code>, <code>min-height</code>, <code>max-width</code>, <code>aspect-ratio</code>, <code>icon-size</code>, <code>item-size</code> |
+| Layout | <code>display</code>, <code>flex-direction</code>, <code>flex-grow</code>, <code>flex-shrink</code>, <code>flex-basis</code>, <code>flex-wrap</code>, <code>justify-content</code>, <code>align-items</code>, <code>align-self</code>, <code>grid-template-columns</code>, <code>grid-column</code>, <code>grid-row</code>, <code>position</code>, <code>top</code>, <code>right</code>, <code>bottom</code>, <code>left</code>, <code>z-index</code> |
 | Effects | <code>opacity</code>, <code>object-fit</code>, <code>filter</code>, <code>scale</code> |
-| Behaviour | <code>transition</code>, <code>press</code>, <code>code-copy</code>, <code>animation</code>, <code>animation-name</code>, <code>animation-duration</code>, <code>animation-delay</code>, <code>animation-iteration-count</code> |
+| Behaviour | <code>transition</code>, <code>press</code>, <code>code-copy</code>, <code>animation-name</code>, <code>animation-duration</code> |
 
 It is a warning, not a failure -- the build carries on, the way it does for an
 icon name the catalogue does not have. What it buys you is the difference

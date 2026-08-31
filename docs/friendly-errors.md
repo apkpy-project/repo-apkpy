@@ -135,6 +135,7 @@ quoted in an issue.
 | `U2027` | A module constant joined from a name declared further down |
 | `U2028` | `var(--name)` naming a theme token that does not exist |
 | `U2029` | A stylesheet property no renderer reads, so nothing applied it |
+| `U2031` | A theme token used in a slot of the wrong kind (a colour where a size belongs, or the reverse) |
 
 ### D2001 Data Core
 

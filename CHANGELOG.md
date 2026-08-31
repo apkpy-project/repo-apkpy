@@ -6,10 +6,78 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased]
+## [1.5.0] — 2026-08-31
+
+Two things, and they turned out to be the same thing.
+
+The first is **the fingerprint check**: `biometrics.unlock(...)`, one call with
+one result. The second is **the two renderers agreeing** — a shared vocabulary
+for sizes and surfaces, and the places where the Previewer and the Android
+generator had quietly picked different numbers for the same idea.
+
+They belong together because the biometric prompt is the sharpest case of the
+same problem. Android draws that dialog itself, so an app supplies three
+strings and the platform does the rest — and the only thing the two runtimes
+*can* agree on is the words and the result. Getting that right meant giving the
+seven possible outcomes one shared table, which is exactly what the type ramp
+and the surface planes do for sizes and colours.
+
+A value with no shared name is a value each side is free to guess at. Both
+sides guessed reasonably. That is precisely why nobody noticed.
 
 ### Added
 
+- **`biometrics.unlock(...)`** -- the fingerprint or face check, as one call
+  with one result. Android draws this dialog itself, so the API is the three
+  strings it lets an app choose: `title`, `subtitle` and `cancel_text`. Plus
+  `allow_pin=True` for the device PIN, pattern or password, which drops the
+  cancel button because `PromptInfo.Builder` refuses a negative button
+  alongside `DEVICE_CREDENTIAL`.
+- `on_result` receives `(success, reason)`, and `reason` is one of seven
+  words -- `ok`, `cancelled`, `no_hardware`, `not_enrolled`, `unavailable`,
+  `lockout`, `failed` -- **never an empty string**. Both runtimes resolve them
+  from one table, so an app that says "try again" for a missing sensor is a
+  bug you can write, not one the library hands you. A scan that simply does
+  not match is not a result: the prompt stays open on both sides.
+- The Previewer draws a **replica** of the system dialog from the same three
+  strings. Click the fingerprint to scan, right-click it for a bad scan,
+  Escape to cancel. The desktop hint sits on the scrim, outside the card, so
+  the card stays a copy of what the phone shows.
+- `fingerprint`, `lock` and `lock_open` in the icon catalogue, with
+  `biometrics`, `touch_id` and `unlock` as aliases. **68 names.**
+- `USE_BIOMETRIC` is declared automatically, and
+  `androidx.biometric:biometric:1.1.0` is added only to an app that asks for
+  the prompt. An app that never mentions it generates the project it generated
+  before -- no interface, no runtime, no permission, no dependency.
+
+- **A type ramp.** `--text-xs`, `--text-sm`, `--text-base`, `--text-lg`,
+  `--text-xl`, `--text-2xl` and `--text-3xl`, resolving to **11, 12, 14, 16,
+  20, 24 and 32** at the default `Theme(font_size=14)` and scaling with it.
+  The steps are Material's own sp values, **not** a geometric series: one
+  ratio produces 29.3 where the platform says 32, and each renderer rounds it
+  differently. Across the 25 shipped examples there were **17 distinct font
+  sizes**, with 13px, 14px and 15px accounting for 32 uses between them --
+  the same intent written three ways.
+- **`--leading-tight`, `--leading-normal` and `--leading-loose`** (1.2, 1.45,
+  1.7). `line-height` already read a bare number as a multiple of the font
+  size on both sides, so these ride on machinery that was already correct.
+- **Three planes: `--surface-low`, `--surface-high` and `--border-subtle`.**
+  A card that has to sit on a surface, a well that has to sit under one, and a
+  divider that should not shout. When the app declared its own
+  `surface`/`background`/`border`, all three are **derived from those
+  colours** rather than falling back to Material's palette -- otherwise a warm
+  theme grows a cold grey plane it never asked for. `--surface-high` is the
+  surface 6% toward the text, `--surface-low` is 55% of the way to the
+  background, and `--border-subtle` sits 35% from the surface toward the
+  border, which is where Material puts `outlineVariant` in both modes.
+- Like every other theme token, the three new colours are written into layouts
+  and drawables as **resource references**, so `values-night/` answers them
+  and `appearance.set()` moves them.
+- `U2031`: a token used in a slot of the wrong kind. `--text` is a colour and
+  `--text-lg` is a size, three characters apart. A size in a colour slot dies
+  in `parseColor` when the screen opens; a colour in a size slot is worse --
+  `#211F26` silently becomes 21px and the app just looks wrong. A composite
+  value like `0 3px 8px var(--border)` is left alone.
 - `U2029`: a stylesheet property no renderer reads is reported by name, with
   the closest match and a link to the table. `frobnicate: 3px` used to
   transpile clean, and so did `elevation`, `transform`, `overflow` and
@@ -21,10 +89,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   failure, the way an unknown icon name is.
 - The full stylesheet vocabulary is now a table in the docs, generated from
   the same set the two renderers read, so it cannot drift from what actually
-  works. **97 properties.**
+  works. **87 properties.**
 
 ### Fixed
 
+- The prompt reached for `ui._app.root` to find its window. `ui._app` is a
+  lazy proxy, so *asking* it builds the Previewer -- which would have opened
+  an empty window from `apkpy build` alone. It now checks whether one was
+  constructed before touching it, the same guard the motion work needed.
+
+- **`label("...")` with no stylesheet at all was 14px in the Previewer and
+  16sp on Android.** Two literals written into two files at different times,
+  each defensible on its own, and invisible because "body text" had no shared
+  name for the two sides to disagree about. It is the most used component in
+  the library, so the gap was in every app ever built with it. Both sides now
+  read the same step of the ramp; **the phone's number wins**, so no compiled
+  app changes.
+- **The active tab's label in the bottom bar was bold in the Previewer and not
+  on the phone.** Material's `Widget.MaterialComponents.BottomNavigationView`
+  points `itemTextAppearanceActive` *and* `itemTextAppearanceInactive` at the
+  same `textAppearanceCaption` -- 12sp, weight normal -- so on the device only
+  the tint changes, and the state is carried by the pill and the filled icon.
+  The desktop was adding a third signal the phone does not have. The same line
+  also asked Tk for ten *points*, which is 13.3px at 96dpi, where the phone
+  renders 12sp. Previewer-only: the generated XML is unchanged.
 - `box-shadow` on a `container` drew a shadow in the Previewer and nothing on
   the phone. The container branch never asked for `android:elevation` -- the
   card and the image did -- so the same declaration meant two different things

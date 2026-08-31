@@ -141,6 +141,37 @@ same antialiasing pass every `icon=` goes through, and they take the app bar's
 colours. They used to be block characters borrowed from the system font, which
 at that size read as a row of dashes.
 
+### A number with no name is a number each side guesses
+
+The mismatches that survive longest are not the loud ones. They are the values
+both renderers had to pick, that nobody ever wrote down, so each side picked
+something reasonable in its own file and neither looked wrong on its own.
+
+Two were found and repaired in 1.5.0, and they have the same shape:
+
+| What | Previewer | Android |
+| --- | --- | --- |
+| `label()` with no stylesheet | 14px | 16sp |
+| the bottom bar's active label | bold, 10pt (13.3px) | normal, 12sp |
+
+Neither was a rendering bug. Both were two literals, written into two files at
+different times, with no shared name to disagree about. `label()` is the most
+used component in the library, so that one was in every app ever built.
+
+The repair in both cases was the same, and it is the pattern worth copying:
+**give the value a name in a neutral module both sides import**, then let each
+renderer read it. `apkpy_lib/theme.py` holds the type ramp,
+`apkpy_lib/motion.py` the durations, `apkpy_lib/icons.py` the glyphs. A test
+that asserts both sides resolve the same value from the same table is what
+keeps them from drifting again -- a test comparing two hard-coded numbers only
+proves that somebody typed the same thing twice.
+
+When you find one of these, check the platform before choosing a side. The
+bottom-bar label was settled by reading Material's own
+`Widget.MaterialComponents.BottomNavigationView`, which points the active and
+inactive text appearances at the same 12sp caption -- so the phone was right
+and the desktop was inventing a third state signal.
+
 ## Release test
 
 1. Exercise every primary action in the Previewer.

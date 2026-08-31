@@ -67,6 +67,134 @@ files.pick(on_result=file_chosen, types=["pdf", "zip"])
 
 See [Streaming multipart uploads](guides/uploads.md).
 
+## Biometrics
+
+~~~ python
+from apkpy_lib import Screen, biometrics, button, label, on_click_navigate, run, toast
+
+home = Screen(id="home")
+vault = Screen(id="vault")
+
+label("Your notes are locked", id="t", screen=home)
+label("Here they are", id="v", screen=vault)
+
+
+def unlocked(ok, reason):
+    if ok:
+        on_click_navigate(vault)
+    else:
+        toast(reason)
+
+
+def ask():
+    biometrics.unlock(
+        title="Unlock the vault",
+        subtitle="Use your fingerprint",
+        cancel_text="Use password",
+        on_result=unlocked,
+    )
+
+
+button("UNLOCK", id="go", icon="lock", screen=home, command=ask)
+run(start_screen=home)
+~~~
+
+![The biometric prompt in the Previewer: the waiting state, a scan that was not
+recognised, and the PIN fallback, in dark and light
+mode](assets/biometric-prompt.png)
+
+`USE_BIOMETRIC` is declared for you, and `androidx.biometric` is added to the
+Gradle build only for an app that asks for the prompt. An app that never
+mentions it generates the project it generated before.
+
+### Android draws this dialog
+
+`BiometricPrompt` is a **system surface**. An app supplies the title, the
+subtitle and the words on the cancel button, and the platform draws everything
+else — the shape, the colours, the sensor, the typeface. That is why those
+three strings are the whole API: there is nothing else to give it.
+
+It also means a typeface declared with `font()` does **not** apply here. The
+prompt uses the system font on the phone, so the Previewer's replica does too.
+
+### The seven reasons
+
+`on_result` receives `(success, reason)`. `reason` is `"ok"` on success, and
+otherwise one of:
+
+| Reason | What happened | What an app usually does |
+| --- | --- | --- |
+| `cancelled` | Dismissed, or the cancel button was pressed | Nothing. They chose to stop |
+| `no_hardware` | The device has no biometric sensor at all | Hide the unlock button entirely |
+| `not_enrolled` | A sensor, but no finger or face registered | Offer a password, and say why |
+| `unavailable` | The sensor cannot be used right now | Offer a password; suggest retrying |
+| `lockout` | Too many failed attempts; temporarily disabled | Offer a password. The sensor is out |
+| `failed` | It ended without success for another reason | Offer a password |
+
+It is never an empty string, so an app always has something to say. Both
+runtimes resolve these words from the same table, so neither can report one the
+other does not know.
+
+~~~ python
+def unlocked(ok, reason):
+    if ok:
+        on_click_navigate(vault)
+    elif reason == "cancelled":
+        pass                                  # they chose to stop
+    elif reason == "no_hardware":
+        on_click_navigate(password_screen)    # this phone will never do it
+    else:
+        toast("Could not confirm it was you")
+        on_click_navigate(password_screen)
+~~~
+
+The status is checked **before** the dialog is built, so a phone with no sensor
+gets `no_hardware` rather than a prompt that cannot succeed.
+
+!!! note "A scan that does not match is not a result"
+    Android keeps the prompt open and lets the person try again, so the
+    callback does not fire. It fires when the check *ends* — confirmed,
+    cancelled, or impossible. Both runtimes behave this way, which is why
+    there is no `on_failure`.
+
+### Falling back to the PIN
+
+~~~ python
+biometrics.unlock(title="Confirm it's you", allow_pin=True, on_result=unlocked)
+~~~
+
+`allow_pin=True` lets the person use the device PIN, pattern or password
+instead, and a correct one succeeds exactly like a matching finger.
+
+The cancel button disappears in that mode, and `cancel_text` is ignored.
+That is not a simplification: Android's `PromptInfo.Builder` **throws** if a
+negative button and `DEVICE_CREDENTIAL` are both set, because the system draws
+its own way out. The Previewer drops it too, so what you design is what ships.
+
+### In the Previewer
+
+The desktop has no sensor, so the Previewer draws a **replica** of the dialog
+from the same three strings and lets you drive it by hand:
+
+| Action | What it does |
+| --- | --- |
+| **Click the fingerprint** | A scan that matches — `(True, "ok")` |
+| **Right-click the fingerprint** | A scan that does not. The prompt stays open, the way it does on the phone |
+| **Cancel, `Esc`, or a click outside** | `(False, "cancelled")` |
+| **Use PIN** (when `allow_pin=True`) | Stands in for the system credential sheet, and succeeds |
+
+The one-line hint is drawn on the scrim, **outside** the card, so the card
+itself stays a copy of what the phone shows.
+
+What the two runtimes guarantee is the same words, the same shape, the same
+result and the same timing — not the same pixels, because the phone's dialog
+is drawn by the system and cannot be styled by anyone. See
+[Previewer versus Android](preview-android.md).
+
+The icon catalogue also gained `fingerprint`, `lock` and `lock_open` (with
+`biometrics`, `touch_id` and `unlock` as aliases) for the button that opens the
+prompt.
+
 ## Location
 
 ~~~ python
