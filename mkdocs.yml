@@ -73,6 +73,7 @@ extra_javascript:
 nav:
   - Home: index.md
   - Can ApkPy build this?: can-apkpy-build-this.md
+  - ApkPy vs Kivy, BeeWare and Flet: apkpy-vs-kivy-flet-beeware.md
   - Showcase: showcase.md
   - Benchmarks: benchmark.md
   - Start:

@@ -1,6 +1,14 @@
-# 🚀 ApkPy — Build Native Android Apps in Pure Python
+# ApkPy — a Python to Android transpiler
 
-> **Transform Python scripts into real, native Android projects — no Java required.**
+**ApkPy is a Python package (`pip install apkpy`) that transpiles Python UI code into native Android Java and XML. The generated APK does not bundle a Python interpreter and does not use a WebView.**
+
+Your Python is read at build time and turned into ordinary Android source — `Activity` classes, layout XML, `res/` resources — so what installs on the phone is a normal Android app. A debug build of a small app is around 5 MB and starts with no interpreter to boot.
+
+You write the whole app in Python with a CSS-style design system, see it on your desktop in a live Previewer, and then either `apkpy run` for an installable `.apk` or `apkpy build` for a project you can open in Android Studio. No Java, no Kotlin, no Android Studio needed.
+
+**What it does not do:** it does not run Python on the device, so `pip` packages such as `requests`, `numpy` or `pandas` cannot come along — ApkPy translates a [documented subset of Python](docs/apkpy-vs-kivy-flet-beeware.md#where-apkpy-loses-and-it-is-not-close) and gives you its own APIs (`https`, `db`, `files`, `background_job`) for the same jobs. Anything outside that subset stops the build and names it, rather than compiling to nothing. The engine is closed source; the examples and documentation in this repository are public.
+
+See [ApkPy compared with Kivy, BeeWare and Flet](docs/apkpy-vs-kivy-flet-beeware.md) for where each one wins.
 
 [![PyPI version](https://img.shields.io/pypi/v/apkpy)](https://pypi.org/project/apkpy/)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue)](https://python.org)
@@ -8,8 +16,6 @@
 [![Platform](https://img.shields.io/badge/platform-Android-green)](https://developer.android.com)
 
 **Documentation:** [Start here](docs/index.md) · [End-to-end tutorial](docs/tutorial-end-to-end.md) · [Essential API](docs/reference/essential.md) · [Friendly errors](docs/friendly-errors.md) · [Troubleshooting](docs/troubleshooting.md) · [Showcase](docs/showcase.md) · [Android benchmark](BENCHMARKS.md)
-
-**ApkPy** is a closed-source Python-to-Android transpiler. Write your app in pure Python using a clean, CSS-inspired design system. ApkPy parses your Python code, generates native Java + XML Android projects, and either bundles them into a ready-to-compile `.zip` or — with a single `apkpy run` — compiles them straight into an installable `.apk`. **No Java, no Kotlin, no Android Studio.**
 
 ---
 
