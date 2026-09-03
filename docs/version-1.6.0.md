@@ -273,20 +273,6 @@ and refusing to build would only teach people to switch the check off.
 
 ---
 
-### Built for Android 15, and drawn around the system bars
-
-Apps now target API 35. Google raises the minimum every year and 34 had fallen
-below it, so a new app or an update would be refused by Play.
-
-That is not a one-line change. From API 35 Android draws the app **behind** the
-status and navigation bars, always — so every screen without an app bar would
-have had its first line hidden under the clock. Each screen's root now declares
-`fitsSystemWindows`, on the root deliberately: it *consumes* the insets, so the
-toolbar's own listener stops growing and the top does not get padded twice.
-
-Checked on a phone running Android 16, on all the screen shapes: plain, with an
-app bar, with a bottom bar, with a drawer, and with both.
-
 ## Also fixed
 
 - **`round(2.5)` gave 2 in the Previewer and 3 on the phone.** Python rounds a
@@ -301,13 +287,6 @@ app bar, with a bottom bar, with a drawer, and with both.
 - **`math.sqrt(-1)` returned NaN** on the phone and put that word on screen,
   where Python raises. Both sides now raise, and one `try`/`except` covers
   them.
-- **`background-color` on a label reached the Previewer and vanished on the
-  phone.** The `TextView` never carried a background at all, so a band of
-  colour with dark text on it looked right on the desktop and came out as
-  invisible text on the device. Found while photographing something else.
-  It also means the accessibility check was measuring contrast against a
-  background that was never painted; now the number describes what is on
-  screen.
 - **`label(MSG)` and `label("a" + "b")` produced an empty attribute** — the text
   showed in the Previewer and nothing on the phone.
 - **`sync.input()` inside a job**, `get_value()` from another screen, and
@@ -370,9 +349,5 @@ Four behaviours changed without an opt-in, all four because they were defects:
    the rules. Existing installs keep their data; what changes is that it stops
    travelling to a phone that cannot read it.
 4. **`math.floor`, `ceil` and `trunc` return whole numbers**, not `2.0`.
-5. **Apps target API 35 and draw around the system bars.** Required by Play,
-   and handled for you — but if your app positions anything by hand near the
-   top or bottom of a screen, look at it once on a device.
-
 Everything else in 1.6.0 is opt-in. An app that names none of it generates the
 project it generated on 1.5.0.

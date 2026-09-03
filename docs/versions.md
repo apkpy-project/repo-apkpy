@@ -7,7 +7,8 @@ description: ApkPy stable version, release candidates and version history.
 
 | Version | Status | Main addition |
 | --- | --- | --- |
-| 1.6.0 | prepared | the silence: Python that did nothing now says so, plus Bluetooth, purchases, languages, crash reports, code scanning, pinning and accessibility |
+| 1.6.1 | prepared | targets API 35 so Play accepts the builds, draws around the system bars, and paints a label background |
+| 1.6.0 | published | the silence: Python that did nothing now says so, plus Bluetooth, purchases, languages, crash reports, code scanning, pinning and accessibility |
 | 1.5.0 | prepared | the fingerprint check, a shared vocabulary for sizes and surfaces, and the places where the two renderers had picked different numbers |
 | 1.4.0 | published | typed JSON bodies and timeouts, Markdown answers in rows that fit them, a drawer, settings rows and your own typeface |
 | 1.3.2 | published | persistent background jobs, offline queue, any-file picker, `upload_button` and 64 diagnostic codes |
@@ -31,6 +32,7 @@ and limitations remain explicit.
 
 Use the page matching your installed package:
 
+- [Version 1.6.1](version-1.6.1.md)
 - [Version 1.6.0](version-1.6.0.md)
 - [Version 1.5.0](version-1.5.0.md)
 - [Version 1.4.0](version-1.4.0.md)

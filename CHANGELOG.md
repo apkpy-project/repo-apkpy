@@ -8,6 +8,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-09
+
+Three fixes that landed just after 1.6.0 was published. A version on PyPI
+cannot be replaced, so they arrive here.
+
+### Fixed
+
+- **Google Play rejected builds made with 1.6.0.** Projects were generated with
+  `targetSdk 34`, below the minimum Google requires for a new app or an update.
+  1.6.1 targets API 35.
+- **Every screen root now declares `fitsSystemWindows`.** From API 35 Android
+  draws the app behind the status and navigation bars, so without this the
+  first line of a screen without an app bar would sit under the clock. On the
+  root deliberately: it consumes the insets, so the toolbar's own listener
+  stops growing and the top is not padded twice. Checked on Android 16 across
+  all five screen shapes.
+- **`background-color` on a label did nothing on the phone.** The `TextView`
+  never carried a background, so dark text on a light band came out invisible
+  on the device while looking right in the Previewer. The accessibility report
+  was measuring contrast against that unpainted background; the number now
+  describes what is on screen.
+
+
 ## [1.6.0] - 2026-09
 
 Almost everything here began the same way: something did not work, and nothing
@@ -79,12 +102,6 @@ said so. Full notes in [Version 1.6.0](docs/version-1.6.0.md).
   starting items after the list had grown.
 - **`label(MSG)` and `label("a" + "b")` produced an empty attribute** -- the
   text showed in the Previewer and nothing on the phone.
-- **`background-color` on a label** reached the Previewer and vanished on the
-  phone: the `TextView` never carried a background, so dark text on a light
-  band came out invisible on the device.
-- **Apps target API 35** (required by Play) and every screen root now declares
-  `fitsSystemWindows`, so Android 15's enforced edge-to-edge does not hide the
-  first line under the status bar.
 - **Two shipped examples were broken**: `22_chat_composer.py` appended to a
   list, which did nothing, and `23_settings_rows.py` opened a modal declared
   below its own button.
