@@ -48,17 +48,9 @@ list_row("Notifications", icon="bell", trailing="Off",
 
 label("DATA", id="data_kicker", screen=settings)
 
-data_group = container(id="data_group", screen=settings)
-list_row("Export everything", subtitle="A JSON file you keep",
-         icon="description", trailing_icon="chevron_right", id="row_export",
-         parent=data_group, command=lambda: toast("Nothing to export yet"))
-list_row("Delete everything", icon="delete", id="row_wipe",
-         parent=data_group, command=lambda: wipe_dialog.open())
-
-label("Deleting clears this device only. Anything already synced stays where "
-      "it is, which is the part people forget.", id="footnote", screen=settings)
-
-
+# The dialog is built here, above the row that opens it. ApkPy reads a module
+# from top to bottom, so a modal created further down does not exist yet at the
+# line that calls .open() -- and the row would do nothing on the phone.
 def wipe_everything():
     storage.set("wiped", "1")
     snackbar("Everything deleted")
@@ -72,6 +64,16 @@ wipe_dialog = modal(
     on_confirm=wipe_everything,
     id="wipe_dialog",
 )
+
+data_group = container(id="data_group", screen=settings)
+list_row("Export everything", subtitle="A JSON file you keep",
+         icon="description", trailing_icon="chevron_right", id="row_export",
+         parent=data_group, command=lambda: toast("Nothing to export yet"))
+list_row("Delete everything", icon="delete", id="row_wipe",
+         parent=data_group, command=lambda: wipe_dialog.open())
+
+label("Deleting clears this device only. Anything already synced stays where "
+      "it is, which is the part people forget.", id="footnote", screen=settings)
 
 
 theme = Theme(

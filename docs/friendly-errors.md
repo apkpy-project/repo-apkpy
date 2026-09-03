@@ -136,6 +136,29 @@ quoted in an issue.
 | `U2028` | `var(--name)` naming a theme token that does not exist |
 | `U2029` | A stylesheet property no renderer reads, so nothing applied it |
 | `U2031` | A theme token used in a slot of the wrong kind (a colour where a size belongs, or the reverse) |
+| `U2032` | `crypto.encrypt(..., password=...)` in the Previewer without the `cryptography` package |
+| `U2033` | Python ApkPy has no translation for, which used to compile to nothing at all |
+
+#### U2033 in a bit more detail
+
+ApkPy reads your module and writes Java. It translates a fixed vocabulary of
+Python rather than running it, and anything outside that vocabulary used to be
+dropped without a word: `math.sqrt(x)` became an empty string, a `try:` block
+lost its whole body, and `items.append(x)` produced no line at all. The app
+built, installed and ran, and was simply missing a piece.
+
+The message names the construct and says which of two things it is:
+
+- **A gap.** `math`, `re`, `json` and `base64` all have Java equivalents that
+  ApkPy has not wired up yet. The message says so, and suggests something that
+  compiles today.
+- **A wall.** `requests`, `numpy`, `pandas` and `os` need a Python interpreter,
+  and there is none on the phone. The message points at the ApkPy API that
+  covers the same ground -- `https`, `db`, `files`.
+
+It also catches a mistyped function name (and suggests the one you meant), and
+a modal opened above the line that creates it, which is about order rather than
+vocabulary.
 
 ### D2001 Data Core
 

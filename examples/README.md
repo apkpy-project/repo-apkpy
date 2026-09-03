@@ -47,6 +47,8 @@ apkpy build
 | `24_ask_an_api.py` | A JSON body, a long timeout, a user-supplied key and a Markdown answer |
 | `25_appearance.py` | Dark, light or follow-the-system at run time, and why a hand-written colour stays put |
 | `26_biometric_lock.py` | A vault behind the fingerprint, and what to say for each of the seven reasons a check can fail |
+| `27_bluetooth_serial.py` | Both radios behind one screen: paired devices or a scan, then lines of text each way |
+| `28_in_app_purchases.py` | A shop: a one-time unlock, a consumable, a subscription, and restoring what was already paid for |
 
 ## Practical note
 

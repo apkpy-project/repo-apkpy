@@ -86,6 +86,80 @@ These checks prove repeatable generation and compilation. They do not replace
 testing an application's own backend, device permissions, OEM behavior or
 release signing.
 
+## The Python ApkPy translates
+
+ApkPy reads your module and writes Java. It translates a fixed vocabulary of
+Python rather than running it, so this list is the whole of it. Anything
+outside it stops the build with [`U2033`](friendly-errors.md), naming what it
+found -- it used to compile to nothing at all and leave you with a blank value.
+
+**Control flow and values**
+
+`if` / `elif` / `else`, `for` over a list or `range()`, `while`, `break`,
+`continue`, `return`, `try` / `except` / `finally`, function definitions with
+arguments, list and dict literals, indexing (`items[0]`, `items[-1]`,
+`row["key"]`), `in`, list comprehensions, f-strings, `%` formatting and
+`.format()`.
+
+**Builtins**
+
+`len`, `int`, `float`, `str`, `round`, `sorted`, `list`, `abs`, `min`, `max`,
+`sum`, and the string methods `upper`, `lower`, `strip`, `split`, `replace`,
+`zfill`.
+
+**Lists**
+
+`items.append(x)` works. A list written at module level that the app appends
+to is kept in one process-wide store, so every screen sees the same list --
+exactly as a module-level list behaves in Python.
+
+**math**
+
+Write `import math` and use the standard module; the Previewer gets Python's
+own and the phone gets `java.lang.Math`.
+
+`sqrt` `exp` `log` `log10` `fabs` `pow` `hypot` `floor` `ceil` `trunc`
+`sin` `cos` `tan` `asin` `acos` `atan` `atan2` `degrees` `radians`
+`pi` `e` `tau`
+
+!!! note "Where numbers used to disagree, and no longer do"
+
+    Three differences between the two runtimes were fixed rather than
+    documented away, because each one was invisible until it mattered:
+
+    - **`round(2.5)`** gave `2` in the Previewer and `3` on the phone. Python
+      rounds a half to the even neighbour and `Math.round` always rounds up;
+      the generator now emits `Math.rint`, which has Python's rule.
+    - **`math.pow(10, 8)`** printed `1.0E8` on the phone and `100000000.0` in
+      the Previewer. Java switches to exponent notation from 1e7 and Python
+      only from 1e16, so numbers are now written out with Python's rule.
+    - **`math.floor(2.7)`** printed `2.0` on the phone. `floor`, `ceil` and
+      `trunc` return an `int` in Python 3, and now do here too.
+
+    `math.sqrt(-1)` raises on both sides. Java would have returned `NaN` and
+    put that word on screen; it now throws, so one `try` / `except` covers the
+    Previewer and the phone together.
+
+**Left out on purpose**
+
+`math.log2`, because Java has no `Math.log2` and `log(x)/log(2)` disagrees
+with Python on 8 of the first 60 powers of two. `math.inf` and `math.nan`,
+because Python writes `inf` where Java writes `Infinity`. A translation that
+is right most of the time is worse than one that says no.
+
+**Not translated yet**
+
+`re`, `json.dumps`, `base64`, `uuid`, `datetime` (use the `datetime` API),
+string slicing (`text[0:2]`), `startswith`, `find`, `join`, `print`, and
+multiple `except` clauses on one `try`.
+
+**Never translatable**
+
+`requests`, `numpy`, `pandas`, `os`, `pathlib`, `threading`, `sqlite3` and
+anything else that needs a Python interpreter: there is none on the phone.
+Use `https`, `files`, `db` and `background_job` instead. `U2033` names the
+replacement when it recognises what you reached for.
+
 ## Deliberate boundaries
 
 Production Feeds does **not** provide:

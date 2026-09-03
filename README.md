@@ -43,6 +43,132 @@ error families, examples and opt-out control.
 
 ---
 
+## ApkPy 1.6.0 — Things that failed quietly
+
+Almost everything in this release began the same way: something did not work
+and **nothing said so**. Python ApkPy could not translate compiled to an empty
+value; `items.append(x)` generated no line at all; an app that changed phone
+came back with every saved value empty. [The full notes](docs/version-1.6.0.md)
+say what each one was and how it was found.
+
+Alongside those, the things a business app could not do at all — hardware,
+money, languages, crash reports, code scanning — and the honesty about what has
+been proven is part of the entry.
+
+### Bluetooth, both radios
+
+```python
+def incoming(ok, line):
+    if ok:
+        reading.set_value(line)
+
+bluetooth.devices(on_result=found)          # classic: paired devices
+ble.scan(on_result=found, seconds=8)        # low energy: advertising ones
+
+bluetooth.connect(address, on_result=linked, on_line=incoming)
+bluetooth.send("LED ON")
+```
+
+![The Previewer's serial monitor, classic and low energy](docs/assets/bluetooth-monitor.png)
+
+Talking to hardware over lines of text: an Arduino, an ESP32, a micro:bit, a
+thermal printer. Four verbs each, one result contract, ten shared reasons that
+are **never an empty string**.
+
+- **Classic declares no location permission at all.** `devices()` lists paired
+  devices rather than scanning, because an RFCOMM socket needs a bonded device
+  anyway. An app that only talks to a printer should never ask where its user
+  is. Low Energy must scan, so its grant is capped at API 30 and carries
+  `neverForLocation` above it.
+- **`ble` defaults to the Nordic UART Service**, which is what an ESP32 or a
+  micro:bit exposes, so the common case names no UUIDs.
+- **The permission and the radio are asked for, not assumed**: if the
+  permission is missing the app asks and resumes what you called; if Bluetooth
+  is off it offers Android's own prompt.
+- **The link outlives the screen.** Connect on one screen and talk on the next;
+  a screen that wants the lines calls `connect()` again, which is free when it
+  is already open.
+- `terminator=` for hardware that wants a carriage return rather than a
+  newline -- the usual reason a board never answers.
+
+**Checked on a phone** against a smartwatch: both prompts appear, a scan finds
+real devices, connecting establishes the link and discovers services, and every
+failure word comes back correctly. **Not yet proven:** lines actually arriving,
+which needs a board that speaks back.
+
+### Encryption
+
+```python
+box = crypto.encrypt("the secret", password="open sesame")
+crypto.decrypt(box, password="open sesame")
+
+crypto.token(32)                       # random nobody can guess
+crypto.hash(text) / crypto.hash_file(path)
+crypto.totp("JBSWY3DPEHPK3PXP")        # the digits an authenticator shows
+secure_screen(vault)                   # no screenshots, blank in recents
+```
+
+- **A password makes the data portable.** Without one the key lives in the
+  phone's Keystore and the value never leaves it, which is right for settings.
+  With one, the format is `pw1$rounds$salt$nonce$box` -- PBKDF2 then
+  AES-256-GCM, standard enough that `openssl` opens it. Both runtimes write
+  the same bytes, or it would not be portable at all.
+- **`crypto.totp` is checked against the six vectors published in RFC 6238** --
+  the rare piece of this project that can be proven rather than reviewed.
+- `crypto.token()` exists because whoever needs a session id reaches for
+  `random`, whose next output follows from its last two.
+
+**Fixed along the way: changing phone used to empty everything the app had
+stored.** Auto-backup copied the encrypted preferences to the new device while
+the Keystore key stayed behind, so the restored app decrypted every value to
+`""` and reported it as never saved. The encrypted store is now excluded from
+both cloud backup and direct device transfer.
+
+Full guide: [Data and security](https://repo-apkpy.pages.dev/data-security/)
+
+---
+
+### Google Play billing
+
+```python
+billing.prices(["pro_unlock", "coins_100"], on_result=shown)
+billing.buy("pro_unlock", on_result=bought)
+billing.buy("coins_100", consumable=True, on_result=bought)
+billing.subscribe("monthly", on_result=bought)
+billing.owned(on_result=restored)
+```
+
+One-time purchases and subscriptions, with the part that costs real money
+handled for you:
+
+- **Google refunds any purchase an app leaves unacknowledged for three days.**
+  Every completed purchase is acknowledged *before* your callback is told it
+  worked -- including one that completed while the app was closed, which never
+  reaches the live listener and is settled by `owned()` instead.
+- **`pending` is not a purchase** and `owned` is not an error. Both are their
+  own words, because showing "payment failed" for either is lying to a paying
+  customer.
+- **Prices are asked of Play**, so they arrive in the person's own currency and
+  locale. A price written into the app is wrong in most of the world.
+- Every purchase carries its `token`, because on-device state can be faked and
+  a server checking that token is the only real proof.
+
+**Compiled and reviewed, never sold.** Play billing cannot be exercised on an
+emulator, and a real purchase needs a Play Console account and a published
+build. It is verified to compile against Billing Library 7.1.1, to acknowledge
+before reporting, and to run in the Previewer -- and no further.
+
+Reading the generated Java against the classic mistakes of each API found nine
+logic bugs that the compiler and the test suite had both passed: a purchase
+made while the app was closed going unacknowledged, a dropped Low Energy link
+leaking its GATT client, a `disconnect()` that announced itself as a link
+failure. Where a feature cannot be tested, the review is the verification.
+
+Full guides: [Bluetooth](https://repo-apkpy.pages.dev/native-features/#bluetooth) ·
+[In-app purchases](https://repo-apkpy.pages.dev/native-features/#in-app-purchases)
+
+---
+
 ## ApkPy 1.5.0 — The same words on both sides
 
 Two things that turned out to be one: **the fingerprint check**, and **the two

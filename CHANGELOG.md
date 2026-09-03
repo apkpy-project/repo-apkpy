@@ -6,6 +6,176 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+## [1.6.0] - 2026-09
+
+Almost everything here began the same way: something did not work, and nothing
+said so. Full notes in [Version 1.6.0](docs/version-1.6.0.md).
+
+### Added -- the app now says what it could not do
+
+- **`U2033`** -- Python with no translation stops the build and names the
+  construct, instead of compiling to the empty string. Separates a gap ApkPy
+  has not filled (`re`, `json.dumps`, `base64`) from a wall that cannot exist
+  on a phone (`requests`, `numpy`, `os`), and points at the ApkPy API that
+  covers the same ground. Also catches a mistyped helper, `print()`, and a
+  modal opened above the line that creates it.
+- **`try` / `except` / `finally`** -- the body used to be dropped whole. One
+  handler, deliberately: Python's exception types have no equivalent where
+  every value is text, so a second one is refused with its reason rather than
+  half-honoured. `except ... as e` binds a String.
+- **`items.append(x)`**, plus reading a list back: indexing with Python's
+  negative indices, `len()`, and `for`. A module-level list the app appends to
+  is now one list for the whole app, as it is in Python.
+- **`math`**, with `abs`, `min`, `max` and `sum`. Only names where Java's
+  answer is Python's; `log2` and `inf` are left out with their reasons.
+- **The list of translated Python** now exists, on Compatibility and limits.
+
+### Added -- hardware, money and business
+
+- **`bluetooth` and `ble`** -- both radios, the same four verbs and the same
+  result contract. Classic declares no location permission at all; BLE defaults
+  to the Nordic UART Service. Ten reasons, never an empty string. Verified
+  against a real device.
+- **`billing`** -- one-time unlocks and subscriptions, acknowledged before
+  success is reported, with purchases completed while the app was closed
+  settled on the next launch. Compiled and reviewed; never sold.
+- **`translations()` / `t()` / `language`** -- each language becomes its own
+  `res/values-<tag>/` folder, the phone picks by locale, and `language.set()`
+  switches while the app runs.
+- **`crash.last()` / `crash.clear()`** -- the previous crash, kept where the
+  next launch can read it. No vendor chosen, no endpoint invented.
+- **`scan.code()`** -- barcodes and QR codes with **no CAMERA permission**.
+- **`app.version_code()` / `version_name()` / `open_store()`** and
+  `modal(dismissable=False)`, which together are a forced update without a
+  protocol imposed on you.
+- **`https.pin()`** -- certificate pinning as configuration, with two pins
+  required. The Previewer opens a real handshake and prints the live pin when
+  it does not match.
+- **`describe=`** on components, and a `U2035` accessibility report during the
+  build: undescribed images, unlabelled icon buttons, text below WCAG contrast,
+  tap targets under 48dp.
+- **Encryption that travels** (`crypto.encrypt(password=)`, a standard
+  PBKDF2 + AES-GCM format), `crypto.totp()` verified against RFC 6238's
+  vectors, plus `token()`, `hash()`, `hash_file()` and `secure_screen()`.
+
+### Fixed
+
+- **Auto-backup was emptying people's data.** Values are encrypted with a key
+  in the old phone's Keystore, which does not travel, so a restored app read
+  every one of them as empty and reported it as never saved. The encrypted
+  store and login token are now excluded from cloud backup and device transfer.
+- **`round(2.5)`** gave 2 in the Previewer and 3 on the phone. Over 4001
+  values the old rule disagreed with Python on 1000 of them.
+- **Decimals printed differently on the two sides** -- `math.pow(10, 8)` was
+  `1.0E8` on the phone and `100000000.0` on the desktop. Proven against
+  `repr()` across 90 022 values.
+- **`math.floor(2.7)` printed `2.0`**; floor, ceil and trunc return an int.
+- **`math.sqrt(-1)` returned NaN** and put that word on screen, where Python
+  raises. Both sides now raise.
+- **Indexing a list generated invalid Java** (`(x)[Integer.parseInt(...)]`).
+- **`set_items()` inlined the original list**, so the screen kept showing the
+  starting items after the list had grown.
+- **`label(MSG)` and `label("a" + "b")` produced an empty attribute** -- the
+  text showed in the Previewer and nothing on the phone.
+- **`background-color` on a label** reached the Previewer and vanished on the
+  phone: the `TextView` never carried a background, so dark text on a light
+  band came out invisible on the device.
+- **Apps target API 35** (required by Play) and every screen root now declares
+  `fitsSystemWindows`, so Android 15's enforced edge-to-edge does not hide the
+  first line under the status bar.
+- **Two shipped examples were broken**: `22_chat_composer.py` appended to a
+  list, which did nothing, and `23_settings_rows.py` opened a modal declared
+  below its own button.
+
+
+### Added
+
+- **`bluetooth` and `ble`** -- talking to hardware over both Bluetooth radios,
+  with the same four verbs and the same result contract: `devices()`/`scan()`,
+  `connect()`, `send()`, `disconnect()`. Lines of text out, lines of text back.
+- **Classic declares no location permission at all.** `devices()` lists paired
+  devices rather than scanning, because an RFCOMM socket needs a bonded device
+  anyway and pairing belongs to system Settings. An app that only talks to a
+  printer should never have to ask where its user is. BLE has no such choice --
+  devices advertise -- so its scan grant is capped at API 30 and carries
+  `neverForLocation` above it.
+- **`ble` defaults to the Nordic UART Service**, which is what an ESP32, a
+  micro:bit or an HM-10 exposes, so the common case names no UUIDs. Others are
+  named in 16-bit shorthand or in full, expanded identically on both runtimes.
+- **The permission and the radio are asked for, not assumed.** If the
+  permission is missing the app asks and resumes what you called; if Bluetooth
+  is off it offers Android's own prompt to turn it on. Either refusal is
+  remembered, so a second tap reports `denied` or `off` instead of reopening
+  the dialog.
+- **Ten reasons, never an empty string** -- `off`, `unsupported`, `denied`,
+  `not_paired`, `not_found`, `unreachable`, `no_service`, `not_connected`,
+  `lost`, `failed`. Both runtimes read one table, and the generated Java's
+  `switch` is emitted *from* it.
+- `terminator=` on `send()`: `newline`, `return`, `crlf`, `none`, or the
+  characters. Sending the wrong line ending is the usual reason a board never
+  answers.
+- BLE writes are queued, so several `send()` calls in a row arrive in order
+  instead of the second being refused -- GATT allows one operation at a time.
+  A connect that never answers times out with `unreachable` rather than
+  hanging forever.
+- `bluetooth`, `link`, `fingerprint`, `lock` and `lock_open` in the icon
+  catalogue. **70 names.**
+- The Previewer offers one openly simulated device and a monitor you drive by
+  hand: what the app sends appears in it, what you type arrives at `on_line`.
+- **The link outlives the screen.** It lives in a generated
+  `ApkpyBluetooth` / `ApkpyBle` class rather than on an Activity, so
+  connecting on one screen and talking on the next works. A screen that
+  wants the lines calls `connect()` again -- already-open is free, and it
+  simply adopts the new callback. A screen owns only its callback: being
+  destroyed stops it receiving, it does not close the radio.
+
+- **`billing`** -- Google Play in-app purchases and subscriptions.
+  `prices()`, `buy()`, `subscribe()`, `owned()` and `consume()`, with the same
+  `(ok, value)` contract as everything else.
+- **Every purchase is acknowledged before your callback is told it worked**,
+  including one that completed while the app was closed: that case never
+  reaches the live listener, so `owned()` settles anything it finds
+  unacknowledged.
+  Google refunds anything an app leaves unacknowledged for three days, so this
+  is not a call you can forget: `consumable=True` consumes instead, which
+  settles the same clock and is what lets something be bought again.
+- `pending` is its own word, not a success and not an error: a slow payment
+  method has started and nothing should be unlocked yet. So is `owned`, which
+  means they already paid.
+- Prices are asked of Play rather than written down, so they arrive in the
+  person's own currency and locale. A subscription reports the offer that
+  `subscribe()` will actually launch.
+- `owned()` reports every purchase with its `token`, because on-device state
+  can be faked and a server checking that token is the only real proof.
+
+### Fixed
+
+- A permission whose name carries a package -- `com.android.vending.BILLING` --
+  was written as `android.permission.com.android.vending.BILLING`, and turned
+  into a Java identifier with dots in it. The namespace is only added to a
+  bare name now, and the identifier uses the last segment.
+- `AndroidManifest.xml` could only write a permission's name. Bluetooth needs
+  `maxSdkVersion` and `usesPermissionFlags`, so an entry may now carry
+  attributes -- and everything that builds a Java identifier from one reads the
+  bare name, which a real build caught after brace-counting did not.
+
+### Known limits
+
+- **Checked on a phone, up to the point a peer is needed.** An Android
+  emulator has no Bluetooth radio, so this was exercised on a real device
+  against a smartwatch: the permission and enable prompts appear, a scan finds
+  real devices, connecting establishes the link and discovers services, and
+  every failure word comes back correctly -- including `unreachable` after the
+  fifteen-second timeout. **Not yet proven:** lines arriving through
+  `on_line`, `send()` reaching a peer, and the write queue under real timing.
+  Those need a board that speaks back.
+- Line-oriented text only, one device at a time, client only, and pairing stays
+  in system Settings.
+
+---
+
 ## [1.5.0] — 2026-08-31
 
 Two things, and they turned out to be the same thing.

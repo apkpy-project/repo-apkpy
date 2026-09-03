@@ -20,6 +20,9 @@ description: Permissions, push, maps, location, notifications and Android integr
 | `service` | periodic and one-shot background work |
 | `background_job` | persistent queue: constraints, retries, cancellation and observable progress |
 | `biometrics` | the system fingerprint or face prompt, and why a check ended |
+| `bluetooth` | classic serial (SPP): paired devices, lines in and out |
+| `ble` | Bluetooth Low Energy: scan, connect, and the Nordic UART default |
+| `billing` | Play in-app purchases and subscriptions, acknowledged for you |
 | `apps` | installed app inspection |
 
 Use [Background jobs](../background-jobs.md),

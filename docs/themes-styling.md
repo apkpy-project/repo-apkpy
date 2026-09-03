@@ -167,6 +167,20 @@ appearance.get()            # what is in force
 
 The choice is remembered, so the app opens the way it was left.
 
+!!! note "A remembered choice outranks `Theme(mode=...)`"
+
+    `Theme(mode="dark")` is where the app *starts*, not a setting it re-applies
+    on every launch -- otherwise choosing light would last until the next
+    restart and no further. Once anything has called `appearance.set(...)`,
+    that choice wins.
+
+    This surprises people while they are still writing the app: you change
+    `mode="dark"`, run it, and nothing looks different. In the Previewer the
+    choice lives in `apkpy_storage.json`, **next to your main script** rather
+    than in the folder you ran the command from. Delete that key (or the file)
+    and the app goes back to opening the way it declares itself. On the phone,
+    the same reset is Settings > Apps > your app > Storage > Clear data.
+
 What makes this possible is that a colour which came from a token is not
 written into the layout at all -- a reference to it is:
 

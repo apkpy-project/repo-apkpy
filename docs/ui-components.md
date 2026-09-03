@@ -349,3 +349,53 @@ ApkPy supports the layout properties needed for application interfaces, includin
 - relative/absolute positioning, offsets and z-index.
 
 Use responsive composition for major structural changes and CSS for sizing/alignment inside a structure.
+
+## Accessibility
+
+Accessibility fails quietly. An image with no description is announced as
+nothing at all; text at 3:1 against its background is unreadable for a good
+share of people and looks fine to whoever chose the colours. Neither shows up
+in a build, a test or a screenshot — so ApkPy says it during the build.
+
+### Describing what has no words
+
+~~~python
+image("shelf.png", id="shelf", screen=home, describe="Aisle 4, third shelf")
+image("divider.png", id="rule", screen=home, describe="")      # decoration
+button("", id="settings", screen=home, icon="settings", describe="Settings")
+~~~
+
+`describe=` becomes `android:contentDescription`. **An empty description is a
+decision, not an omission**: it marks the element as decorative and TalkBack
+skips it, instead of announcing a file name. A button with words already
+announces those words and needs nothing.
+
+### What the build tells you
+
+A `U2035` report lists what it found and lets the build finish — every app in
+existence has an image somebody forgot to describe, and refusing to build over
+it would only teach people to switch the check off.
+
+~~~
+home.photo (image): nothing to announce. Add describe="...", or describe=""
+                    if it is decoration.
+home.save (button): text is 3.90:1 against its background; 16sp needs 4.5:1.
+home.tiny (button): height is 32dp, under the 48dp a fingertip needs.
+~~~
+
+The numbers are WCAG's and Material's, not opinions:
+
+| | Minimum |
+| --- | --- |
+| Body text | 4.5:1 |
+| Large text — 18pt (24sp), or 14pt bold (18.7sp) | 3:1 |
+| Anything you tap | 48dp |
+
+!!! note "Large text is measured in points, not in sp"
+
+    WCAG says 18pt, or 14pt bold; Android sizes text in sp, and 1pt is 1.333sp
+    at the default density. So the thresholds are **24sp and 18.7sp** — writing
+    them as 18 and 14 would let 18sp body text pass at 3:1 when it needs 4.5:1.
+
+Text is already emitted in `sp`, so it grows when someone has enlarged the
+system font — nothing to do there.
