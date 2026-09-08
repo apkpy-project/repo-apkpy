@@ -8,6 +8,67 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-09-08
+
+Native device updates, portable text processing and actionable notifications.
+Read the [complete 1.7.0 notes](docs/version-1.7.0.md).
+
+### Added
+
+- Accelerometer, gyroscope and pressure streams, plus complete documentation for
+  all existing sensors and battery snapshots. Hardware availability is explicit.
+- Static home/lock/both wallpapers, with preview and mandatory user confirmation.
+- A portable subset of `re.match`, `re.search`, `re.findall` and `re.sub`, including
+  Match captures and constant flags; unsupported patterns stop generation clearly.
+- Extended `notify()` with channels/importance, monochrome native icons,
+  big-text, picture and inbox styles, up to three actions, tap/dismiss callbacks,
+  grouping, ongoing/progress state and displayed timestamps. Existing calls
+  with title, message and ID remain supported; timestamps do not schedule delivery.
+- `notifications.channel()`, `allowed()`, `ask()`, `cancel()` and `cancel_all()`.
+  Activity permission requests, workers and ApkPy-handled Firebase messages use
+  the shared native publisher. Projects without the feature get no notification
+  helper or Activity notification hooks.
+- Persistent Previewer cards in the device window; high-importance heads-up
+  banners expire without deleting their cards. No notification Toplevel.
+- A complete [notification guide](docs/guides/notifications.md), four checked
+  Python examples, real Previewer screenshots, callback signatures, a demo
+  control checklist and an app-only Order Desk download.
+
+### Changed
+
+- Redesigned Previewer drawer: fixed header, scrollable rounded cards, improved
+  title/body hierarchy, soft icon backgrounds, full-area action pills, wrapping
+  labels, progress tracks, and clearer permission/empty states in both themes.
+  Wide windows center the content; redraws preserve scroll where possible.
+  This does not restyle Android's system-controlled notification shade.
+- Order Desk's View action opens details and cancels the card. Later cancels
+  and confirms; it intentionally does not schedule a reminder.
+
+### Fixed
+
+- Values written with `set_value()` survive Android Activity recreation without
+  disabling orientation changes. Screen-local values remain isolated.
+- The demo/guide background callback now uses `task()`, not `task(job, payload)`.
+- Conflicting button drawables from different screens receive separate names
+  instead of overwriting one another and making labels invisible.
+- Generated worker helpers use application Context, not Activity-only methods.
+- Bundled big pictures are copied into Android assets. Cancelled/superseded
+  image loads cannot publish stale cards.
+- Notification permission queuing survives Activity recreation; callbacks work
+  with warm and newly created Activities. Dismissal never forces an app launch.
+
+### Verification and limits
+
+- 970 feature tests (including 21 focused notification tests), 258 transpiler
+  checks, both Previewer scripts and the four guide examples passed.
+- Notification Lab and Firebase integration projects compiled with Gradle.
+  The lab passed 39 instrumentation checkpoints on Android 16 / API 36;
+  direct system-drawer View/Later taps were also checked on that device.
+- The Previewer simulates permission and does not reproduce sound, vibration,
+  lock-screen policy or process survival. Android 14+ can allow dismissal of
+  ongoing cards. Actual FCM remote delivery and other device versions were not
+  validated. Test counts cover the recorded scenarios, not every device.
+
 ## [1.6.1] - 2026-09
 
 Three fixes that landed just after 1.6.0 was published. A version on PyPI

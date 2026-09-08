@@ -23,6 +23,9 @@ Previewer validation and Android generation, follow the
   <a href="maps-tracking/"><span>07</span><strong>Maps and tracking</strong><p>Device location, preview simulation and calculated routes.</p></a>
   <a href="../background-jobs/"><span>08</span><strong>Offline work queue</strong><p>Persistent jobs, constraints, retries and observable progress.</p></a>
   <a href="knowledge-app/"><span>09</span><strong>Knowledge app</strong><p>Markdown, inline spans, trees and local documents.</p></a>
+  <a href="sensors/"><span>10</span><strong>Sensors and battery</strong><p>Eight sensor APIs, callback contracts, complete apps and the 1.7.0 additions.</p></a>
+  <a href="wallpaper/"><span>11</span><strong>Static wallpapers</strong><p>Choose an image, preview it, confirm the target and handle cancellation.</p></a>
+  <a href="notifications/"><span>12</span><strong>Persistent notifications</strong><p>Channels, actions, expanded cards, progress and the in-device Previewer drawer. Unreleased 1.7.0.</p></a>
 </div>
 
 ## How to use a guide

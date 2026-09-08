@@ -43,9 +43,9 @@ description: Build native Android Java, XML and Gradle projects from a supported
 
 <div class="release-line">
   <span class="release-line__pulse"></span>
-  <strong>ApkPy 1.3.2</strong>
-  <span>Persistent background jobs that survive backgrounding, network loss and a reboot</span>
-  <a href="background-jobs/">Explore background jobs</a>
+  <strong>ApkPy 1.7.0 · available now</strong>
+  <span>Motion sensors, confirmed wallpapers and actionable notifications with a redesigned Previewer drawer — examples and testing limits. Available in ApkPy 1.7.0.</span>
+  <a href="version-1.7.0/">Read the update</a>
 </div>
 
 <section class="home-errors">

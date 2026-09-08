@@ -70,6 +70,13 @@ If only a platform-owned element differs — notification, permission dialog,
 video controls, keyboard, GPS provider — compare behavior rather than forcing
 the desktop simulation to copy every system pixel.
 
+## Notification cards or actions do not behave as expected
+
+For notification-specific problems — invisible cards, unchanged channel
+importance, action callbacks, `C1710`, missing pictures or a background task
+with the wrong argument count — use the [notification troubleshooting table](guides/notifications.md#troubleshooting).
+The extended API and redesigned Previewer drawer require ApkPy 1.7.0 or newer.
+
 ## A Material component crashes on open
 
 The generated application must use an ApkPy-generated Material-compatible theme. Do not replace it with a legacy <code>Theme.AppCompat</code> theme.

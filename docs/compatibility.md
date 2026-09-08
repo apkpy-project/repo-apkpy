@@ -149,9 +149,54 @@ is right most of the time is worse than one that says no.
 
 **Not translated yet**
 
-`re`, `json.dumps`, `base64`, `uuid`, `datetime` (use the `datetime` API),
+`json.dumps`, `base64`, `uuid`, `datetime` (use the `datetime` API),
 string slicing (`text[0:2]`), `startswith`, `find`, `join`, `print`, and
 multiple `except` clauses on one `try`.
+
+### Regular expressions — 1.7.0 subset
+
+`re.match`, `re.search`, `re.sub` and `re.findall` now have an Android
+translation in ApkPy **1.7.0**. Use constant Unicode patterns and flags inside callbacks/helper
+functions; input and replacement text may be dynamic.
+
+```python
+import re
+
+def check_text():
+    text = message.get_value()
+    found = re.search(r"\bREF-(?P<code>[0-9]{4,8})\b", text, re.I)
+    if found is not None:
+        reference.set_value(found.group("code"))
+    else:
+        reference.set_value("No reference")
+    matches = re.findall(r"#[\w]+", text)
+    tags.set_items(matches)
+    cleaned.set_value(re.sub(r"\s+", " ", text).strip())
+```
+
+`match` checks the beginning, not the entire string: add `\Z` for full-input
+format checks. Match objects support `group`, `groups`, `start`, `end`, `span`
+and checks against `None`; group selectors must be constant. `findall` returns
+strings without captures, a capture with one group, and grouped sequences with
+multiple captures. Assign its result before iteration or passing it to a list.
+
+Supported flags are `IGNORECASE`, `MULTILINE`, `DOTALL`, `VERBOSE`, `ASCII` and
+`UNICODE` (including short aliases and `|` combinations). Named groups,
+lookahead, greedy/lazy quantifiers, common character classes and boundaries
+are supported. Replacements use Python's `\1` / `\g<name>` syntax; `$` is literal.
+
+Dynamic patterns, `re.compile`, `fullmatch`, `finditer`, `split`, bytes,
+callable replacements, lookbehind, pattern backreferences, conditionals,
+atomic groups and possessive repetition are outside this subset. Unsupported
+forms fail the build with `C1701`; do not assume everything accepted by the
+desktop `re` module can be exported to Android.
+
+The generator fixes Unicode classes and case folding to the **build Python's**
+tables. Use the same Python version for preview and build. Regex calls are
+synchronous: bound input sizes and avoid pathological patterns. Java's native
+regex helper adds no Python runtime, permission or Android dependency, and is
+only emitted when used. This supports format validation and text extraction;
+it does not prove an email address exists or replace server-side validation.
 
 **Never translatable**
 

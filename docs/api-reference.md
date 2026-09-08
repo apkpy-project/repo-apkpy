@@ -201,9 +201,14 @@ gapless transitions.
 | --- | --- |
 | <code>permissions</code> | Runtime Android permission requests |
 | <code>notify</code> | System notifications |
+| <code>notifications</code> | Channels, permission checks/requests and cancellation; extended notification API — 1.7.0 |
 | <code>share</code> | Native share sheet |
 | <code>clipboard</code> | System clipboard |
 | <code>camera</code> | Native camera capture |
+| <code>sensors</code> | Shake, compass, steps, light and proximity; accelerometer, gyroscope and pressure added in 1.7.0 |
+| <code>battery</code> | Percentage, charging and power-saver snapshots |
+| <code>wallpaper</code> | Static wallpaper with image preview and confirmation; home/lock/both — 1.7.0 |
+| <code>flashlight</code> | The torch on the back -- on, off, toggle, and whether it is lit. No permission |
 | <code>gallery</code> | Native media picker |
 | <code>location</code> | Current position and city |
 | <code>map_view</code> | OpenStreetMap tiles, markers, route, user layer and follow controls |
@@ -214,6 +219,16 @@ gapless transitions.
 | <code>apps</code> | Installed-app listing, permissions, extraction and hashing |
 
 For behavior and security notes, use the topic guides rather than relying on this compact index alone.
+
+See [Notifications](guides/notifications.md) for the full `notify()` signature,
+copyable examples, zero-argument action callbacks, progress, pictures, the
+desktop drawer's controls and Android permission/lifecycle limits.
+
+See [Sensors and battery](guides/sensors.md) for exact callback signatures,
+units, permissions, complete examples and Previewer simulation limits.
+The three new sensor methods belong to the [1.7.0](version-1.7.0.md).
+The [static wallpaper guide](guides/wallpaper.md) covers the new `wallpaper.set()`
+and `wallpaper.available()` APIs, with a complete gallery example.
 
 The [Version 1.2.1 guide](version-1.2.1.md) documents feed pagination,
 prefetch, refresh, retry and generated Android behavior. The wider runtime is

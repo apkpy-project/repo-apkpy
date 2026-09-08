@@ -19,6 +19,32 @@ See [ApkPy compared with Kivy, BeeWare and Flet](docs/apkpy-vs-kivy-flet-beeware
 
 ---
 
+## New in 1.7.0: device features and notifications
+
+Available in **ApkPy 1.7.0**. The extended `notify()` supports channels,
+icons, big text, pictures, inbox lines, up to three actions, tap/dismiss callbacks,
+progress and grouping. The Previewer keeps cards inside its device window; Android
+uses system notifications, including from background workers. Existing
+`notify(title, message, id=...)` calls remain compatible.
+
+Read the [complete guide and runnable examples](docs/guides/notifications.md),
+or download the [Order Desk app project](docs/downloads/notifications/notification-lab.zip).
+The download contains app code, configuration and a picture, not library source.
+The guide explains permissions, lifecycle and the limits of Previewer simulation.
+
+The redesigned desktop drawer has a fixed header, scrollable rounded cards,
+readable titles, full-area action buttons, wrapped long labels and light/dark
+permission and empty states. Android keeps its own system notification UI.
+The lab's **View** opens order details; **Later** cancels with a confirmation,
+not a scheduled reminder. These are explicit callbacks, not built-in actions
+inferred from a label.
+
+After the UI refresh, 970 feature tests, 258 transpiler checks and both desktop
+interaction/visual scripts passed. The separate native check covered 39
+checkpoints on one Android 16 device and actual View/Later system-drawer taps.
+FCM remote delivery and other device/Android combinations are not claimed tested.
+See the [1.7.0 release](docs/version-1.7.0.md) and [release notes](RELEASE_1.7.0.md).
+
 ## Errors that explain the fix
 
 ApkPy 1.3.1 turns common startup, Previewer callback, Data Core,

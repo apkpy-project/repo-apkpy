@@ -4,6 +4,8 @@ Task guides: [Firebase push](guides/push-firebase.md),
 [streaming uploads](guides/uploads.md) and
 [maps with continuous location](guides/maps-tracking.md).
 
+Motion and environment: [sensors, units and Previewer simulation](guides/sensors.md).
+
 ## Permissions
 
 Declare permissions before running the app:
@@ -839,6 +841,145 @@ the wrong label ends up in the right field.
 | `(False, "cancelled")` | the person backed out -- a choice, not an error |
 | `(False, "unreadable")` | a code it saw but could not decode |
 | `(False, "unavailable")` | no Play services scanner on this device |
+
+## The flashlight
+
+~~~python
+from apkpy_lib import button, flashlight
+
+button("Torch", id="torch", screen=home,
+       command=lambda: flashlight.toggle())
+~~~
+
+**No permission at all.** Turning the torch on is not camera access: the app
+never opens a camera device, never receives a frame, and so never asks for
+CAMERA. An app whose only camera-shaped feature is the light keeps a clean
+store listing.
+
+`flashlight.on()`, `flashlight.off()` and `flashlight.toggle()` all take an
+optional `on_result(ok, reason)`. `flashlight.available()` and
+`flashlight.is_on()` answer questions, and both work in an `if`:
+
+~~~python
+def press():
+    if not flashlight.available():
+        toast("This phone has no torch")
+    elif flashlight.is_on():
+        flashlight.off()
+    else:
+        flashlight.on(on_result=lit)
+~~~
+
+Showing the state in a label needs `str()`, because `is_on()` answers a real
+boolean and every value in a generated app is text:
+
+~~~python
+status.set_value("lit: " + str(flashlight.is_on()))
+~~~
+
+**The torch belongs to the phone, not to your app.** Anything can change it --
+the quick settings, another app, the camera opening. So ApkPy does not remember
+a boolean of its own; it *watches* the real light, and `is_on()` reports what is
+actually lit. Open your app with the torch already on and it knows, and a
+`toggle()` puts it out rather than turning it on again.
+
+**It stays on when you leave.** That is the system torch behaving like the
+system torch, and it is right for a light you switched on to see with. It goes
+out when your app's process ends. If your app wants it out sooner, say so:
+
+~~~python
+lifecycle(home, on_destroy=lambda: flashlight.off())
+~~~
+
+| Answer | Means |
+| --- | --- |
+| `(True, "ok")` | the torch is in the state you asked for |
+| `(False, "no_flash")` | this phone has no flash unit |
+| `(False, "in_use")` | another app is holding the camera |
+| `(False, "disabled")` | the camera is off by device policy (a managed phone) |
+| `(False, "unavailable")` | the system refused for another reason |
+
+The Previewer has no flash unit to light, so it shows an amber bolt in the
+status strip instead -- device chrome, where a device thing belongs -- and every
+call succeeds. The words above are answers only a phone can give.
+
+## Sensors
+
+Five of them, named for what people want rather than for what the chip is
+called, plus the battery.
+
+~~~python
+from apkpy_lib import battery, label, lifecycle, sensors
+
+heading = label("-", id="heading", screen=home)
+
+def turned(degrees):
+    heading.set_value(degrees + " deg")
+
+lifecycle(home, on_mount=lambda: sensors.compass(on_change=turned))
+~~~
+
+| Call | Your callback gets | Permission |
+| --- | --- | --- |
+| `sensors.shake(on_shake=...)` | nothing -- it happened | none |
+| `sensors.compass(on_change=...)` | heading, `"0"` to `"359"` | none |
+| `sensors.light(on_change=...)` | lux, e.g. `"145"` or `"0.8"` | none |
+| `sensors.proximity(on_change=...)` | `True` when something is close | none |
+| `sensors.steps(on_change=...)` | steps since the watch started | activity |
+| `battery.level()` | charge as text, `"59"` | none |
+| `battery.charging()` | `True` when plugged in | none |
+| `battery.saver()` | `True` in battery saver | none |
+
+`sensors.stop("light")` stops one; `sensors.stop()` stops all of them.
+`sensors.available("compass")` asks before you rely on it.
+
+### They stop when your screen stops
+
+This is the part that matters and you do not have to write it. ApkPy registers
+each sensor in `onResume` and unregisters it in `onPause`, so a screen nobody
+is looking at is not keeping the sensor hub awake. Leave your app and the
+readings stop; come back and they resume, without your app asking again.
+
+### Steps count *your* steps
+
+Android's step counter runs from the phone's last reboot, which is a number
+about the phone. ApkPy takes the first reading as zero, so what your callback
+receives is what the person has walked since your screen started watching.
+
+This is the one that needs a permission -- `ACTIVITY_RECOGNITION`, and only on
+Android 10 and later. ApkPy adds it to the manifest and asks for it the first
+time you watch, so there is nothing for you to declare.
+
+### A shake is a shake, not three axes
+
+Handing every app the raw accelerometer would mean every author writing their
+own shake detector, and no two ApkPy apps shaking alike. `shake` is 2.7g with a
+0.8-second gap so one flick of the wrist is one callback rather than a dozen.
+
+### You will not hear the same reading twice
+
+A light sensor reports about sixteen times a second, and the same lux sixteen
+times a second is not news. A reading has to move by a degree, a lux, a step,
+or from far to near before your callback runs.
+
+### Nothing is required
+
+Each sensor you watch is declared in the manifest as `required="false"`, so a
+phone without a step counter still installs your app -- it just never reports
+any. Ask `sensors.available("steps")` if you want to say so on screen.
+
+### In the Previewer
+
+A laptop has no step counter and nothing worth calling a compass, so the
+Previewer opens a small panel with one row per sensor you are watching: a
+button that shakes, sliders for heading and light, a switch for near and far,
+and buttons that add steps. Its readings go through the same threshold and the
+same formatting rule the phone uses, so a callback that fires there fires here
+and the text is identical.
+
+The battery row is real in both places: moving its slider moves the battery
+icon in the Previewer's status strip too, so an app cannot show 14% beside an
+icon reading 80%.
 
 ## Forcing an update
 

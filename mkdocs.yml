@@ -88,6 +88,7 @@ nav:
       - API-backed feed: guides/feed-api.md
       - Real-time chat: guides/chat-realtime.md
       - Firebase push: guides/push-firebase.md
+      - Notifications and preview drawer: guides/notifications.md
       - Background audio: guides/media-player.md
       - SQLite and security: guides/sqlite-security.md
       - Streaming uploads: guides/uploads.md
@@ -104,6 +105,8 @@ nav:
       - Audio, playlists and Spotify: media-auth.md
       - Data, network and security: data-security.md
       - Native Android features: native-features.md
+      - Sensors and battery: guides/sensors.md
+      - Static wallpapers: guides/wallpaper.md
       - Background jobs and offline queue: background-jobs.md
   - Ship:
       - Build and release: build-release.md
@@ -128,6 +131,7 @@ nav:
       - Previewer versus Android: preview-android.md
       - FAQ: faq.md
       - Version index: versions.md
+      - Version 1.7.0: version-1.7.0.md
       - Version 1.6.1: version-1.6.1.md
       - Version 1.6.0: version-1.6.0.md
       - Version 1.5.0: version-1.5.0.md

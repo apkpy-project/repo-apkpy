@@ -47,11 +47,26 @@ loop; the generated project uses Android widgets and services.
 | WebSocket | WSS client with reconnect | Android WSS client with lifecycle callbacks |
 | Audio/video | desktop media backend | foreground MediaSession and Media3 |
 | Push | `push.simulate()` | Firebase Cloud Messaging |
+| Extended notifications — 1.7.0 release | themed in-device drawer, fixed header, scrollable cards and real Python action callbacks | native system shade, channels, permissions and PendingIntents |
 | Location | explicit `preview_route` | fused device location |
+| Sensors | explicit buttons, sliders and near/far simulation | `SensorManager` with hardware availability and Activity lifecycle |
+| Battery | desktop status/simulator snapshots | Android battery and power-saving state |
+| Static wallpaper — 1.7.0 release | image confirmation; `simulated`, never changes the desktop | image confirmation, then `WallpaperManager` applies to home/lock/both |
 | Routes | compatible HTTP routing endpoint | same request contract from Android |
 | Background jobs | on-disk queue in `~/.apkpy/jobs` | WorkManager `OneTimeWorkRequest` queue |
 | Soft keyboard | none: the desktop keyboard is always there | the window resizes and the layout moves up |
 | Leaving a screen | the app bar's back arrow, or **Alt+Left** | the arrow, the Back gesture or the hardware key |
+
+For sensor callback shapes, units and what each simulator control does, see
+[Sensors and battery](guides/sensors.md). Accelerometer, gyroscope and pressure
+are documented as **1.7.0** additions. Only device testing confirms
+hardware support; the desktop pressure simulator works even when the phone
+being tested has no barometer.
+
+For the notification drawer's controls, light/dark captures, action callbacks
+and testing checklist, see [Notifications](guides/notifications.md). The new
+desktop design does not change Android's system UI. Preview cards do not prove
+phone permission, sound, vibration, lock-screen behavior or remote FCM delivery.
 
 ## Leaving a screen
 
