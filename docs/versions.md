@@ -7,6 +7,7 @@ description: ApkPy stable version, release candidates and version history.
 
 | Version | Status | Main addition |
 | --- | --- | --- |
+| [1.8.0](version-1.8.0.md) | **released 2026-09-12** | an in-app camera with photo, video and manual controls, an embedded viewfinder, signed releases about a third of their previous size, and Python that did nothing on the phone -- `split()`, arithmetic on a `range()` index, dropped assignments and loops -- now works or stops the build saying why |
 | [1.7.0](version-1.7.0.md) | **released 2026-09-08** | motion/pressure sensors, confirmed wallpapers, extended notifications and redesigned Previewer drawer; complete examples and verification limits |
 | 1.6.1 | published | targets API 35 so Play accepts the builds, draws around the system bars, and paints a label background |
 | 1.6.0 | published | the silence: Python that did nothing now says so, plus Bluetooth, purchases, languages, crash reports, code scanning, pinning and accessibility |

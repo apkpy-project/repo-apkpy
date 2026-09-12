@@ -93,19 +93,49 @@ Python rather than running it, so this list is the whole of it. Anything
 outside it stops the build with [`U2033`](friendly-errors.md), naming what it
 found -- it used to compile to nothing at all and leave you with a blank value.
 
-**Control flow and values**
+**Control flow**
 
-`if` / `elif` / `else`, `for` over a list or `range()`, `while`, `break`,
-`continue`, `return`, `try` / `except` / `finally`, function definitions with
-arguments, list and dict literals, indexing (`items[0]`, `items[-1]`,
-`row["key"]`), `in`, list comprehensions, f-strings, `%` formatting and
-`.format()`.
+`if` / `elif` / `else`, `while`, `break`, `continue`, `return`,
+`try` / `except` / `finally`, and function definitions with arguments.
+A condition compares with `==`, `!=`, `<`, `>`, `<=` or `>=`, tests membership
+with `in` and `not in`, and joins those with `and`, `or` and `not`.
 
-**Builtins**
+`in` is membership against a list, tuple, set or dict written in the source, a
+list kept at module level, or a `split()` call. Against anything else it
+searches text. That is decided from the source, never from the running value.
 
-`len`, `int`, `float`, `str`, `round`, `sorted`, `list`, `abs`, `min`, `max`,
-`sum`, and the string methods `upper`, `lower`, `strip`, `split`, `replace`,
-`zfill`.
+`for` loops over `range()`, over a list or tuple written in the source, over a
+list held in a name, and over the result of `split()`. A `range()` index is a
+number, so `i + 1` and `i % 2` are arithmetic.
+
+**Values**
+
+Assignment to one name, and `+=`, `-=`, `*=`, `/=` and `%=`. List and dict
+literals, indexing (`items[0]`, `items[-1]`, `row["key"]`), slicing text
+(`text[0:2]`), the conditional expression `a if test else b`, and f-strings
+with `{value}`, `{value:.2f}` and `{value:,.2f}`.
+
+A list comprehension is translated in one place: the search callback,
+`on_change=lambda q: notes.set_items([...])`.
+
+**Arithmetic**
+
+`+`, `-`, `*`, `/` and `%` work between values ApkPy knows are numbers: a
+number written in the source, `int(...)` or `float(...)`, a name assigned from
+one of those, and a `range()` index. `/` always gives a float, as in Python.
+Text read from an input or from storage stays text until you convert it, so
+`float(price) * 2` works and `price * 2` stops the build. Between values that
+are not known to be numbers, `+` joins text.
+
+**Builtins and text**
+
+`len`, `int`, `float`, `str`, `round`, `list`, `abs`, `min`, `max`, `sum`, and
+the string methods `upper`, `lower`, `strip`, `replace`, `split`, `title`,
+`find`, `count`, `join`, `startswith` and `endswith`; `isdigit` in a condition.
+
+`split()` gives a list with Python's rules: the separator is text rather than a
+regular expression, empty parts are kept, `maxsplit` is honoured, and with no
+separator it splits on runs of whitespace.
 
 **Lists**
 
@@ -147,11 +177,40 @@ with Python on 8 of the first 60 powers of two. `math.inf` and `math.nan`,
 because Python writes `inf` where Java writes `Infinity`. A translation that
 is right most of the time is worse than one that says no.
 
-**Not translated yet**
+**Not translated -- the build stops and says so**
 
-`json.dumps`, `base64`, `uuid`, `datetime` (use the `datetime` API),
-string slicing (`text[0:2]`), `startswith`, `find`, `join`, `print`, and
-multiple `except` clauses on one `try`.
+Each of these stops the build with `U2033`, naming the line and a form that
+does compile:
+
+- `%` formatting (`"n=%s" % n`) and `.format()` -- use an f-string;
+- `sorted`, `zfill`, `lstrip`, `rstrip`, and a slice with a step (`text[::2]`);
+- `is`, and chained comparisons such as `0 < x < 10`;
+- a comprehension anywhere except the search callback, module level included;
+- unpacking (`a, b = parts`, `for key, value in pairs:`), `a = b = 0`,
+  `for ... else`, and assigning to an item or an attribute (`row["k"] = v`,
+  `status.text = v`);
+- `not x`, `a or b`, or a comparison used as a value instead of a condition;
+- a tuple or a set used as a value, and a `for` over text, a dict or a set;
+- arithmetic on a value not known to be a number (`price * 2` on text from an
+  input), and repeating text with `*`;
+- an f-string format other than `.2f` or `,.2f`;
+- `json.dumps`, `base64`, `uuid`, `datetime` (use the `datetime` API), `print`,
+  and more than one `except` clause on a `try`.
+
+**Differences that do not stop the build**
+
+Everything on the phone is text, and ApkPy decides from the source rather than
+from the running value. These four still give a different answer from Python:
+
+- `text[0]` on text reads it as a list and gives empty text. Slice it instead:
+  `text[0:1]`.
+- `+` on a function's parameter joins text: `n + 1` with `n` set to `1` shows
+  `11`. Convert it first: `int(n) + 1`.
+- `x in name`, where `name` is a local variable holding a list, searches the
+  list's text. Test the call itself (`x in text.split(",")`), a list written in
+  the source, or a list kept at module level.
+- A list shown with `set_value()` reads `["a","b"]` on the phone and
+  `['a', 'b']` in the Previewer.
 
 ### Regular expressions — 1.7.0 subset
 

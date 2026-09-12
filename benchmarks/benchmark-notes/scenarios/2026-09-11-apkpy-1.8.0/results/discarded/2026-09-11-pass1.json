@@ -1,0 +1,93 @@
+{
+  "date": "2026-09-11",
+  "device": {
+    "ro.product.model": "sdk_gphone16k_x86_64",
+    "ro.build.version.sdk": "35",
+    "ro.product.cpu.abi": "x86_64",
+    "ro.build.fingerprint": "google/sdk_gphone16k_x86_64/emu64xa16k:15/AE3A.240806.041/12890756:user/dev-keys",
+    "page_size": "16384"
+  },
+  "apps": [
+    {
+      "framework": "ApkPy",
+      "package": "com.apkpy.benchmark.apkpy",
+      "activity": "com.apkpy.app.Screen_homeActivity",
+      "apk_bytes": 5635041,
+      "apk_mib": 5.37,
+      "sha256": "BF49AE524C8965EA484E65CFCBAD2B62A4E93D155C08237BA0A4F168E94BCACF",
+      "install": "Success",
+      "functional": {
+        "labels": {
+          "Benchmark Notes": false,
+          "Search notes": false,
+          "FAVORITES ONLY": false,
+          "ADD NOTE": false
+        },
+        "labels_found": 0,
+        "steps": [
+          {
+            "step": "opens with 100 notes",
+            "expected": 100,
+            "seen": null,
+            "pass": false,
+            "note_001_visible": false
+          },
+          {
+            "step": "favourites filter",
+            "expected": 20,
+            "seen": null,
+            "pass": false
+          },
+          {
+            "step": "favourites off again",
+            "expected": 100,
+            "seen": null,
+            "pass": false
+          },
+          {
+            "step": "add a note",
+            "expected": 101,
+            "seen": null,
+            "pass": false
+          },
+          {
+            "step": "search \"Note 010\"",
+            "expected": 1,
+            "seen": null,
+            "pass": false
+          }
+        ],
+        "passed": false
+      },
+      "runs": [
+        {
+          "run": 1,
+          "cold_start_ms": 5694,
+          "total_time_ms": 5694,
+          "wait_time_ms": 5700,
+          "launch_state": "COLD",
+          "pss_kb": 70716
+        },
+        {
+          "run": 2,
+          "cold_start_ms": 4965,
+          "total_time_ms": 4965,
+          "wait_time_ms": 4967,
+          "launch_state": "COLD",
+          "pss_kb": 69949
+        },
+        {
+          "run": 3,
+          "cold_start_ms": 2769,
+          "total_time_ms": 2769,
+          "wait_time_ms": 2774,
+          "launch_state": "COLD",
+          "pss_kb": 69650
+        }
+      ],
+      "cold_start_median_ms": 4965,
+      "pss_median_kb": 69949
+    }
+  ],
+  "discarded_because": "Right after an emulator reboot: the UI tree could not be read, so the functional check could not run."
+}

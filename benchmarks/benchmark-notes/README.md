@@ -22,7 +22,17 @@ This is a development-artifact comparison. Android's production guidance
 prefers optimized release-like builds for performance conclusions, so these
 numbers must not be presented as a universal store-release ranking.
 
-## Measured result
+## Corrected on 2026-09-11
+
+The ApkPy row below measured an app whose list was empty on the phone: ApkPy
+1.3.0 compiled its module-level comprehension to nothing without a word, and
+the UI smoke check only looked for four labels. The program was rewritten so it
+builds, driven on the device to show, filter, add and search its 100 notes, and
+timed again beside BeeWare/Toga in the same session. See
+[`scenarios/2026-09-11-apkpy-1.8.0/`](scenarios/2026-09-11-apkpy-1.8.0/README.md)
+for that measurement, its method and every session of the day.
+
+## Measured result, 2026-08-17
 
 | Stack | APK bytes | APK MiB | Cached build | Cold-start median | PSS median |
 | --- | ---: | ---: | ---: | ---: | ---: |

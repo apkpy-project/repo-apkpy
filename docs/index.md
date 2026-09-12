@@ -75,8 +75,8 @@ description: Build native Android Java, XML and Gradle projects from a supported
 <section class="home-proof">
   <div>
     <span>MEASURED ON ANDROID</span>
-    <strong>5.38 MiB debug APK in the Benchmark Notes test.</strong>
-    <p>The same 100-note app was built with ApkPy, Flet and BeeWare/Toga, then installed and measured on one emulator. The programs, line counts, raw starts, memory samples and artifact hashes are available for review.</p>
+    <strong>1.48 MiB signed release, 5.37 MiB debug, in the Benchmark Notes test.</strong>
+    <p>The same 100-note app was built with ApkPy, Flet and BeeWare/Toga, then installed and measured on one emulator. The comparison uses debug builds on every side, so the build class is the same; what you publish is the release, which R8 shrinks to 1.48 MiB. The programs, line counts, raw starts, memory samples and artifact hashes are available for review.</p>
   </div>
   <a href="benchmark/">Inspect the benchmark <span>→</span></a>
 </section>

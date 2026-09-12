@@ -105,6 +105,7 @@ nav:
       - Audio, playlists and Spotify: media-auth.md
       - Data, network and security: data-security.md
       - Native Android features: native-features.md
+      - Camera: guides/camera.md
       - Sensors and battery: guides/sensors.md
       - Static wallpapers: guides/wallpaper.md
       - Background jobs and offline queue: background-jobs.md
@@ -131,6 +132,7 @@ nav:
       - Previewer versus Android: preview-android.md
       - FAQ: faq.md
       - Version index: versions.md
+      - Version 1.8.0: version-1.8.0.md
       - Version 1.7.0: version-1.7.0.md
       - Version 1.6.1: version-1.6.1.md
       - Version 1.6.0: version-1.6.0.md

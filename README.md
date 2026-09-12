@@ -2,7 +2,7 @@
 
 **ApkPy is a Python package (`pip install apkpy`) that transpiles Python UI code into native Android Java and XML. The generated APK does not bundle a Python interpreter and does not use a WebView.**
 
-Your Python is read at build time and turned into ordinary Android source — `Activity` classes, layout XML, `res/` resources — so what installs on the phone is a normal Android app. A debug build of a small app is around 5 MB and starts with no interpreter to boot.
+Your Python is read at build time and turned into ordinary Android source — `Activity` classes, layout XML, `res/` resources — so what installs on the phone is a normal Android app. A small app ships at about 1.5 MB, signed and shrunk with R8 (its debug build is about 5 MB) and starts with no interpreter to boot.
 
 You write the whole app in Python with a CSS-style design system, see it on your desktop in a live Previewer, and then either `apkpy run` for an installable `.apk` or `apkpy build` for a project you can open in Android Studio. No Java, no Kotlin, no Android Studio needed.
 
@@ -18,6 +18,31 @@ See [ApkPy compared with Kivy, BeeWare and Flet](docs/apkpy-vs-kivy-flet-beeware
 **Documentation:** [Start here](docs/index.md) · [End-to-end tutorial](docs/tutorial-end-to-end.md) · [Essential API](docs/reference/essential.md) · [Friendly errors](docs/friendly-errors.md) · [Troubleshooting](docs/troubleshooting.md) · [Showcase](docs/showcase.md) · [Android benchmark](BENCHMARKS.md)
 
 ---
+
+## New in 1.8.0: a camera of your own, smaller releases, fewer silences
+
+Available in **ApkPy 1.8.0**. `camera.open()`, `capture()`, `record()` and
+`capabilities()` give your app its own camera — photo and video, both lenses,
+zoom, focus, exposure, flash and torch, a timer, pause/resume, a review step and
+manual ISO, shutter, white balance and focus. A setting the hardware cannot
+honour reports an error instead of pretending it applied. `camera_view()` puts a
+live viewfinder inside your own layout, with your own buttons around it.
+
+`apkpy release` now runs R8 and drops the library code your app never calls: a
+measured release went from 4,496 KB to 1,536 KB, and the benchmark app ships at
+1,518 KB. Names are deliberately not obfuscated, so `crash.last()` stays
+readable.
+
+Python that used to fail quietly now either works or stops the build. `split()`
+returns a real list with Python's rules, and a `range()` index is a number —
+`i + 1` printed `01` on the phone before. `%` formatting, arithmetic on text,
+unpacking, item and attribute assignment, `for ... else` and comprehensions
+outside the search callback stop the build with U2033, naming a form that does
+compile. **Existing code that relied on one of those doing nothing will now stop
+the build**, which is the point of the change.
+
+See the [1.8.0 release](docs/version-1.8.0.md), the
+[camera guide](docs/guides/camera.md) and the [release notes](RELEASE_1.8.0.md).
 
 ## New in 1.7.0: device features and notifications
 
@@ -708,6 +733,26 @@ migration.
 **Benchmark Notes** implements the same deterministic 100-note app in ApkPy,
 Flet, BeeWare/Toga and Kivy. The application source, packaging files, raw
 device samples and artifact hashes are included in this repository.
+
+**Corrected on 2026-09-11.** The ApkPy row first published here measured an app
+whose list was empty on the phone: ApkPy 1.3.0 compiled its module-level
+comprehension to nothing without a word, and the check only looked for four
+labels. The app was rewritten so it builds, driven on the device to show,
+filter, add and search its 100 notes, and timed again beside BeeWare/Toga in
+the same session:
+
+| Same session, debug builds | App source | Debug APK | Cold start | PSS | Works |
+| --- | ---: | ---: | ---: | ---: | --- |
+| ApkPy 1.8.0 candidate | 104 lines | **5.37 MiB** | **2,565 ms** | **67.0 MiB** | 5/5 |
+| BeeWare/Toga, control | 73 lines | 34.46 MiB | 5,536 ms | 83.4 MiB | 4/5 |
+
+About 2x sooner to start, about a fifth less memory and a 6.4x smaller APK, for
+this app in this session. Signed and shrunk with R8, the same ApkPy app comes
+to 1,518 KB; the 5.37 MiB is the debug build every stack is compared in. Cold
+start on this emulator moved by more than 2x within one day, so times from
+different sessions cannot be set side by side.
+
+**The 2026-08-17 run, kept as recorded** (its ApkPy row is the empty-list app):
 
 | Stack | App source | Debug APK | Cached build | Cold start | PSS |
 | --- | ---: | ---: | ---: | ---: | ---: |

@@ -4,19 +4,96 @@ description: Reproducible debug APK, build, cold-start, memory and source-line c
 ---
 
 <section class="benchmark-hero">
-  <span>MEASURED / 2026-08-17</span>
+  <span>MEASURED / 2026-09-11 · APKPY 1.8.0 CANDIDATE</span>
   <h1>One small app.<br>Four Python Android paths.</h1>
   <p>Benchmark Notes fixes the dataset and user-visible behavior, then measures the Android package each stack actually produces. The programs and raw samples are included so the comparison can be challenged and repeated.</p>
 </section>
 
 <div class="benchmark-metrics">
-  <article><span>ApkPy debug APK</span><strong>5.38 MiB</strong><small>5,637,396 bytes</small></article>
-  <article><span>Cold-start median</span><strong>590 ms</strong><small>three force-stopped launches</small></article>
-  <article><span>Total PSS median</span><strong>46.3 MiB</strong><small>sampled two seconds after launch</small></article>
-  <article><span>App source</span><strong>83 lines</strong><small>66 non-blank, non-comment</small></article>
+  <article><span>ApkPy debug APK</span><strong>5.37 MiB</strong><small>6.4x smaller than BeeWare/Toga · 1.48 MiB as a signed release</small></article>
+  <article><span>Cold start, same session</span><strong>about 2x sooner</strong><small>2,565 ms against 5,536 ms</small></article>
+  <article><span>Total PSS, same session</span><strong>67.0 MiB</strong><small>83.4 MiB for BeeWare/Toga</small></article>
+  <article><span>App source</span><strong>104 lines</strong><small>81 non-blank, non-comment</small></article>
 </div>
 
+!!! warning "Corrected on 2026-09-11"
+
+    The ApkPy figures first published on this page -- 590 ms and 46.3 MiB --
+    came from an app whose list was empty on the phone. ApkPy 1.3.0 compiled
+    its module-level comprehension to nothing without a word, and the smoke
+    check only looked for four labels. Measured again with all 100 notes on
+    screen, ApkPy still started about twice as soon as BeeWare/Toga in the same
+    session, and held 67.0 MiB against 83.4 MiB. The 2026-08-17 record is kept
+    below, marked.
+
+## Scenario 2026-09-11: ApkPy 1.8.0
+
+Only ApkPy was measured again. Its program had to be rewritten to build, and a
+functional check now proves that each app does what the contract says before
+it is timed. BeeWare/Toga was rebuilt and measured in the same session as a
+control, because cold start on this emulator moved by more than 2x within one
+day.
+
+| Stack, same session | APK | Cold start, first three | Cold start, median of ten | PSS median | Functional check |
+| --- | ---: | ---: | ---: | ---: | --- |
+| **ApkPy 1.8.0 candidate** | **5.37 MiB** | **2,565 ms** | **2,855 ms** | **67.0 MiB** | 5/5 |
+| BeeWare/Toga, control | 34.46 MiB | 5,536 ms | 5,573 ms | 83.4 MiB | 4/5 |
+
+For this app, in one session, ApkPy's debug APK was **6.4x smaller**, it
+started **about 2x sooner**, and its PSS was **about a fifth lower** than
+BeeWare/Toga's.
+
+Both are debug builds, as in 2026-08-17: measuring a shrunk ApkPy release
+against unshrunk competitors would not be a comparison. For scale, the same
+ApkPy program signed as a release, with R8, comes to **1,518 KB** -- the debug
+APK carries the whole of AndroidX and Material, and R8 drops what the app never
+calls. The other stacks have their own release settings, not measured here.
+
+!!! warning "Do not mix this table with the 2026-08-17 one"
+
+    The same BeeWare/Toga program started in 2,334 ms on 2026-08-17, and in
+    2,145 ms and then 5,573 ms in two sessions on 2026-09-11. An absolute time
+    describes the emulator at that moment, so ApkPy's 2026-09-11 time cannot be
+    compared with Flet's or BeeWare/Toga's from 2026-08-17. Compare within one
+    session.
+
+What changed, and why:
+
+- **The ApkPy program.** The 2026-08-17 version built its notes with a
+  comprehension at module level and `{index:03d}`. Neither is translated, and
+  ApkPy now stops the build instead of compiling them to nothing. The notes are
+  filled in `lifecycle(home, on_mount=...)` with a `for` loop: 104 lines, 81 of
+  code, against 83 and 66.
+- **A functional check.** Before timing, each app has to open with 100 notes,
+  filter to 20 favourites, show 100 again, add a note, and find exactly one
+  match for `Note 010` -- read back from the screen every time. BeeWare/Toga's
+  search had not reached one match after 20 seconds in the two slower
+  sessions; it had in the first.
+- **A warm-up and ten launches.** Each app is cold-started until three launches
+  in a row agree within 15 %, then timed ten times. The median of the first
+  three is the 2026-08-17 method.
+- **Flet** was not rebuilt: its Android build needs Windows Developer Mode on
+  this host. Its 2026-08-17 APK was `arm64-v8a`, running through ARM
+  translation on the x86_64 emulator.
+
+The generated Java also shows where ApkPy's start-up goes: each of the 100
+appends reads the whole list back from JSON and writes it out again, before the
+first frame. That was not profiled, but it is the first place to look for a
+faster start.
+
+The [scenario folder](https://github.com/apkpy-project/repo-apkpy/tree/main/benchmarks/benchmark-notes/scenarios/2026-09-11-apkpy-1.8.0)
+has the program, the measurement script, every session of the day -- including
+three that were discarded, each with its reason -- and a README with the
+details.
+
 ## Result
+
+!!! danger "The ApkPy row of this 2026-08-17 run measured an empty list"
+
+    Everything from here down is the run recorded on 2026-08-17, unchanged. Its
+    ApkPy app opened with no notes on the phone, so its cold start and memory
+    are not a like-for-like comparison. Its APK size still compares: the code it
+    carried is the same size either way.
 
 All available APKs were debug builds installed on the same Pixel 9 emulator,
 Android API 35 and x86_64 ABI. “Cached build” excludes first-time toolchain
@@ -38,7 +115,9 @@ downloads.
 
 For this app, ApkPy's debug APK was **4.70x smaller than Flet** and **6.32x
 smaller than BeeWare/Toga**. Its measured PSS was **4.46x lower than Flet**
-and **1.72x lower than BeeWare/Toga**.
+and **1.72x lower than BeeWare/Toga** -- for an app whose list was empty. In the
+2026-09-11 session, with 100 notes on screen, it was 1.24x lower than
+BeeWare/Toga's.
 
 !!! warning "Read the claim at the correct size"
 
@@ -51,9 +130,9 @@ and **1.72x lower than BeeWare/Toga**.
 | Question | Answer from this run |
 | --- | --- |
 | Which measured debug artifact was smallest? | ApkPy, at 5.38 MiB. |
-| Which measured app had the lowest median cold start? | ApkPy, at 590 ms. |
-| Which measured app had the lowest median total PSS? | ApkPy, at 46.3 MiB. |
-| Was every implementation asked to do the same thing? | Yes: the same 100 records and four visible actions. |
+| Which measured app had the lowest median cold start? | ApkPy, at 590 ms -- but its list was empty. See the 2026-09-11 scenario above. |
+| Which measured app had the lowest median total PSS? | ApkPy, at 46.3 MiB -- but its list was empty. See the 2026-09-11 scenario above. |
+| Was every implementation asked to do the same thing? | They were asked to. ApkPy's did not: its 100 records never reached the screen. |
 | Does this prove every ApkPy app beats every alternative? | No. The result is scoped to this app, device, ABI and debug configuration. |
 | Is Kivy slower or larger here? | Unknown. No Kivy APK was produced, so no Android number is claimed. |
 

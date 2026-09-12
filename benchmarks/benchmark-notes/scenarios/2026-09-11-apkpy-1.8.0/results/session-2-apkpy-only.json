@@ -1,0 +1,184 @@
+{
+  "date": "2026-09-11",
+  "device": {
+    "ro.product.model": "sdk_gphone16k_x86_64",
+    "ro.build.version.sdk": "35",
+    "ro.product.cpu.abi": "x86_64",
+    "ro.build.fingerprint": "google/sdk_gphone16k_x86_64/emu64xa16k:15/AE3A.240806.041/12890756:user/dev-keys",
+    "page_size": "16384"
+  },
+  "method": {
+    "warm_tolerance": 0.15,
+    "warm_window": 3,
+    "warm_limit": 12,
+    "timed_runs": 10
+  },
+  "apps": [
+    {
+      "framework": "ApkPy",
+      "package": "com.apkpy.benchmark.apkpy",
+      "activity": "com.apkpy.app.Screen_homeActivity",
+      "apk_bytes": 5635041,
+      "apk_mib": 5.37,
+      "sha256": "74F4FE6179AC9220180EA639C9E37CAB5A99858C1ED5B9402930AA440113CD30",
+      "install": "Success",
+      "functional": {
+        "labels": {
+          "Benchmark Notes": true,
+          "Search notes": true,
+          "FAVORITES ONLY": true,
+          "ADD NOTE": true
+        },
+        "labels_found": 4,
+        "steps": [
+          {
+            "step": "opens with 100 notes",
+            "expected": 100,
+            "seen": 100,
+            "pass": true,
+            "note_001_visible": true
+          },
+          {
+            "step": "favourites filter",
+            "expected": 20,
+            "seen": 20,
+            "pass": true
+          },
+          {
+            "step": "favourites off again",
+            "expected": 100,
+            "seen": 100,
+            "pass": true
+          },
+          {
+            "step": "add a note",
+            "expected": 101,
+            "seen": 101,
+            "pass": true
+          },
+          {
+            "step": "search \"Note 010\"",
+            "expected": 1,
+            "seen": 1,
+            "pass": true
+          }
+        ],
+        "passed": true,
+        "screen_unreadable": false,
+        "attempts": 1,
+        "unreadable_attempts": 0
+      },
+      "warm_up": {
+        "samples_ms": [
+          3990,
+          2778,
+          2684,
+          2474
+        ],
+        "settled": true
+      },
+      "runs": [
+        {
+          "cold_start_ms": 2490,
+          "total_time_ms": 2490,
+          "wait_time_ms": 2496,
+          "launch_state": "COLD",
+          "pss_kb": 68348,
+          "run": 1
+        },
+        {
+          "cold_start_ms": 2666,
+          "total_time_ms": 2666,
+          "wait_time_ms": 2674,
+          "launch_state": "COLD",
+          "pss_kb": 68384,
+          "run": 2
+        },
+        {
+          "cold_start_ms": 2522,
+          "total_time_ms": 2522,
+          "wait_time_ms": 2524,
+          "launch_state": "COLD",
+          "pss_kb": 68460,
+          "run": 3
+        },
+        {
+          "cold_start_ms": 2523,
+          "total_time_ms": 2523,
+          "wait_time_ms": 2529,
+          "launch_state": "COLD",
+          "pss_kb": 68431,
+          "run": 4
+        },
+        {
+          "cold_start_ms": 2808,
+          "total_time_ms": 2808,
+          "wait_time_ms": 2832,
+          "launch_state": "COLD",
+          "pss_kb": 68597,
+          "run": 5
+        },
+        {
+          "cold_start_ms": 2515,
+          "total_time_ms": 2515,
+          "wait_time_ms": 2521,
+          "launch_state": "COLD",
+          "pss_kb": 68507,
+          "run": 6
+        },
+        {
+          "cold_start_ms": 2600,
+          "total_time_ms": 2600,
+          "wait_time_ms": 2613,
+          "launch_state": "COLD",
+          "pss_kb": 68544,
+          "run": 7
+        },
+        {
+          "cold_start_ms": 2501,
+          "total_time_ms": 2501,
+          "wait_time_ms": 2503,
+          "launch_state": "COLD",
+          "pss_kb": 68583,
+          "run": 8
+        },
+        {
+          "cold_start_ms": 2452,
+          "total_time_ms": 2452,
+          "wait_time_ms": 2461,
+          "launch_state": "COLD",
+          "pss_kb": 68486,
+          "run": 9
+        },
+        {
+          "cold_start_ms": 2536,
+          "total_time_ms": 2536,
+          "wait_time_ms": 2539,
+          "launch_state": "COLD",
+          "pss_kb": 68456,
+          "run": 10
+        }
+      ],
+      "published_method": {
+        "cold_start_median_ms": 2522,
+        "pss_median_kb": 68384
+      },
+      "all_runs": {
+        "cold_start_ms": {
+          "median": 2522.5,
+          "min": 2452,
+          "max": 2808
+        },
+        "pss_kb": {
+          "median": 68473.0,
+          "min": 68348,
+          "max": 68597
+        },
+        "launch_states": [
+          "COLD"
+        ]
+      }
+    }
+  ],
+  "note": "ApkPy alone, same APK as session 3."
+}

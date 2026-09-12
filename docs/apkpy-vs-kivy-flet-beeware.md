@@ -54,8 +54,10 @@ Android Studio and read.
 
 - **Nothing to boot.** No interpreter starts, because there is not one. The app
   launches like any other Android app.
-- **Size.** A debug build of a small app is around 5 MB. A bundled runtime is
-  the largest single thing in the other approaches.
+- **Size.** A small app ships at about 1.5 MB, signed and shrunk with R8; its
+  debug build is about 5 MB. One pulling in Firebase, WorkManager, media3 and
+  RecyclerView came to 2 MB. A bundled runtime is the largest single thing in
+  the other approaches.
 - **They are Android's widgets, not lookalikes.** Scrolling, text selection,
   accessibility services, keyboard behaviour and dark mode are the platform's,
   because the views are the platform's.

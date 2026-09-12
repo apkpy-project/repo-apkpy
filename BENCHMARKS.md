@@ -14,6 +14,18 @@ The benchmark includes the application source and packaging configuration for
 every candidate. It does **not** contain the private source of the ApkPy
 compiler.
 
+## Corrected on 2026-09-11
+
+The ApkPy row of the 2026-08-17 result below measured an app whose list was
+empty on the phone. Rewritten so it builds, checked on the device and timed
+again beside BeeWare/Toga in the same session, ApkPy started about 2x sooner
+(2,565 ms against 5,536 ms), held 67.0 MiB against 83.4 MiB, and its debug APK
+was 6.4x smaller. Signed and shrunk with R8 the same app comes to 1,518 KB.
+Cold start on that emulator moved by more than 2x within one day, so numbers
+from different sessions are not comparable. The programs, the script, every
+session of the day and three discarded ones are in
+`benchmarks/benchmark-notes/scenarios/2026-09-11-apkpy-1.8.0/`.
+
 ## Result from 2026-08-17
 
 All produced APKs are debug builds. Cold start and memory were measured on the

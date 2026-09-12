@@ -1,0 +1,173 @@
+{
+  "date": "2026-09-11",
+  "device": {
+    "ro.product.model": "sdk_gphone16k_x86_64",
+    "ro.build.version.sdk": "35",
+    "ro.product.cpu.abi": "x86_64",
+    "ro.build.fingerprint": "google/sdk_gphone16k_x86_64/emu64xa16k:15/AE3A.240806.041/12890756:user/dev-keys",
+    "page_size": "16384"
+  },
+  "apps": [
+    {
+      "framework": "ApkPy",
+      "package": "com.apkpy.benchmark.apkpy",
+      "activity": "com.apkpy.app.Screen_homeActivity",
+      "apk_bytes": 5635045,
+      "apk_mib": 5.37,
+      "sha256": "9F6F52289496FD6F99F8F059164CE8D7F044CC9269072905958F1DC2B78E2740",
+      "install": "Success",
+      "functional": {
+        "labels": {
+          "Benchmark Notes": true,
+          "Search notes": true,
+          "FAVORITES ONLY": true,
+          "ADD NOTE": true
+        },
+        "labels_found": 4,
+        "steps": [
+          {
+            "step": "opens with 100 notes",
+            "expected": 100,
+            "seen": 100,
+            "pass": true,
+            "note_001_visible": true
+          },
+          {
+            "step": "favourites filter",
+            "expected": 20,
+            "seen": 20,
+            "pass": true
+          },
+          {
+            "step": "favourites off again",
+            "expected": 100,
+            "seen": 100,
+            "pass": true
+          },
+          {
+            "step": "add a note",
+            "expected": 101,
+            "seen": 101,
+            "pass": true
+          },
+          {
+            "step": "search \"Note 010\"",
+            "expected": 1,
+            "seen": 1,
+            "pass": true
+          }
+        ],
+        "passed": true
+      },
+      "runs": [
+        {
+          "run": 1,
+          "cold_start_ms": 1736,
+          "total_time_ms": 1736,
+          "wait_time_ms": 1738,
+          "launch_state": "COLD",
+          "pss_kb": 69511
+        },
+        {
+          "run": 2,
+          "cold_start_ms": 1387,
+          "total_time_ms": 1387,
+          "wait_time_ms": 1390,
+          "launch_state": "COLD",
+          "pss_kb": 69634
+        },
+        {
+          "run": 3,
+          "cold_start_ms": 1383,
+          "total_time_ms": 1383,
+          "wait_time_ms": 1384,
+          "launch_state": "COLD",
+          "pss_kb": 69557
+        }
+      ],
+      "cold_start_median_ms": 1387,
+      "pss_median_kb": 69557
+    },
+    {
+      "framework": "BeeWare/Toga",
+      "package": "com.apkpy.benchmark.benchmark_notes",
+      "activity": "org.beeware.android.MainActivity",
+      "apk_bytes": 35629508,
+      "apk_mib": 33.98,
+      "sha256": "207A4A996CBB89BC29243DF2A615A496A0A7D754071BAE1E76503AE20E604923",
+      "install": "Success",
+      "functional": {
+        "labels": {
+          "Benchmark Notes": true,
+          "Search notes": true,
+          "FAVORITES ONLY": true,
+          "ADD NOTE": true
+        },
+        "labels_found": 4,
+        "steps": [
+          {
+            "step": "opens with 100 notes",
+            "expected": 100,
+            "seen": 100,
+            "pass": true,
+            "note_001_visible": true
+          },
+          {
+            "step": "favourites filter",
+            "expected": 20,
+            "seen": 20,
+            "pass": true
+          },
+          {
+            "step": "favourites off again",
+            "expected": 100,
+            "seen": 100,
+            "pass": true
+          },
+          {
+            "step": "add a note",
+            "expected": 101,
+            "seen": 101,
+            "pass": true
+          },
+          {
+            "step": "search \"Note 010\"",
+            "expected": 1,
+            "seen": 1,
+            "pass": true
+          }
+        ],
+        "passed": true
+      },
+      "runs": [
+        {
+          "run": 1,
+          "cold_start_ms": 2718,
+          "total_time_ms": 2718,
+          "wait_time_ms": 2722,
+          "launch_state": "COLD",
+          "pss_kb": 83533
+        },
+        {
+          "run": 2,
+          "cold_start_ms": 2145,
+          "total_time_ms": 2145,
+          "wait_time_ms": 2146,
+          "launch_state": "COLD",
+          "pss_kb": 83600
+        },
+        {
+          "run": 3,
+          "cold_start_ms": 2078,
+          "total_time_ms": 2078,
+          "wait_time_ms": 2081,
+          "launch_state": "COLD",
+          "pss_kb": 83428
+        }
+      ],
+      "cold_start_median_ms": 2145,
+      "pss_median_kb": 83533
+    }
+  ],
+  "note": "First trial: three launches per app, no warm-up, an earlier build of the rewritten ApkPy program."
+}

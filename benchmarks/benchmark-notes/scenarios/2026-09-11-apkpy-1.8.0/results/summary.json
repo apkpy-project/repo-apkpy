@@ -1,0 +1,350 @@
+{
+  "scenario": "Benchmark Notes, ApkPy 1.8.0 candidate",
+  "date": "2026-09-11",
+  "published_2026_08_17_for_reference": {
+    "ApkPy 1.3.0 candidate": {
+      "apk_bytes": 5637396,
+      "cold_start_median_ms": 590,
+      "pss_median_kb": 47375,
+      "note": "list was empty on the phone; see README"
+    },
+    "Flet 0.86.5": {
+      "apk_bytes": 26505412,
+      "cold_start_median_ms": 1824,
+      "pss_median_kb": 211060,
+      "note": "arm64-v8a APK on an x86_64 emulator, through ARM translation"
+    },
+    "BeeWare/Toga 0.5.6": {
+      "apk_bytes": 35634620,
+      "cold_start_median_ms": 2334,
+      "pss_median_kb": 81630
+    }
+  },
+  "sessions": [
+    {
+      "file": "session-4-final.json",
+      "note": "BeeWare/Toga then ApkPy, back to back, with the final ApkPy APK. The published scenario numbers.",
+      "apps": [
+        {
+          "framework": "BeeWare/Toga",
+          "apk_bytes": 36128863,
+          "sha256": "2FF004FFD2798862F226B60400D857512FADD76B2508D43B1518A9502B65ABEA",
+          "functional_passed": false,
+          "functional_steps": [
+            [
+              "opens with 100 notes",
+              100,
+              100
+            ],
+            [
+              "favourites filter",
+              20,
+              20
+            ],
+            [
+              "favourites off again",
+              100,
+              100
+            ],
+            [
+              "add a note",
+              101,
+              101
+            ],
+            [
+              "search \"Note 010\"",
+              1,
+              101
+            ]
+          ],
+          "warm_up_ms": [
+            5811,
+            5728,
+            5581
+          ],
+          "first_three_median_ms": 5536,
+          "all_runs_median_ms": 5573.0,
+          "all_runs_min_ms": 5445,
+          "all_runs_max_ms": 5846,
+          "runs": 10,
+          "pss_median_kb": 85409.0
+        },
+        {
+          "framework": "ApkPy",
+          "apk_bytes": 5635393,
+          "sha256": "7225B5D0E63C461CD91B39D73C6578F9EF2B6D3BCDE97E6E55D360D39D72F8EB",
+          "functional_passed": true,
+          "functional_steps": [
+            [
+              "opens with 100 notes",
+              100,
+              100
+            ],
+            [
+              "favourites filter",
+              20,
+              20
+            ],
+            [
+              "favourites off again",
+              100,
+              100
+            ],
+            [
+              "add a note",
+              101,
+              101
+            ],
+            [
+              "search \"Note 010\"",
+              1,
+              1
+            ]
+          ],
+          "warm_up_ms": [
+            2700,
+            2589,
+            2654
+          ],
+          "first_three_median_ms": 2565,
+          "all_runs_median_ms": 2854.5,
+          "all_runs_min_ms": 2542,
+          "all_runs_max_ms": 7332,
+          "runs": 10,
+          "pss_median_kb": 68632.0
+        }
+      ]
+    },
+    {
+      "file": "session-3-control.json",
+      "note": "BeeWare/Toga then ApkPy, back to back. ApkPy APK built before range() indexes were numbers: favourites were chosen by the last digit instead of index % 5, and the split helper was absent.",
+      "apps": [
+        {
+          "framework": "BeeWare/Toga",
+          "apk_bytes": 36128863,
+          "sha256": "2FF004FFD2798862F226B60400D857512FADD76B2508D43B1518A9502B65ABEA",
+          "functional_passed": false,
+          "functional_steps": [
+            [
+              "opens with 100 notes",
+              100,
+              100
+            ],
+            [
+              "favourites filter",
+              20,
+              20
+            ],
+            [
+              "favourites off again",
+              100,
+              100
+            ],
+            [
+              "add a note",
+              101,
+              101
+            ],
+            [
+              "search \"Note 010\"",
+              1,
+              101
+            ]
+          ],
+          "warm_up_ms": [
+            5460,
+            5291,
+            5078
+          ],
+          "first_three_median_ms": 5201,
+          "all_runs_median_ms": 5211.5,
+          "all_runs_min_ms": 5120,
+          "all_runs_max_ms": 5406,
+          "runs": 10,
+          "pss_median_kb": 85032.5
+        },
+        {
+          "framework": "ApkPy",
+          "apk_bytes": 5635041,
+          "sha256": "74F4FE6179AC9220180EA639C9E37CAB5A99858C1ED5B9402930AA440113CD30",
+          "functional_passed": true,
+          "functional_steps": [
+            [
+              "opens with 100 notes",
+              100,
+              100
+            ],
+            [
+              "favourites filter",
+              20,
+              20
+            ],
+            [
+              "favourites off again",
+              100,
+              100
+            ],
+            [
+              "add a note",
+              101,
+              101
+            ],
+            [
+              "search \"Note 010\"",
+              1,
+              1
+            ]
+          ],
+          "warm_up_ms": [
+            2875,
+            2629,
+            2530
+          ],
+          "first_three_median_ms": 2483,
+          "all_runs_median_ms": 2549.5,
+          "all_runs_min_ms": 2457,
+          "all_runs_max_ms": 2785,
+          "runs": 10,
+          "pss_median_kb": 68615.0
+        }
+      ]
+    },
+    {
+      "file": "session-2-apkpy-only.json",
+      "note": "ApkPy alone, same APK as session 3.",
+      "apps": [
+        {
+          "framework": "ApkPy",
+          "apk_bytes": 5635041,
+          "sha256": "74F4FE6179AC9220180EA639C9E37CAB5A99858C1ED5B9402930AA440113CD30",
+          "functional_passed": true,
+          "functional_steps": [
+            [
+              "opens with 100 notes",
+              100,
+              100
+            ],
+            [
+              "favourites filter",
+              20,
+              20
+            ],
+            [
+              "favourites off again",
+              100,
+              100
+            ],
+            [
+              "add a note",
+              101,
+              101
+            ],
+            [
+              "search \"Note 010\"",
+              1,
+              1
+            ]
+          ],
+          "warm_up_ms": [
+            3990,
+            2778,
+            2684,
+            2474
+          ],
+          "first_three_median_ms": 2522,
+          "all_runs_median_ms": 2522.5,
+          "all_runs_min_ms": 2452,
+          "all_runs_max_ms": 2808,
+          "runs": 10,
+          "pss_median_kb": 68473.0
+        }
+      ]
+    },
+    {
+      "file": "session-1-trial.json",
+      "note": "First trial: three launches per app, no warm-up, an earlier build of the rewritten ApkPy program.",
+      "apps": [
+        {
+          "framework": "ApkPy",
+          "apk_bytes": 5635045,
+          "sha256": "9F6F52289496FD6F99F8F059164CE8D7F044CC9269072905958F1DC2B78E2740",
+          "functional_passed": true,
+          "functional_steps": [
+            [
+              "opens with 100 notes",
+              100,
+              100
+            ],
+            [
+              "favourites filter",
+              20,
+              20
+            ],
+            [
+              "favourites off again",
+              100,
+              100
+            ],
+            [
+              "add a note",
+              101,
+              101
+            ],
+            [
+              "search \"Note 010\"",
+              1,
+              1
+            ]
+          ],
+          "warm_up_ms": null,
+          "first_three_median_ms": null,
+          "all_runs_median_ms": 1387,
+          "all_runs_min_ms": 1383,
+          "all_runs_max_ms": 1736,
+          "runs": 3,
+          "pss_median_kb": 69557
+        },
+        {
+          "framework": "BeeWare/Toga",
+          "apk_bytes": 35629508,
+          "sha256": "207A4A996CBB89BC29243DF2A615A496A0A7D754071BAE1E76503AE20E604923",
+          "functional_passed": true,
+          "functional_steps": [
+            [
+              "opens with 100 notes",
+              100,
+              100
+            ],
+            [
+              "favourites filter",
+              20,
+              20
+            ],
+            [
+              "favourites off again",
+              100,
+              100
+            ],
+            [
+              "add a note",
+              101,
+              101
+            ],
+            [
+              "search \"Note 010\"",
+              1,
+              1
+            ]
+          ],
+          "warm_up_ms": null,
+          "first_three_median_ms": null,
+          "all_runs_median_ms": 2145,
+          "all_runs_min_ms": 2078,
+          "all_runs_max_ms": 2718,
+          "runs": 3,
+          "pss_median_kb": 83533
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,347 @@
+{
+  "date": "2026-09-11",
+  "device": {
+    "ro.product.model": "sdk_gphone16k_x86_64",
+    "ro.build.version.sdk": "35",
+    "ro.product.cpu.abi": "x86_64",
+    "ro.build.fingerprint": "google/sdk_gphone16k_x86_64/emu64xa16k:15/AE3A.240806.041/12890756:user/dev-keys",
+    "page_size": "16384"
+  },
+  "method": {
+    "warm_tolerance": 0.15,
+    "warm_window": 3,
+    "warm_limit": 12,
+    "timed_runs": 10
+  },
+  "apps": [
+    {
+      "framework": "BeeWare/Toga",
+      "package": "com.apkpy.benchmark.benchmark_notes",
+      "activity": "org.beeware.android.MainActivity",
+      "apk_bytes": 36128863,
+      "apk_mib": 34.46,
+      "sha256": "2FF004FFD2798862F226B60400D857512FADD76B2508D43B1518A9502B65ABEA",
+      "install": "Success",
+      "functional": {
+        "labels": {
+          "Benchmark Notes": true,
+          "Search notes": true,
+          "FAVORITES ONLY": true,
+          "ADD NOTE": true
+        },
+        "labels_found": 4,
+        "steps": [
+          {
+            "step": "opens with 100 notes",
+            "expected": 100,
+            "seen": 100,
+            "pass": true,
+            "note_001_visible": true
+          },
+          {
+            "step": "favourites filter",
+            "expected": 20,
+            "seen": 20,
+            "pass": true
+          },
+          {
+            "step": "favourites off again",
+            "expected": 100,
+            "seen": 100,
+            "pass": true
+          },
+          {
+            "step": "add a note",
+            "expected": 101,
+            "seen": 101,
+            "pass": true
+          },
+          {
+            "step": "search \"Note 010\"",
+            "expected": 1,
+            "seen": 101,
+            "pass": false
+          }
+        ],
+        "passed": false,
+        "screen_unreadable": false,
+        "attempts": 1,
+        "unreadable_attempts": 0
+      },
+      "warm_up": {
+        "samples_ms": [
+          5811,
+          5728,
+          5581
+        ],
+        "settled": true
+      },
+      "runs": [
+        {
+          "cold_start_ms": 5584,
+          "total_time_ms": 5584,
+          "wait_time_ms": 5587,
+          "launch_state": "COLD",
+          "pss_kb": 85310,
+          "run": 1
+        },
+        {
+          "cold_start_ms": 5445,
+          "total_time_ms": 5445,
+          "wait_time_ms": 5449,
+          "launch_state": "COLD",
+          "pss_kb": 85338,
+          "run": 2
+        },
+        {
+          "cold_start_ms": 5536,
+          "total_time_ms": 5536,
+          "wait_time_ms": 5538,
+          "launch_state": "COLD",
+          "pss_kb": 85442,
+          "run": 3
+        },
+        {
+          "cold_start_ms": 5688,
+          "total_time_ms": 5688,
+          "wait_time_ms": 5691,
+          "launch_state": "COLD",
+          "pss_kb": 85382,
+          "run": 4
+        },
+        {
+          "cold_start_ms": 5846,
+          "total_time_ms": 5846,
+          "wait_time_ms": 5851,
+          "launch_state": "COLD",
+          "pss_kb": 85238,
+          "run": 5
+        },
+        {
+          "cold_start_ms": 5562,
+          "total_time_ms": 5562,
+          "wait_time_ms": 5567,
+          "launch_state": "COLD",
+          "pss_kb": 85176,
+          "run": 6
+        },
+        {
+          "cold_start_ms": 5649,
+          "total_time_ms": 5649,
+          "wait_time_ms": 5651,
+          "launch_state": "COLD",
+          "pss_kb": 85487,
+          "run": 7
+        },
+        {
+          "cold_start_ms": 5552,
+          "total_time_ms": 5552,
+          "wait_time_ms": 5554,
+          "launch_state": "COLD",
+          "pss_kb": 85436,
+          "run": 8
+        },
+        {
+          "cold_start_ms": 5520,
+          "total_time_ms": 5520,
+          "wait_time_ms": 5528,
+          "launch_state": "COLD",
+          "pss_kb": 85460,
+          "run": 9
+        },
+        {
+          "cold_start_ms": 5690,
+          "total_time_ms": 5690,
+          "wait_time_ms": 5696,
+          "launch_state": "COLD",
+          "pss_kb": 85445,
+          "run": 10
+        }
+      ],
+      "published_method": {
+        "cold_start_median_ms": 5536,
+        "pss_median_kb": 85338
+      },
+      "all_runs": {
+        "cold_start_ms": {
+          "median": 5573.0,
+          "min": 5445,
+          "max": 5846
+        },
+        "pss_kb": {
+          "median": 85409.0,
+          "min": 85176,
+          "max": 85487
+        },
+        "launch_states": [
+          "COLD"
+        ]
+      }
+    },
+    {
+      "framework": "ApkPy",
+      "package": "com.apkpy.benchmark.apkpy",
+      "activity": "com.apkpy.app.Screen_homeActivity",
+      "apk_bytes": 5635393,
+      "apk_mib": 5.37,
+      "sha256": "7225B5D0E63C461CD91B39D73C6578F9EF2B6D3BCDE97E6E55D360D39D72F8EB",
+      "install": "Success",
+      "functional": {
+        "labels": {
+          "Benchmark Notes": true,
+          "Search notes": true,
+          "FAVORITES ONLY": true,
+          "ADD NOTE": true
+        },
+        "labels_found": 4,
+        "steps": [
+          {
+            "step": "opens with 100 notes",
+            "expected": 100,
+            "seen": 100,
+            "pass": true,
+            "note_001_visible": true
+          },
+          {
+            "step": "favourites filter",
+            "expected": 20,
+            "seen": 20,
+            "pass": true
+          },
+          {
+            "step": "favourites off again",
+            "expected": 100,
+            "seen": 100,
+            "pass": true
+          },
+          {
+            "step": "add a note",
+            "expected": 101,
+            "seen": 101,
+            "pass": true
+          },
+          {
+            "step": "search \"Note 010\"",
+            "expected": 1,
+            "seen": 1,
+            "pass": true
+          }
+        ],
+        "passed": true,
+        "screen_unreadable": false,
+        "attempts": 1,
+        "unreadable_attempts": 0
+      },
+      "warm_up": {
+        "samples_ms": [
+          2700,
+          2589,
+          2654
+        ],
+        "settled": true
+      },
+      "runs": [
+        {
+          "cold_start_ms": 2542,
+          "total_time_ms": 2542,
+          "wait_time_ms": 2545,
+          "launch_state": "COLD",
+          "pss_kb": 68589,
+          "run": 1
+        },
+        {
+          "cold_start_ms": 2565,
+          "total_time_ms": 2565,
+          "wait_time_ms": 2570,
+          "launch_state": "COLD",
+          "pss_kb": 68660,
+          "run": 2
+        },
+        {
+          "cold_start_ms": 3256,
+          "total_time_ms": 3256,
+          "wait_time_ms": 3339,
+          "launch_state": "COLD",
+          "pss_kb": 61915,
+          "run": 3
+        },
+        {
+          "cold_start_ms": 7332,
+          "total_time_ms": 7332,
+          "wait_time_ms": 7335,
+          "launch_state": "COLD",
+          "pss_kb": 68845,
+          "run": 4
+        },
+        {
+          "cold_start_ms": 2850,
+          "total_time_ms": 2850,
+          "wait_time_ms": 2973,
+          "launch_state": "COLD",
+          "pss_kb": 68547,
+          "run": 5
+        },
+        {
+          "cold_start_ms": 2679,
+          "total_time_ms": 2679,
+          "wait_time_ms": 2779,
+          "launch_state": "COLD",
+          "pss_kb": 68613,
+          "run": 6
+        },
+        {
+          "cold_start_ms": 2875,
+          "total_time_ms": 2875,
+          "wait_time_ms": 2876,
+          "launch_state": "COLD",
+          "pss_kb": 68655,
+          "run": 7
+        },
+        {
+          "cold_start_ms": 2859,
+          "total_time_ms": 2859,
+          "wait_time_ms": 2888,
+          "launch_state": "COLD",
+          "pss_kb": 68577,
+          "run": 8
+        },
+        {
+          "cold_start_ms": 3131,
+          "total_time_ms": 3131,
+          "wait_time_ms": 3178,
+          "launch_state": "COLD",
+          "pss_kb": 68671,
+          "run": 9
+        },
+        {
+          "cold_start_ms": 2844,
+          "total_time_ms": 2844,
+          "wait_time_ms": 2846,
+          "launch_state": "COLD",
+          "pss_kb": 68651,
+          "run": 10
+        }
+      ],
+      "published_method": {
+        "cold_start_median_ms": 2565,
+        "pss_median_kb": 68589
+      },
+      "all_runs": {
+        "cold_start_ms": {
+          "median": 2854.5,
+          "min": 2542,
+          "max": 7332
+        },
+        "pss_kb": {
+          "median": 68632.0,
+          "min": 61915,
+          "max": 68845
+        },
+        "launch_states": [
+          "COLD"
+        ]
+      }
+    }
+  ],
+  "note": "BeeWare/Toga then ApkPy, back to back, with the final ApkPy APK. The published scenario numbers."
+}

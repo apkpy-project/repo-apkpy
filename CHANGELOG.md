@@ -6,7 +6,69 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased]
+## [1.8.0] - 2026-09-12
+
+Read the [complete 1.8.0 notes](docs/version-1.8.0.md).
+
+**Upgrading:** several fixes below turn silence into build errors. Code that
+relied on `%` formatting, arithmetic on text, unpacking, item or attribute
+assignment, `for ... else` or a comprehension outside the search callback
+quietly doing nothing will now stop the build, naming a form that compiles.
+
+### Added
+
+- An in-app camera: `camera.open()`, `capture()`, `record()` and
+  `capabilities()` with photo and video, both lenses, zoom, focus, exposure,
+  flash and torch, a timer, pause and resume, a review step, manual ISO,
+  shutter, white balance and focus, and a customisable interface.
+  `camera.capture()` keeps its 1.7.0 callback.
+- `camera_view()`, a live viewfinder embedded in your own layout.
+- `in` and `not in` inside `and`, `or` and `not`, `x not in y` on its own, and
+  `in` in a ternary condition. Membership for lists, tuples, sets and dicts
+  written in the source or kept at module level; a text search otherwise.
+
+### Changed
+
+- `apkpy release` shrinks with R8 (`minifyEnabled`, `shrinkResources`) and keeps
+  names readable with `-dontobfuscate`: a measured release went from 4,496 KB
+  to 1,536 KB. Release builds take longer; `apkpy run` is unchanged.
+
+### Fixed
+
+- An `if` whose condition ApkPy could not write no longer disappears, body and
+  all: it stops the build with U2033. That covers `is`, chained comparisons and
+  any other shape without a translation, at module level and in functions.
+- A ternary whose condition could not be written no longer becomes empty text.
+- A comparison with a side ApkPy could not write -- inside `and`, `not` or a
+  ternary -- no longer compiles to `Double.parseDouble("")`, which crashed the
+  app when that code ran. Calls into
+  the other runtime of a background job (`job.input()`, `job.attempt()`) stay
+  exempt, as before, and so does `get_value()` of a component in a callback
+  that is also written into a screen without that component.
+- A list comprehension at module level no longer creates an empty list.
+- An f-string format other than `.Nf` no longer prints the unformatted value on
+  the phone while the Previewer formats it.
+- `x in some_list` now asks the list instead of searching its JSON text, which
+  answered `True` for `"a" in ["ab"]`.
+- `text.split()` compiled to Java's array: a `for` loop over it ran no times,
+  `len()` counted the characters of its address, and a label showed
+  `[Ljava.lang.String;@…`. It is now a list with Python's rules -- the separator
+  is text rather than a regular expression, empty parts are kept, `maxsplit` is
+  honoured, and with no separator it splits on whitespace. `x in
+  text.split(",")` is membership. Checked against `str.split` on 628 cases.
+- A `range()` index is a number. `i + 1` showed `01` on the phone and `1` in the
+  Previewer, `n += i` joined text, and `i % 2` had no translation.
+- Arithmetic ApkPy cannot write -- `"n=%s" % n`, `price * 2` on text from an
+  input, `"-" * 20`, `-n` on text -- no longer becomes empty text. It stops the
+  build with U2033 and a form that compiles. `-x` of a number is translated.
+- Assignments that left the app without a word now stop the build with U2033:
+  unpacking, `a = b = 0`, assigning to an item or an attribute, and a
+  comprehension, a condition, a tuple or a set used as a value. `x = -1`,
+  `x = a if test else b` and `x = math.pi` now translate instead.
+- `for` loops that were left out, or ran over nothing, now stop the build with
+  U2033: unpacking, `for ... else`, and looping over text, a dict or a set. A
+  tuple written in the source is looped like a list.
+- `not x` used as a value no longer becomes empty text.
 
 ## [1.7.0] - 2026-09-08
 

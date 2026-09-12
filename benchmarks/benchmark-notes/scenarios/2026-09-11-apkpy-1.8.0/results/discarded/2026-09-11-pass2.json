@@ -1,0 +1,93 @@
+{
+  "date": "2026-09-11",
+  "device": {
+    "ro.product.model": "sdk_gphone16k_x86_64",
+    "ro.build.version.sdk": "35",
+    "ro.product.cpu.abi": "x86_64",
+    "ro.build.fingerprint": "google/sdk_gphone16k_x86_64/emu64xa16k:15/AE3A.240806.041/12890756:user/dev-keys",
+    "page_size": "16384"
+  },
+  "apps": [
+    {
+      "framework": "ApkPy",
+      "package": "com.apkpy.benchmark.apkpy",
+      "activity": "com.apkpy.app.Screen_homeActivity",
+      "apk_bytes": 5635041,
+      "apk_mib": 5.37,
+      "sha256": "BF49AE524C8965EA484E65CFCBAD2B62A4E93D155C08237BA0A4F168E94BCACF",
+      "install": "Success",
+      "functional": {
+        "labels": {
+          "Benchmark Notes": true,
+          "Search notes": true,
+          "FAVORITES ONLY": true,
+          "ADD NOTE": true
+        },
+        "labels_found": 4,
+        "steps": [
+          {
+            "step": "opens with 100 notes",
+            "expected": 100,
+            "seen": 100,
+            "pass": true,
+            "note_001_visible": true
+          },
+          {
+            "step": "favourites filter",
+            "expected": 20,
+            "seen": 20,
+            "pass": true
+          },
+          {
+            "step": "favourites off again",
+            "expected": 100,
+            "seen": 100,
+            "pass": true
+          },
+          {
+            "step": "add a note",
+            "expected": 101,
+            "seen": 101,
+            "pass": true
+          },
+          {
+            "step": "search \"Note 010\"",
+            "expected": 1,
+            "seen": 1,
+            "pass": true
+          }
+        ],
+        "passed": true
+      },
+      "runs": [
+        {
+          "run": 1,
+          "cold_start_ms": 4127,
+          "total_time_ms": 4127,
+          "wait_time_ms": 4156,
+          "launch_state": "COLD",
+          "pss_kb": 69664
+        },
+        {
+          "run": 2,
+          "cold_start_ms": 3054,
+          "total_time_ms": 3054,
+          "wait_time_ms": 3065,
+          "launch_state": "COLD",
+          "pss_kb": 69429
+        },
+        {
+          "run": 3,
+          "cold_start_ms": 2513,
+          "total_time_ms": 2513,
+          "wait_time_ms": 2515,
+          "launch_state": "COLD",
+          "pss_kb": 69480
+        }
+      ],
+      "cold_start_median_ms": 3054,
+      "pss_median_kb": 69480
+    }
+  ],
+  "discarded_because": "Still settling after the reboot; launches drifted from 4.1 s to 2.5 s within the run. This is what led to the warm-up step."
+}
