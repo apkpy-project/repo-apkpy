@@ -48,6 +48,14 @@ description: Build native Android Java, XML and Gradle projects from a supported
   <a href="version-1.7.0/">Read the update</a>
 </div>
 
+<div class="release-line">
+  <strong>New in 1.9.0 · NFC, contacts and your own Java</strong>
+  <span>Read and write NFC tags, choose a contact, search with permission and open native contact editors — and declare your own Java for what ApkPy does not translate yet. Themed desktop simulators and complete app examples.</span>
+  <a href="guides/nfc/">Try the NFC guide</a>
+  <a href="guides/contacts/">Try People Desk</a>
+  <a href="version-1.9.0/">Scope and testing limits</a>
+</div>
+
 <section class="home-errors">
   <div class="home-errors__copy">
     <span class="eyebrow">FRIENDLY DIAGNOSTICS</span>

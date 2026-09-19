@@ -23,6 +23,8 @@ description: Permissions, push, maps, location, notifications and Android integr
 | `biometrics` | the system fingerprint or face prompt, and why a check ended |
 | `bluetooth` | classic serial (SPP): paired devices, lines in and out |
 | `ble` | Bluetooth Low Energy: scan, connect, and the Nordic UART default |
+| `nfc` | Foreground NDEF tags and one-shot writes — new in 1.9.0 |
+| `contacts` | Scoped phone/email selection, read-only queries and native editors — new in 1.9.0 |
 | `billing` | Play in-app purchases and subscriptions, acknowledged for you |
 | `apps` | installed app inspection |
 | `sensors` | shake, compass, steps, light and proximity; three new streams in the 1.7.0 |
@@ -33,6 +35,49 @@ Use [Background jobs](../background-jobs.md),
 [Firebase push](../guides/push-firebase.md),
 [Maps and continuous location](../guides/maps-tracking.md) and
 [Native Android features](../native-features.md).
+
+## NFC — 1.9.0
+
+| Method | Contract |
+| --- | --- |
+| `nfc.status(on_result=None)` | `(True, "ready")` or `(False, reason)` |
+| `nfc.start(on_tag=None, on_error=None)` | Start foreground reading; `on_tag(True, tag_json)`, `on_error(False, reason)` |
+| `nfc.stop()` | Stop reading and silently cancel pending writes |
+| `nfc.write(*, text=None, url=None, on_result=None)` | Exactly one payload; arm one attempt on the next tag; callback `(ok, reason)` |
+| `nfc.cancel_write()` | Cancel an armed write; does not undo a physical write |
+| `nfc.settings()` | Open Android NFC settings; never enable the radio automatically |
+
+Tags are JSON text with `id`, `type`, `text`, `url`, `records`, `writable`,
+`size`, `used` and `tech`. Reasons: `unsupported`, `off`, `not_started`,
+`no_ndef`, `read_only`, `too_small`, `tag_lost`, `unknown`.
+Callbacks return on the UI thread. Pausing disables reading and cancels writes.
+The Previewer offers simulated tags, not real NFC. Read the
+[complete NFC guide](../guides/nfc.md) for runnable code, formatting/read-back
+limits, lifecycle, error recovery and excluded protocols.
+
+## Contacts — 1.9.0
+
+| Method | Successful `(ok, value)` result |
+| --- | --- |
+| `contacts.pick(kind="phone", on_result=None)` | One JSON contact with the selected phone or email; `kind` is `phone` or `email` |
+| `contacts.list(query="", limit=50, offset=0, on_result=None)` | JSON array, display-name substring search; limit 1–100, offset 0–100000 |
+| `contacts.get(id, on_result=None)` | One JSON contact by numeric id or returned lookup URI |
+| `contacts.create(name="", phone="", email="", on_result=None)` | Editor-return JSON, not a confirmed save |
+| `contacts.edit(id, on_result=None)` | Editor-return JSON, not a confirmed save |
+| `contacts.settings(on_result=None)` | `"opened"` when app settings opened |
+
+Contact fields: `id`, `uri`, `name`, `phone`, `email`, `phones`, `emails`.
+Editor fields: `status="editor_returned"`, `result_code="ok"|"cancelled"`,
+`uri`. Callbacks receive a boolean followed by JSON text or a reason string.
+Reasons: `cancelled`, `permission_denied`, `permission_blocked`, `not_found`,
+`unsupported`, `busy`, `invalid`, `unavailable`, `unknown`.
+
+Only list/get add and request `READ_CONTACTS`. The picker grants access to the
+selected detail; create/edit use the system editor without `WRITE_CONTACTS`.
+Queries run off the UI thread; callbacks return on it. Background-job calls
+are rejected. No direct deletion is provided. See the
+[complete guide and People Desk source](../guides/contacts.md) for permission
+recovery, lifecycle, editor-return limitations and fictional Previewer data.
 
 ## Notifications
 

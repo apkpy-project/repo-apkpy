@@ -19,6 +19,88 @@ See [ApkPy compared with Kivy, BeeWare and Flet](docs/apkpy-vs-kivy-flet-beeware
 
 ---
 
+## New in 1.9.0: NFC, contacts and your own Java
+
+**New in ApkPy 1.9.0.** Read tag IDs, NDEF text and
+URLs, or write one text/URL record to a spare rewritable tag. Build equipment
+labels, inventory lookups and physical shortcuts without adding Python or an
+Android dependency to the generated APK.
+
+```python
+# In app callbacks; handlers below each receive (ok, value).
+nfc.start(on_tag=tag_received, on_error=nfc_failed)
+nfc.write(url="https://example.com/item/12", on_result=write_finished)
+nfc.cancel_write()
+```
+
+Import `nfc` from `apkpy_lib`. The compiler declares the normal NFC permission
+and optional hardware only when needed. Reading is foreground-only; writes
+replace existing NDEF records and are armed for the next contact. The themed
+Previewer panel simulates six tag types and failures; it does not use radio.
+
+Start with the [complete NFC guide](docs/guides/nfc.md), run
+[NFC Tags](examples/29_nfc_tags.py), and read the
+[1.9.0 notes and verification limits](docs/version-1.9.0.md).
+No card emulation, payments, raw APDU access or screen-off reading is promised.
+
+**Contacts** adds scoped phone/email selection, paginated display-name search,
+detail loading and the native create/edit forms. Only list/get request
+`READ_CONTACTS`; the picker and editor need no address-book permission.
+
+```python
+from apkpy_lib import Screen, button, contacts, json_get, label, run
+
+home = Screen(id="home")
+status = label("Choose a phone number", screen=home)
+
+def picked(ok, value):
+    if ok:
+        status.set_value(json_get(value, "name") + ": " + json_get(value, "phone"))
+    else:
+        status.set_value("Contacts: " + value)
+
+button("Choose phone", screen=home,
+       command=lambda: contacts.pick(kind="phone", on_result=picked))
+run(start_screen=home)
+```
+
+The complete [People Desk app](examples/30_contacts.py) also demonstrates
+search, get, create, edit and settings. Read the [Contacts guide](docs/guides/contacts.md)
+for all signatures, errors, privacy and lifecycle. **An editor-return callback
+does not prove a save.** No direct deletion, `WRITE_CONTACTS` or bulk writing is
+included. The Previewer contains only fictional contacts.
+
+**Your own Java** covers what ApkPy does not translate yet. `native.java()` and
+`native.java_async()` declare a Java block with the arguments it takes and the
+`preview=` that answers on the desktop. That second half is required: a block
+that only works on the phone is exactly the divergence this project keeps
+removing. `native.gradle()`, `native.manifest()` and `native.keep()` add the
+Gradle dependency, the manifest entry and the R8 keep rule around it.
+
+```python
+battery = native.java(
+    "batteryLevel",
+    imports=["android.os.BatteryManager", "android.content.Context"],
+    code="""
+        BatteryManager bm = (BatteryManager)
+                context.getSystemService(Context.BATTERY_SERVICE);
+        return String.valueOf(bm.getIntProperty(
+                BatteryManager.BATTERY_PROPERTY_CAPACITY));
+    """,
+    preview=lambda: "87",
+)
+
+reading.set_value("Battery: " + battery() + "%")
+```
+
+Read [your own Java](docs/guides/native.md) for the rules, the refusals and the
+limit of the guarantee, and run [the example](examples/31_native_java.py).
+Inside a block, keeping the Java and the `preview=` in step is your promise,
+not ApkPy's.
+
+The [release notes](RELEASE_1.9.0.md) list what was verified for 1.9.0, and
+what was not.
+
 ## New in 1.8.0: a camera of your own, smaller releases, fewer silences
 
 Available in **ApkPy 1.8.0**. `camera.open()`, `capture()`, `record()` and
@@ -2135,7 +2217,7 @@ desc_lbl   = label("---", id="desc", screen=screen)
 def on_weather(success, response):
     if success:
         temp_lbl.set_value(f"{json_get(response, 'main.temp')} °C")
-        desc_lbl.set_value(json_get(response, "weather.0.description").capitalize())
+        desc_lbl.set_value(json_get(response, "weather.0.description"))
     else:
         toast("Failed to connect.")
 

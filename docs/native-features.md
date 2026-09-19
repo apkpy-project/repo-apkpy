@@ -6,6 +6,30 @@ Task guides: [Firebase push](guides/push-firebase.md),
 
 Motion and environment: [sensors, units and Previewer simulation](guides/sensors.md).
 
+## NFC tags — new in 1.9.0
+
+`nfc` reads NDEF text and links, reports tag IDs and technology, and arms
+one-shot text/URI writes for the next contact. It uses foreground reader mode
+with lifecycle cleanup. No additional Android dependency or Python runtime is
+added to the output; apps without NFC calls receive no NFC code or permission.
+
+The Previewer has an in-frame, explicitly labelled NFC simulator for writable,
+read-only, small, empty and non-NDEF tags. A simulated success is not proof of
+physical radio or tag compatibility. See the [NFC guide](guides/nfc.md) for
+complete code, error reasons, safety and unsupported features.
+
+## Contacts — new in 1.9.0
+
+`contacts.pick()` selects one phone/email without reading the whole address
+book. `list()` and `get()` request read access when called, then query on a
+background executor. `create()` and `edit()` open the system contact editor;
+`settings()` opens this app's settings. All callbacks take `(ok, value)`.
+
+There is no direct delete or `WRITE_CONTACTS`. The editor decides save/cancel;
+its return callback does not prove a write. The desktop simulator uses only
+fictional contacts. See [complete code, permissions and privacy](guides/contacts.md).
+No contacts helper is emitted for apps that do not use the API.
+
 ## Permissions
 
 Declare permissions before running the app:
@@ -980,6 +1004,37 @@ and the text is identical.
 The battery row is real in both places: moving its slider moves the battery
 icon in the Previewer's status strip too, so an app cannot show 14% beside an
 icon reading 80%.
+
+## Your own Java
+
+When what you need is not in the translated subset, you do not have to wait for
+a release, and you do not have to edit the generated project -- `apkpy build`
+rewrites that. `native` declares the gap instead:
+
+```python
+battery = native.java(
+    "batteryLevel",
+    imports=["android.os.BatteryManager", "android.content.Context"],
+    code="""
+        BatteryManager bm = (BatteryManager)
+                context.getSystemService(Context.BATTERY_SERVICE);
+        return String.valueOf(bm.getIntProperty(
+                BatteryManager.BATTERY_PROPERTY_CAPACITY));
+    """,
+    preview=lambda: "87",
+)
+
+reading.set_value("Battery: " + battery() + "%")
+```
+
+`native.java_async()` covers the APIs that answer later, and
+`native.gradle()`, `native.manifest()` and `native.keep()` add the dependency,
+the manifest entry and the R8 rule that usually come with them.
+
+`preview=` is required: the Previewer cannot run Java, and a block without a
+desktop answer would work on the phone and do nothing on your desk. Inside a
+block, keeping the two halves in step is your promise, not ApkPy's -- that is
+the trade, and the [guide](guides/native.md) says so plainly.
 
 ## Forcing an update
 

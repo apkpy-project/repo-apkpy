@@ -26,6 +26,26 @@ Java.
 No. It is a fast desktop renderer for layout and callbacks. Android permissions,
 services, codecs, FCM, GPS and OEM behavior require an emulator or device.
 
+## Can I read or write NFC tags?
+
+Since **1.9.0**, ApkPy can read tag IDs, NDEF text and URLs and write a single
+text/URL record to a compatible spare tag. See the
+[complete NFC guide and app](guides/nfc.md).
+
+No runtime NFC permission popup is needed: the compiler declares the normal
+permission and optional hardware. The person still has to enable NFC. Reading
+is foreground-only, the desktop panel is a simulator, and writes replace the
+tag's existing records. This is not card emulation or support for bank cards.
+
+## Can I choose or edit a contact?
+
+Since **1.9.0**, `contacts.pick()` selects one phone
+or email without broad address-book permission. `list()`/`get()` ask for read
+access. `create()`/`edit()` open the native editor without `WRITE_CONTACTS`;
+their callback reports editor return, not confirmed saving. There is no direct
+delete API. The Previewer uses fictional data. See the
+[complete guide and People Desk app](guides/contacts.md).
+
 ## Can ApkPy build a complete social or delivery app?
 
 It can generate much of the native client. Accounts, moderation, payments,

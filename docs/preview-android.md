@@ -49,6 +49,8 @@ loop; the generated project uses Android widgets and services.
 | Push | `push.simulate()` | Firebase Cloud Messaging |
 | Extended notifications — 1.7.0 release | themed in-device drawer, fixed header, scrollable cards and real Python action callbacks | native system shade, channels, permissions and PendingIntents |
 | Location | explicit `preview_route` | fused device location |
+| NFC — 1.9.0 | themed in-frame simulator, six tag profiles, writes and failures; no radio | foreground reader mode, actual NDEF tags, optional hardware and lifecycle cleanup |
+| Contacts — 1.9.0 | fictional, process-local address book; picker/editor and permission simulation | scoped system picker, permission-gated provider reads and user-mediated native editors |
 | Sensors | explicit buttons, sliders and near/far simulation | `SensorManager` with hardware availability and Activity lifecycle |
 | Battery | desktop status/simulator snapshots | Android battery and power-saving state |
 | Static wallpaper — 1.7.0 release | image confirmation; `simulated`, never changes the desktop | image confirmation, then `WallpaperManager` applies to home/lock/both |
@@ -67,6 +69,23 @@ For the notification drawer's controls, light/dark captures, action callbacks
 and testing checklist, see [Notifications](guides/notifications.md). The new
 desktop design does not change Android's system UI. Preview cards do not prove
 phone permission, sound, vibration, lock-screen behavior or remote FCM delivery.
+
+## NFC simulation boundary
+
+For [NFC](guides/nfc.md), a simulated successful write only proves the callback
+and state flow. Physical read/write tests still depend on the phone, antenna
+and tag. The device checks and limited follow-up user report are listed in the
+[1.9.0 notes](version-1.9.0.md#verification).
+
+## Contacts simulation boundary
+
+The [Contacts simulator](guides/contacts.md#previewer) never accesses desktop
+contacts. Saving a fictional entry proves the application flow, not Android
+account synchronization or an OEM editor's return behavior. On Android,
+`create`/`edit` success means **editor returned**, not **contact saved**.
+Verify by choosing the contact again or reloading with permission. Real
+save/edit and recreation checks remain listed in the
+[1.9.0 evidence](version-1.9.0.md#contacts).
 
 ## Leaving a screen
 

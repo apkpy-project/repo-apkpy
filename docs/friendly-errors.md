@@ -138,6 +138,7 @@ quoted in an issue.
 | `U2031` | A theme token used in a slot of the wrong kind (a colour where a size belongs, or the reverse) |
 | `U2032` | `crypto.encrypt(..., password=...)` in the Previewer without the `cryptography` package |
 | `U2033` | Python ApkPy has no translation for, which used to compile to nothing at all |
+| `U2035` | A `native` block the build cannot read: no `preview=`, a value computed at run time, or a call that does not match the declaration |
 
 #### U2033 in a bit more detail
 

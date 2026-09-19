@@ -9,6 +9,17 @@ This page is the fastest route from an API name to working code. It documents
 the supported public surface exported by `apkpy_lib`; generated Java helper
 classes are implementation details.
 
+For the **1.9.0 NFC API**, use the
+[exact device signatures](device.md#nfc-190) and
+[complete NFC examples](../guides/nfc.md). It is not available in published
+1.8.0; callbacks take `(ok, value)`, and writes replace existing tag content.
+
+The same **1.9.0** adds [Contacts](../guides/contacts.md): choose a
+phone/email without broad access, list/get with read permission, or open a
+native create/edit form. [Exact signatures](device.md#contacts-190)
+and [People Desk source](../downloads/contacts/people-desk.py) include callback
+contracts and errors. Editor return does not confirm a saved contact.
+
 ## Conventions
 
 ```python

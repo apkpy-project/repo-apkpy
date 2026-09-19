@@ -4,7 +4,38 @@ Canonical site: https://repo-apkpy.pages.dev/
 Project: ApkPy
 Purpose: Generate native Android Java, XML and Gradle projects from a supported declarative Python API.
 Runtime: Generated APKs do not embed Python.
-Current version: 1.3.2 (background jobs, any-file picker, upload_button, 64 diagnostic codes).
+Stable release documented in this checkout: 1.9.0. Check the package index for the installed/latest published version.
+Released in 1.9.0: NFC, contacts and the native (own Java) seam. They are not in 1.8.0 or earlier; pip install --upgrade apkpy to use them.
+
+NFC documentation (1.9.0):
+- https://repo-apkpy.pages.dev/version-1.9.0/
+- https://repo-apkpy.pages.dev/guides/nfc/
+- https://repo-apkpy.pages.dev/downloads/nfc/nfc-tags.py
+- nfc.status/start/stop/write/cancel_write/settings; callbacks (ok, value).
+- Foreground NDEF text/URI reading and one-record writes. Writes replace previous records.
+- Normal NFC manifest permission; optional hardware; no runtime grant dialog.
+- Previewer tags are simulated, not radio. No HCE, raw APDU, payment-card support, cold-start tag launch or screen-off reading.
+- Direct phone checks verified settings, off/on recovery and reader controls. A later user report said the feature worked but did not identify a tag or tested operations; do not infer full physical read/write certification.
+
+Contacts documentation (1.9.0):
+- https://repo-apkpy.pages.dev/guides/contacts/
+- https://repo-apkpy.pages.dev/downloads/contacts/people-desk.py
+- contacts.pick/list/get/create/edit/settings; callbacks (ok, value).
+- pick selects one phone/email without broad address-book permission; list/get request READ_CONTACTS and query off the UI thread.
+- create/edit open native editors, not direct writes. Their successful callback means editor returned, NOT contact saved. No WRITE_CONTACTS or direct delete API.
+- Seven contact fields: id, uri, name, phone, email, phones, emails. list returns a JSON array; get/pick return a JSON object string.
+- Previewer contacts are fictional, process-local, not desktop contacts. Native editor save/edit, provider behavior and rotation still require end-to-end device tests.
+- The documented phone check only opened/cancelled the picker. Do not claim real contact creation or full address-book testing.
+
+Your own Java (native) documentation (1.9.0):
+- https://repo-apkpy.pages.dev/guides/native/
+- native.java/java_async/gradle/manifest/keep. A block answers one String; an async block answers (ok, value) through done, from any thread, and ApkPy moves it to the UI thread.
+- preview= is required. The Previewer cannot run Java, and a block without a desktop answer would work on the phone and do nothing on the desktop.
+- A block becomes a private method of the screen Activity. It receives the String arguments it declared and a context, never the generated fields. A block called from a background job stops the build.
+- Declarations are read from the source, never executed: an f-string or any value computed at run time is refused.
+- Refusals are U2035: no preview, code computed at run time, java without return, java_async that never calls done, wrong argument count, on_result that is not a def, gradle line that is not a dependency, manifest xml that rewrites <application>.
+- ApkPy cannot check that a block's Java and its preview= agree. Inside a block that promise belongs to the app author, not to ApkPy.
+- Verified by 29 focused tests and a Gradle build of an app with two blocks (battery level, vibrator): BUILD SUCCESSFUL. No block was run on a physical device.
 
 Core documentation:
 - https://repo-apkpy.pages.dev/getting-started/

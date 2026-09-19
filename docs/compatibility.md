@@ -197,6 +197,14 @@ does compile:
 - `json.dumps`, `base64`, `uuid`, `datetime` (use the `datetime` API), `print`,
   and more than one `except` clause on a `try`.
 
+**When what you need is not here**
+
+The list above is what ApkPy translates, not what Android can do. For the
+rest there is [your own Java](guides/native.md): a named block with the
+Java that runs on the phone and the answer the Previewer gives instead,
+plus the Gradle dependency, manifest line and R8 rule it needs. Inside
+that block the agreement between the two runtimes is yours to keep.
+
 **Differences that do not stop the build**
 
 Everything on the phone is text, and ApkPy decides from the source rather than
@@ -281,6 +289,37 @@ behavior while the application retains control over product rules and data
 ownership.
 
 ## Previewer versus device
+
+### NFC — new in 1.9.0
+
+The [NFC API](guides/nfc.md) supports foreground tag IDs/metadata, NDEF text and
+URI reading, and a one-record text/URI write to compatible tags. Callbacks are
+`(ok, value)`; tag results are JSON strings read with `json_get()`. Its manifest
+permission is normal, not an Android runtime request. No NFC helper or
+permission is emitted when the app does not call the API.
+
+There is no HCE/card emulation, raw ISO-DEP/APDU, bank-card protocol, MIFARE
+Classic authentication, Beam, cold-start tag launch or screen-off reading.
+Writes replace existing records and are not transactional. A freshly formatted
+tag must be removed and re-presented for independent read-back and capacity.
+The desktop panel is simulation, not physical NFC validation. See the
+[development status](version-1.9.0.md); this API is not in published 1.8.0.
+
+### Contacts — new in 1.9.0
+
+The [Contacts API](guides/contacts.md) supports one phone/email selection,
+display-name search with `limit`/`offset`, detail reads and native create/edit
+forms. Only list/get request `READ_CONTACTS`; no direct deletion or
+`WRITE_CONTACTS` is included. Editor return does not prove a save. The compiler
+omits the helper when unused; no new Android dependency is required.
+
+Search uses literal substrings and ASCII case-insensitive ordering. Paging
+skips a provider cursor, and changes between requests may shift offsets.
+No photos, groups, bulk writes, observers or vCard support is included.
+The fictional desktop simulator cannot validate Android grants, account sync
+or OEM editors. See [verification limits](version-1.9.0.md#contacts).
+
+### Device-only checks
 
 Use the Previewer for layout, callbacks, data flow and rapid iteration. Use an
 Android emulator or physical device before release for:

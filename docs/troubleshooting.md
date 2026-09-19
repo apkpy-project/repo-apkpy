@@ -17,6 +17,42 @@ Start with the first failing layer instead of changing several things at once:
 | App closes on Android | the first `FATAL EXCEPTION` in Logcat |
 | Platform feature does nothing | permission, configuration file and device capability |
 
+## NFC (1.9.0)
+
+| Symptom | Check / recovery |
+| --- | --- |
+| Cannot import `nfc` | It needs ApkPy 1.9.0 or newer. Check which Python installation runs the app. |
+| `unsupported` | The Android phone has no NFC adapter, or `start()` ran without a Previewer window. |
+| `off` | Open `nfc.settings()` and let the person enable NFC, then return to the app. There is no NFC runtime grant dialog. |
+| Write button appears to do nothing | `write()` arms the **next contact**; start the reader first, then remove and re-present a spare tag. |
+| `read_only`, `too_small` or `no_ndef` | Use a compatible writable tag with enough encoded-byte capacity. Arm a new attempt after a failure. |
+| `tag_lost` | Hold the tag still near the antenna, then explicitly retry. |
+| No independent read-back after formatting | Remove/re-present the tag so Android can discover its new NDEF technology list. |
+| Nothing happens with the app closed | Cold-start tag launch and screen-off reading are outside this version. |
+
+See the [full reason table and write safety rules](guides/nfc.md#reasons-and-recovery).
+Never use bank, travel or access cards as write-test tags.
+
+## Contacts (1.9.0)
+
+| Symptom | Check / recovery |
+| --- | --- |
+| Cannot import `contacts` | It needs ApkPy 1.9.0 or newer; check the Python environment. |
+| Picker returned no email after choosing a phone | Intentional: only the selected detail is read. Use `kind="email"`, or `get` with read permission for more details. |
+| `permission_denied` | Offer the scoped picker; ask for full read access only when the person needs directory browsing. |
+| `permission_blocked` | Explain the need and offer `contacts.settings()`; do not repeatedly request permission. |
+| Callback says success but nothing was saved | Create/edit success means editor returned. Inspect `result_code`, then pick/reload to verify; OEM editors differ. |
+| `cancelled` | The picker was closed without selection; keep the previous selection unchanged. |
+| `not_found` | The contact may have been merged or removed; choose it again. |
+| `busy` | Wait for the active picker/editor/read before starting another operation. |
+| `unsupported` | A compatible Contacts picker/editor may be absent or disabled. |
+| Search does not match a phone or email | Search covers display names only; `%` and `_` are literal, not wildcards. |
+| `U2033` during build | Check the six supported methods, argument bounds, two-argument callback and foreground-only use. |
+| Previewer contact disappeared after restart | Fictional data is process-local, not a desktop/system address book. |
+
+Use the [complete reason/lifecycle table](guides/contacts.md#failures-and-lifecycle)
+and [runnable People Desk app](downloads/contacts/people-desk.py).
+
 ## Start with the doctor
 
 ~~~ powershell

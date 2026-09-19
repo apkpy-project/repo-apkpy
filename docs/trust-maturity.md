@@ -38,6 +38,33 @@ debug app on one emulator. It publishes the competing app programs, line-count
 rule, raw starts, memory samples and hashes instead of presenting a marketing
 number without context.
 
+## NFC verification — 1.9.0
+
+The NFC development run passed 26 focused tests, including 95 comparisons
+between Python and the actual generated Java decoder; the complete feature
+suite passed 1066 tests, alongside 258 transpiler and 35 general tests. The
+documented app compiled with Gradle and its APK contained no Python runtime.
+
+Direct phone checks covered NFC settings, off/on recovery, reader stop/start
+and rejecting a write when reading had not started. The Previewer panel was
+checked in light/dark themes. No physical tag was available in that run.
+The maintainer confirmed a successful NFC test on 13 September 2026, without a tag model or
+per-operation results; that report is separate from instrumented verification.
+See [the scope and remaining device checks](version-1.9.0.md#verification).
+
+## Contacts verification — 1.9.0
+
+The integration passed 19 focused checks and the full 1085-test feature suite,
+plus 258 transpiler and 35 general tests. People Desk compiled with Gradle;
+its APK was scanned for Python runtime/source. Direct phone checks covered
+opening and cancelling the phone picker, not saving/editing contacts, listing
+the real address book or rotation. A final visual check of the latest simulator
+layout is still pending. See [remaining checks](version-1.9.0.md#contacts).
+
+The guides distinguish scoped selection, permission-based reads and editor
+return from actual save confirmation. Test counts and simulator results are
+not proof of every provider or manufacturer's behavior.
+
 ## Supported environment
 
 | Tool | Supported |
@@ -57,6 +84,10 @@ ApkPy detects features before generation. A small app does not receive every
 runtime:
 
 - WebSocket helpers appear only when `websocket` is used;
+- NFC helper, normal permission and optional hardware feature appear only
+  with NFC calls (1.9.0);
+- contacts helper appears only when used; only list/get add `READ_CONTACTS`,
+  and no contacts operation adds `WRITE_CONTACTS` (1.9.0);
 - Firebase dependencies appear only with push code and configuration;
 - `SwipeRefreshLayout` appears only for refreshable virtual collections;
 - Media3 and the foreground media service appear only for media features;

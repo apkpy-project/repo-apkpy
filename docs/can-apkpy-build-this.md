@@ -85,6 +85,29 @@ servers, security design, product rules, testing and operations.
 | Network | HTTPS, uploads, WebSockets, reconnect and callbacks | API, authentication authority, rate limits and observability |
 | Delivery | Java/XML/Gradle generation and Android Studio project | signing, store policy, rollout and production monitoring |
 
+## NFC labels and physical shortcuts (1.9.0)
+
+The [NFC API](guides/nfc.md) lets a running app read an equipment
+reference, a museum label or a product link, then look up its own content.
+A tag-writing utility can replace a spare tag's NDEF records with one text or
+URL record. The app still owns inventory, authorization and backend logic.
+
+This does not provide payment-card support, card emulation, secure identity
+from a tag ID, screen-off scanning or launching a closed app. Desktop tags are
+simulated. See [development status and evidence](version-1.9.0.md).
+
+## Contact-aware apps (1.9.0)
+
+An appointment app can choose a customer phone number; a CRM client can search
+the directory with permission; an event app can select an email recipient;
+a customer form can hand off to the native contact editor. The
+[Contacts guide](guides/contacts.md) includes the complete People Desk app.
+
+This provides contact selection and user-mediated editing, not messaging,
+cloud CRM synchronization, bulk address-book changes or a default dialer.
+No direct deletion is included, and closing the editor does not confirm a
+save. Prefer the scoped picker whenever only one detail is needed.
+
 ## Pick a complete path
 
 <div class="guide-path-grid">

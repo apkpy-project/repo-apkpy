@@ -49,6 +49,18 @@ apkpy build
 | `26_biometric_lock.py` | A vault behind the fingerprint, and what to say for each of the seven reasons a check can fail |
 | `27_bluetooth_serial.py` | Both radios behind one screen: paired devices or a scan, then lines of text each way |
 | `28_in_app_purchases.py` | A shop: a one-time unlock, a consumable, a subscription, and restoring what was already paid for |
+| [`29_nfc_tags.py`](29_nfc_tags.py) | **1.9.0 unreleased:** NFC status, foreground reading, one-shot text/URL writes, cancellation, settings and error recovery; simulated tags on desktop |
+| [`30_contacts.py`](30_contacts.py) | **1.9.0 unreleased:** People Desk — pick phone/email, search and get with read permission, native create/edit forms, settings and fictional desktop contacts |
+
+**NFC version requirement:** example 29 needs the development library. The
+current published 1.8.0 package does not contain `nfc`. Use your own spare,
+rewritable tag for writes; its previous contents will be replaced. No physical
+tag is needed for the Previewer simulator. See the [NFC guide](../docs/guides/nfc.md).
+
+**Contacts version requirement:** example 30 also needs the 1.9.0 development
+library. Use fictional data for testing. Picking one detail needs no broad
+permission; Search/Get ask for read access. Create/Edit open the native editor
+and do not guarantee a save. See the [Contacts guide](../docs/guides/contacts.md).
 
 ## Practical note
 

@@ -26,6 +26,9 @@ Previewer validation and Android generation, follow the
   <a href="sensors/"><span>10</span><strong>Sensors and battery</strong><p>Eight sensor APIs, callback contracts, complete apps and the 1.7.0 additions.</p></a>
   <a href="wallpaper/"><span>11</span><strong>Static wallpapers</strong><p>Choose an image, preview it, confirm the target and handle cancellation.</p></a>
   <a href="notifications/"><span>12</span><strong>Persistent notifications</strong><p>Channels, actions, expanded cards, progress and the in-device Previewer drawer. New in 1.7.0.</p></a>
+  <a href="nfc/"><span>13</span><strong>NFC tags</strong><p>Read text and links, write a spare tag, handle failures and simulate tags inside the Previewer. New in 1.9.0.</p></a>
+  <a href="contacts/"><span>14</span><strong>Contacts</strong><p>Choose one detail, search with permission and use native editors. Complete People Desk app and fictional desktop data. New in 1.9.0.</p></a>
+  <a href="native/"><span>15</span><strong>Your own Java</strong><p>Declare a Java block with the answer the Previewer gives instead, plus the Gradle dependency, manifest entry and R8 rule around it. New in 1.9.0.</p></a>
 </div>
 
 ## How to use a guide

@@ -94,6 +94,7 @@ nav:
       - Streaming uploads: guides/uploads.md
       - Maps and tracking: guides/maps-tracking.md
       - Knowledge app: guides/knowledge-app.md
+      - Your own Java: guides/native.md
   - Build interfaces:
       - Components and layouts: ui-components.md
       - Production feeds: production-feeds.md
@@ -108,6 +109,8 @@ nav:
       - Camera: guides/camera.md
       - Sensors and battery: guides/sensors.md
       - Static wallpapers: guides/wallpaper.md
+      - NFC tags (unreleased): guides/nfc.md
+      - Contacts (unreleased): guides/contacts.md
       - Background jobs and offline queue: background-jobs.md
   - Ship:
       - Build and release: build-release.md
@@ -132,6 +135,7 @@ nav:
       - Previewer versus Android: preview-android.md
       - FAQ: faq.md
       - Version index: versions.md
+      - Version 1.9.0 (unreleased): version-1.9.0.md
       - Version 1.8.0: version-1.8.0.md
       - Version 1.7.0: version-1.7.0.md
       - Version 1.6.1: version-1.6.1.md

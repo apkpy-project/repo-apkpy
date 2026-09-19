@@ -200,6 +200,9 @@ gapless transitions.
 | Object/API | Purpose |
 | --- | --- |
 | <code>permissions</code> | Runtime Android permission requests |
+| <code>native</code> | Your own Java as a named block with a required `preview=` answer, plus Gradle dependency, manifest entry and R8 keep rule; [1.9.0](guides/native.md) |
+| <code>nfc</code> | Foreground tag status/reading, one-shot text/URI writes, cancellation and settings; [1.9.0](guides/nfc.md) |
+| <code>contacts</code> | Scoped phone/email picker, permission-based list/get, native create/edit forms and settings; [1.9.0](guides/contacts.md) |
 | <code>notify</code> | System notifications |
 | <code>notifications</code> | Channels, permission checks/requests and cancellation; extended notification API — 1.7.0 |
 | <code>share</code> | Native share sheet |
@@ -219,6 +222,11 @@ gapless transitions.
 | <code>apps</code> | Installed-app listing, permissions, extraction and hashing |
 
 For behavior and security notes, use the topic guides rather than relying on this compact index alone.
+
+See [NFC tags](guides/nfc.md) for all six methods, two-argument callbacks,
+the JSON tag shape, normal manifest permission, lifecycle and write safety.
+The [complete app source](downloads/nfc/nfc-tags.py) requires the development
+library; installing the current published version does not add this API.
 
 See [Notifications](guides/notifications.md) for the full `notify()` signature,
 copyable examples, zero-argument action callbacks, progress, pictures, the

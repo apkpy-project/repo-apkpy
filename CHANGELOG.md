@@ -6,6 +6,52 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.9.0] - 2026-09-19
+
+Read the [complete 1.9.0 notes](docs/version-1.9.0.md).
+
+### Added
+
+- `contacts.pick`, `list`, `get`, `create`, `edit` and `settings`, with
+  two-argument UI-thread callbacks and explicit reason strings.
+- Scoped phone/email selection without broad contact access; paginated
+  display-name search and detail reads with runtime `READ_CONTACTS` permission.
+- User-mediated native create/edit forms. No `WRITE_CONTACTS` or direct delete
+  API; editor return is not save confirmation.
+- Fictional, theme-aware Contacts Previewer with picker, editor and permission
+  simulation. No desktop address book is read or written.
+- [Contacts guide](docs/guides/contacts.md) and complete
+  [People Desk app](examples/30_contacts.py), plus reference, permission,
+  troubleshooting, compatibility and 1.9.0 documentation.
+
+- `native.java()` and `native.java_async()`: declare a Java block with the
+  arguments it takes, the `imports=` it needs and a `preview=` that answers
+  on the desktop, then call it like any function. An async block answers
+  `(ok, value)` through `done` from any thread; ApkPy moves it to the UI
+  thread. `native.gradle()`, `native.manifest()` and `native.keep()` add the
+  dependency, manifest entry and R8 rule around it.
+- Blocks that would be silent are refused with `U2035`: no `preview=`, code
+  computed at run time, a `java` block with no `return`, a `java_async`
+  block that never calls `done`, a call with the wrong arguments, or a
+  block called from a background job.
+- [Your own Java guide](docs/guides/native.md) and
+  [example](examples/31_native_java.py).
+
+- `nfc.status`, `start`, `stop`, `write(text=... / url=...)`, `cancel_write`
+  and `settings`: foreground NDEF reading and one-shot writes, shared error
+  vocabulary and UI-thread callbacks.
+- Theme-aware in-frame NFC simulator with six tag types, write failures,
+  cancellation and tag-loss simulation. No desktop radio is implied.
+- Optional manifest permission/feature, lifecycle cleanup and stale-callback
+  rejection. Apps that do not use NFC receive no NFC runtime.
+- [NFC guide](docs/guides/nfc.md), API reference and
+  `examples/29_nfc_tags.py`, including the formatable-tag read-back limitation.
+- NFC documentation across README/package-description draft, home page, guide
+  hub, API overview, compatibility, Previewer comparison, troubleshooting,
+  example index and [1.9.0 notes](docs/version-1.9.0.md).
+
+This work is not published. Package version and release metadata are unchanged.
+
 ## [1.8.0] - 2026-09-12
 
 Read the [complete 1.8.0 notes](docs/version-1.8.0.md).
