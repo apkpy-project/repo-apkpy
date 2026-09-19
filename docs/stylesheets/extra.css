@@ -284,6 +284,32 @@
   margin-inline: auto;
 }
 
+/* The download buttons inherit --md-primary-fg-color, which is near-black in
+   the dark scheme: the outlined one vanished and the filled one read as plain
+   bold text on the panel. */
+.showcase-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1.2rem;
+}
+
+.md-typeset .showcase-actions .md-button {
+  margin: 0;
+  border-radius: 0.4rem;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .showcase-actions .md-button {
+  border-color: rgba(255, 255, 255, 0.32);
+  color: #fff;
+}
+
+[data-md-color-scheme="slate"] .md-typeset .showcase-actions .md-button--primary {
+  background-color: var(--apkpy-violet);
+  border-color: var(--apkpy-violet);
+  color: #fff;
+}
+
 .md-typeset .grid.cards > ul > li {
   border-radius: 0.8rem;
 }
