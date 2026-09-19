@@ -7,6 +7,7 @@ description: ApkPy stable version, release candidates and version history.
 
 | Version | Status | Main addition |
 | --- | --- | --- |
+| [1.10.0](version-1.10.0.md) | **released 2026-09-19** | an app can be split across several Python files; a parameter every call fills with a number stays a number, so arithmetic works inside a helper; a page naming every Android capability it reaches and every one it does not; and `margin` with more than one value no longer blanks the screen |
 | [1.9.0](version-1.9.0.md) | **released 2026-09-19** | NFC reading/writing; scoped contacts picker, paginated reads and native editors; a `native` seam for your own Java with the Gradle dependency, manifest entry and R8 rule around it; themed simulators, complete apps and explicit testing limits |
 | [1.8.0](version-1.8.0.md) | **released 2026-09-12** | an in-app camera with photo, video and manual controls, an embedded viewfinder, signed releases about a third of their previous size, and Python that did nothing on the phone -- `split()`, arithmetic on a `range()` index, dropped assignments and loops -- now works or stops the build saying why |
 | [1.7.0](version-1.7.0.md) | **released 2026-09-08** | motion/pressure sensors, confirmed wallpapers, extended notifications and redesigned Previewer drawer; complete examples and verification limits |
@@ -35,6 +36,8 @@ and limitations remain explicit.
 
 Use the page matching your installed package:
 
+- [Version 1.10.0](version-1.10.0.md)
+- [Version 1.9.0](version-1.9.0.md)
 - [Version 1.7.0](version-1.7.0.md)
 - [Version 1.6.1](version-1.6.1.md)
 - [Version 1.6.0](version-1.6.0.md)

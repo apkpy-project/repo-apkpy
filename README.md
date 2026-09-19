@@ -19,6 +19,38 @@ See [ApkPy compared with Kivy, BeeWare and Flet](docs/apkpy-vs-kivy-flet-beeware
 
 ---
 
+## New in 1.10.0: several files, and numbers that stay numbers
+
+Until now an app had to live in one `writehere.py`, because ApkPy does not
+translate Python classes — every screen, callback and helper in the same file.
+Now it can `import` plain Python modules beside it:
+
+```python
+import money
+
+total.set_value(money.euros(1999))     # EUR 19.99
+```
+
+The helper is merged before anything is translated, so `money.euros` becomes an
+ordinary method of the generated Activity. The Previewer needed no code: beside
+the script, this is the import Python already does. Only the whole-module form
+is accepted — `from money import euros` stops the build with the new `U2036`,
+because merging the file would otherwise give your app names the Previewer's
+own Python would not have.
+
+A function parameter that every call site fills with a number now counts as one
+inside the body, so `cents / 100` is arithmetic instead of a refusal. That
+includes one helper feeding another, `euros(with_vat(cents))`. Anything ApkPy
+cannot prove is a number stays text.
+
+Also: [what ApkPy reaches and what it does not](docs/coverage.md) — 42 of the
+60 capabilities an app uses, named, with the rest named too. And `margin` with
+more than one value no longer means a margin of two million pixels.
+
+Read the [1.10.0 notes](docs/version-1.10.0.md),
+[More than one file](docs/guides/modules.md), and run
+[the example](examples/modules/).
+
 ## New in 1.9.0: NFC, contacts and your own Java
 
 **New in ApkPy 1.9.0.** Read tag IDs, NDEF text and

@@ -93,6 +93,13 @@ Python rather than running it, so this list is the whole of it. Anything
 outside it stops the build with [`U2033`](friendly-errors.md), naming what it
 found -- it used to compile to nothing at all and leave you with a blank value.
 
+**Files**
+
+One `writehere.py`, plus any plain Python modules beside it that it
+imports with `import helpers`. A helper holds functions and constants;
+screens, themes and CSS stay in the application. See
+[More than one file](guides/modules.md). New in 1.10.0.
+
 **Control flow**
 
 `if` / `elif` / `else`, `while`, `break`, `continue`, `return`,

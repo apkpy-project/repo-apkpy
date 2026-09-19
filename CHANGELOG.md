@@ -6,6 +6,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.10.0] - 2026-09-19
+
+### Added
+
+- **More than one file.** `writehere.py` can `import` plain Python modules
+  beside it and share their functions and constants across screens. The helper
+  is merged before anything is translated, so its functions become ordinary
+  methods of the generated Activity and the Previewer needs nothing special.
+  Only the whole-module form is accepted; `from helpers import x` and a name
+  defined in two files stop the build with the new `U2036`.
+- **Numbers that stay numbers.** A function parameter every call site fills
+  with a number now counts as one inside the body, so `cents / 100` is
+  arithmetic instead of a refusal. Numbers written at module level are emitted
+  as fields, and a function whose every `return` is a number lets one helper
+  feed another. Anything ApkPy cannot prove is a number stays text.
+- **What it reaches.** A page naming every Android capability ApkPy covers
+  and every one it is missing, with the numbers measured against
+  `android.jar` rather than estimated.
+
+### Fixed
+
+- **`margin` with more than one value.** Both renderers stripped the
+  non-digits out of the whole string and read the rest as one number, so
+  `margin: 24px 16px 0px 16px` became a margin of 2,416,016: the Previewer
+  screen went blank and the phone layout was pushed off it, with nothing
+  said on either side. The CSS shorthand is now read once, in the module
+  both renderers share.
+
+---
+
 ## [1.9.0] - 2026-09-19
 
 Read the [complete 1.9.0 notes](docs/version-1.9.0.md).
