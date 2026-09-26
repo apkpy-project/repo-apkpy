@@ -210,7 +210,6 @@
   display: block;
   width: 100%;
   height: auto;
-  margin-top: -7.1%;
 }
 
 .showcase-copy h3 {
@@ -2310,5 +2309,34 @@ body:has(.release12-hero) .md-grid {
   .release12-explorer__tabs button,
   .release12-explorer__tabs button::after {
     transition: none !important;
+  }
+}
+
+/* Apps you know, rebuilt: a strip of phone screens with a line under each. */
+.replica-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+  gap: 1rem;
+  margin: 1.2rem 0 1.4rem;
+}
+
+.replica-strip figure {
+  margin: 0;
+}
+
+.replica-strip figcaption {
+  margin-top: 0.45rem;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
+@media screen and (max-width: 44.9375em) {
+  /* Two phones side by side: seven full-height screens in one column is a
+     very long scroll on a phone. */
+  .replica-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
   }
 }

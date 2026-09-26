@@ -86,6 +86,49 @@ title.set_value(details.get_param("title", "Unknown track"))
 
 Values are passed as Android Intent extras and as screen parameters in the Previewer.
 
+## Change another screen
+
+On a phone every `Screen` is its own Android Activity. A function running on
+one screen can still set a label, show or hide a component, or fill a list
+that belongs to another: the screen that owns it applies the change when it
+comes to the front, or at once if it already is.
+
+~~~ python
+home = Screen(id="home")
+stats = Screen(id="stats")
+
+total = label("", id="total", screen=stats)
+done_list = list_view([], id="done_list", screen=stats)
+
+
+def refresh():
+    counted = db.query("SELECT COUNT(*) AS n FROM habits")
+    total.set_value(f"Habits: {counted[0]['n']}")        # a label on Stats
+    finished = db.query("SELECT name FROM habits WHERE done_on = ?",
+                        [datetime.date()])
+    done_list.set_items(finished, title="name")          # a list on Stats
+
+
+def mark_done(item):                                     # runs on Home
+    db.execute("UPDATE habits SET done_on = ? WHERE id = ?",
+               [datetime.date(), item["id"]])
+    refresh()
+
+
+habits = list_view([], id="habits", on_click=mark_done, screen=home)
+~~~
+
+`set_value()`, `show()`, `hide()` and `set_items()` reach another screen; if
+several arrive before it comes back, the last one wins, as in the Previewer.
+Reading another screen's component with `get_value()` does not, and neither do
+the other list operations (`append_items()`, `merge_items()`,
+`update_item()`): keep a value you need to read in `state()` or the database,
+and change such a list from code on its own screen, for example with
+`lifecycle(stats, on_resume=refresh)`.
+
+Before 1.11.0 these calls did nothing on a phone, while the Previewer, where
+every screen lives in one window, showed them working.
+
 ## Bottom navigation
 
 ~~~ python
@@ -167,3 +210,16 @@ mini_player(open=player_screen)
 ~~~
 
 The mini-player appears above bottom navigation, follows the current background track and opens the specified player screen.
+
+It takes the theme's surface and text colours unless it has its own. Give it an
+`id` -- or style `mini_player` -- when a dark player lives in a light app:
+
+~~~ python
+mini_player(open=player_screen, id="mini")
+~~~
+
+~~~ css
+mini { background-color: #3B1F2B; color: #FFFFFF; subtitle-color: #D6C2CA; }
+~~~
+
+`color` is the title and the play/pause icon, `subtitle-color` the artist.

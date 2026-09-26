@@ -1,6 +1,6 @@
 ---
 title: ApkPy
-description: Build native Android Java, XML and Gradle projects from a supported declarative Python API.
+description: "ApkPy is a Python library (pip install apkpy) that turns Python UI code into native Android apps: Java, XML and Gradle, with no Python on the phone."
 ---
 
 <section class="home-hero">
@@ -17,8 +17,8 @@ description: Build native Android Java, XML and Gradle projects from a supported
     <div class="hero-facts" aria-label="ApkPy output facts">
       <span><strong>1</strong> Python source tree</span>
       <span><strong>0</strong> Python runtimes in the APK</span>
-      <span><strong>185</strong> transpiler checks</span>
-      <span><strong>83</strong> focused unit tests</span>
+      <span><strong>258</strong> transpiler checks</span>
+      <span><strong>1,400+</strong> unit tests</span>
     </div>
   </div>
   <div class="editor-card" aria-label="Example ApkPy source code">
@@ -43,17 +43,9 @@ description: Build native Android Java, XML and Gradle projects from a supported
 
 <div class="release-line">
   <span class="release-line__pulse"></span>
-  <strong>ApkPy 1.7.0 · available now</strong>
-  <span>Motion sensors, confirmed wallpapers and actionable notifications with a redesigned Previewer drawer — examples and testing limits. Available in ApkPy 1.7.0.</span>
-  <a href="version-1.7.0/">Read the update</a>
-</div>
-
-<div class="release-line">
-  <strong>New in 1.9.0 · NFC, contacts and your own Java</strong>
-  <span>Read and write NFC tags, choose a contact, search with permission and open native contact editors — and declare your own Java for what ApkPy does not translate yet. Themed desktop simulators and complete app examples.</span>
-  <a href="guides/nfc/">Try the NFC guide</a>
-  <a href="guides/contacts/">Try People Desk</a>
-  <a href="version-1.9.0/">Scope and testing limits</a>
+  <strong>New in 1.11.0 · UI written once, and assistants that know ApkPy</strong>
+  <span>A function that builds a card or a header, called on every screen; background jobs that save what they fetched; one set of database rules for the desk and the phone. And an AGENTS.md in every project, so an AI coding assistant writes ApkPy instead of Kivy.</span>
+  <a href="version-1.11.0/">Read the update</a>
 </div>
 
 <section class="home-errors">

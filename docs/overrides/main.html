@@ -1,11 +1,32 @@
 {% extends "base.html" %}
 
+{#- The home page's title is what a search result shows in blue. The theme gave
+    it "ApkPy - ApkPy"; this one says what ApkPy is, for someone who searched
+    the name after seeing it in a post. -#}
+{% set home_title = "ApkPy: build native Android apps in Python" %}
+
+{% block htmltitle %}
+  {% if page and page.is_homepage %}
+    <title>{{ home_title }}</title>
+  {% else %}
+    {{ super() }}
+  {% endif %}
+{% endblock %}
+
 {% block extrahead %}
   {{ super() }}
-  {% set social_title = page.title if page else config.site_name %}
+  {% set is_home = page and page.is_homepage %}
+  {% set social_title = home_title if is_home else (page.title if page else config.site_name) %}
   {% set social_description = page.meta.description if page and page.meta and page.meta.description else config.site_description %}
   {% set social_url = page.canonical_url if page else config.site_url %}
+  {% if page and page.file and page.file.src_uri == "404.md" %}
+  <meta name="robots" content="noindex,follow">
+  {% else %}
   <meta name="robots" content="index,follow,max-image-preview:large">
+  {% endif %}
+  {% if config.extra.bing_site_verification %}
+  <meta name="msvalidate.01" content="{{ config.extra.bing_site_verification }}">
+  {% endif %}
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="ApkPy">
   <meta property="og:title" content="{{ social_title }}">
@@ -16,18 +37,36 @@
   <meta name="twitter:title" content="{{ social_title }}">
   <meta name="twitter:description" content="{{ social_description }}">
   <meta name="twitter:image" content="{{ config.site_url }}assets/apkpy-social-card.png">
+  {% if is_home %}
+  {#- The site's name. Without it Google labels every result from this
+      address "Cloudflare", the owner of pages.dev. -#}
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "ApkPy",
+    "alternateName": ["apkpy", "ApkPy for Python"],
+    "url": "{{ config.site_url }}"
+  }
+  </script>
+  {% endif %}
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
     "name": "ApkPy",
+    "alternateName": "apkpy",
     "applicationCategory": "DeveloperApplication",
     "operatingSystem": "Windows, macOS, Linux",
     "url": "{{ config.site_url }}",
     "description": "{{ config.site_description }}",
     "softwareVersion": "{{ config.extra.apkpy_version }}",
     "programmingLanguage": "Python",
-    "image": "{{ config.site_url }}assets/apkpy-social-card.png"
+    "image": "{{ config.site_url }}assets/apkpy-social-card.png",
+    "sameAs": [
+      "https://pypi.org/project/apkpy/",
+      "https://github.com/apkpy-project/repo-apkpy"
+    ]
   }
   </script>
 {% endblock %}

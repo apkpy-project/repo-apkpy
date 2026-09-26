@@ -114,6 +114,21 @@ rows = db.query("SELECT title, artist FROM tracks ORDER BY title")
 tracks.set_items(rows, title="title", subtitle="artist")
 ~~~
 
+A tapped row reaches `on_click` whole -- every column the query returned,
+plus `title` and `subtitle` -- so the callback can read the key it needs:
+
+~~~ python
+def remove(item):
+    db.execute("DELETE FROM tracks WHERE id = ?", [item["id"]])
+
+tracks = list_view([], on_click=remove, screen=home)
+tracks.set_items(db.query("SELECT id, title, artist FROM tracks"),
+                 title="title", subtitle="artist")
+~~~
+
+Before 1.11.0 the phone handed over only the text shown, and `item["id"]`
+was that text: the `DELETE` matched nothing, on the phone only.
+
 ## Settings rows
 
 A `list_view` shows rows it owns and fills from data. When the rows *are* the
@@ -276,6 +291,162 @@ Drop `meta` and `badge` from the `template=` as well -- a timestamp on the
 right and a pill under the text are what make a chat read as a notification
 feed.
 
+### Bubbles
+
+A messenger draws the other way: each message a bubble that hugs its text,
+yours on the right. Give the rows a kind with `variant=`, and style each kind
+with `id:kind`:
+
+~~~ python
+thread = virtual_collection(
+    messages,
+    variant="{kind}",
+    template={
+        "day":  {"meta": "{text}"},
+        "them": {"subtitle": "{text}", "meta": "{time}"},
+        "mine": {"subtitle": "{text}", "meta": "{time} ✓✓"},
+    },
+    id="thread", item_height="auto", screen=chat,
+)
+~~~
+
+~~~ css
+thread { item-background-color: #202C33; item-border-radius: 10px; gap: 6px;
+         subtitle-lines: 30; }
+thread:them { align-self: flex-start; max-width: 80%; }
+thread:mine { align-self: flex-end; max-width: 80%; item-background-color: #005C4B; }
+thread:day  { align-self: center; meta-color: #8696A0; }
+~~~
+
+`align-self` puts a kind of row at the start, the end or the centre;
+`max-width` (pixels or a percentage) is as wide as it may grow, and a short
+message is narrower. `item-border-radius` rounds every row and `gap` spaces
+them. Each kind can have its own `item-background-color`, `title-color`,
+`subtitle-color` and `meta-color`. A collection that sets none of it is drawn
+as it always was.
+
+### A list of conversations
+
+Messaging apps all draw a chat list the same way: the time level with the
+name, and the unread count under the time, round.
+`badge-position: end` does that:
+
+~~~ python
+chats = virtual_collection(
+    rows,
+    template={"avatar": "{name}", "title": "{name}", "subtitle": "{last}",
+              "meta": "{time}", "badge": "{unread}"},
+    id="chats", item_height="auto", on_click=open_chat, screen=home,
+)
+~~~
+
+~~~ css
+chats { badge-position: end; badge-background-color: #21C063; badge-color: #0B141A; }
+~~~
+
+A row with an empty `unread` shows no badge. Without `badge-position`, the badge
+follows the subtitle, as before.
+
+### Rows built from components
+
+The slots above draw a chat list or a track list. A feed post -- a header, a
+photo, a row of actions, a caption -- a comment or a product card is a small
+layout of its own, repeated for every item. Write it once, as a function that
+builds one row, and pass it as `row=`:
+
+~~~ python
+POSTS = [
+    {"user": "mara.vale", "face": "mara.png", "picture": "lisbon.jpg",
+     "likes": "1,284", "caption": "Last light over the river"},
+    # ... what your server or database returns
+]
+
+def like(item):
+    toast("You liked " + item["user"] + "'s post")
+
+def post_row(row):
+    head = container(id="post_head", parent=row)
+    avatar("{face}", size=34, id="post_face", parent=head, describe="{user}")
+    label("{user}", id="post_user", parent=head)
+    image("{picture}", id="post_pic", parent=row, aspect_ratio="1:1", describe="")
+    actions = container(id="post_actions", parent=row)
+    button("", icon="favorite_border", describe="Like", parent=actions,
+           command=lambda item: like(item))
+    button("", icon="send", describe="Share", parent=actions,
+           command=lambda: toast("Share"))
+    label("{likes} likes", id="post_likes", parent=row)
+    label("{caption}", id="post_caption", parent=row)
+
+feed = virtual_collection(POSTS, row=post_row, id="feed", screen=home)
+~~~
+
+~~~ css
+feed_row { background-color: #FFFFFF; padding: 0px 0px 8px 0px; }
+post_head { display: flex; flex-direction: row; align-items: center; gap: 10px; }
+~~~
+
+- The function is called once, with the row as its only argument. What it
+  builds is the template; every item gets a copy.
+- `{field}` in a text, a picture's source or a `describe` is filled from the
+  item. Dotted fields (`{author.name}`) reach into nested data.
+- A `command` that takes an argument receives the row's item -- the same
+  dict `on_click` receives. One that takes none is called as it is.
+- The row is styled as `<id>_row`; everything inside it by its own id, like
+  anywhere else. Rows take the height of what they hold.
+- Pictures can be web addresses, files on the phone or files in the app's
+  folder; the ones the items name are packaged with the app.
+- `set_items()`, `append_items()` and the rest work as they do for slot rows,
+  and a phone recycles the rows: only the ones on screen exist.
+
+On the phone the template becomes a layout of its own, inflated by a
+RecyclerView; in the Previewer the visible rows are drawn from the same
+components.
+
+#### A row that changes: the red heart
+
+A row is drawn from its item, so to change a row, change its item.
+`update_item(id, changes)` patches one item -- found by its `id` field -- and
+draws that row again. Two arguments read a field to decide how a component
+looks:
+
+- `visible="{field}"` on any component shows it only when the field is on.
+- `active="{field}"` on a button shows `active_icon` in the button's
+  `active-color` when the field is on, and `icon` when it is off.
+
+A field is off when it is empty, `false`, `0`, `no`, `off`, `none` or `null`;
+anything else is on.
+
+~~~ python
+POSTS = [
+    {"id": "p1", "user": "mara.vale", "likes": 1284, "liked": "", "sponsored": ""},
+    {"id": "p2", "user": "northline", "likes": 3410, "liked": "yes", "sponsored": "yes"},
+]
+
+def like(item):
+    if item["liked"] == "yes":
+        posts.update_item(item["id"], {"liked": "", "likes": int(item["likes"]) - 1})
+    else:
+        posts.update_item(item["id"], {"liked": "yes", "likes": int(item["likes"]) + 1})
+
+def post_row(row):
+    label("{user}", id="post_user", parent=row)
+    label("Sponsored", id="post_ad", parent=row, visible="{sponsored}")
+    button("", icon="favorite_border", active_icon="favorite", active="{liked}",
+           describe="Like", id="post_like", parent=row,
+           command=lambda item: like(item))
+    label("{likes} likes", id="post_likes", parent=row)
+
+posts = virtual_collection(POSTS, row=post_row, id="posts", screen=home)
+~~~
+
+~~~ css
+post_like { active-color: #FF3040; }
+~~~
+
+The heart turns red and the count goes up on that post alone, and back again
+on the next tap. The phone draws both icons at build time, the lit one in
+`active-color`.
+
 ## Rich text, Markdown and trees
 
 Use `rich_text()` for exact inline spans, `markdown()` for structured documents
@@ -313,6 +484,50 @@ grid(categories, cols=2, on_click=open_category, screen=home)
 
 Rich items can contain <code>title</code>, <code>subtitle</code>, <code>image</code> and application-specific fields such as <code>src</code>.
 
+A card's title is white and its subtitle grey unless the component says
+otherwise, on a dark shelf or a light one:
+
+~~~ css
+recent { title-color: #FFFFFF; subtitle-color: #B3B3B3; }
+mixes  { color: #111111; }      /* the title, when title-color is not given */
+~~~
+
+The page's `body` colour does not reach a card. Until 1.11.0 the phone painted
+white and grey whatever the stylesheet said, and the Previewer took the body's
+text colour instead -- dark titles on a dark shelf, on the desktop only.
+
+## Pictures
+
+An `image()` or `avatar()` can be tapped, and an image can change what it shows:
+
+~~~ python
+story = image("story1.jpg", id="story", screen=viewer, describe="Story",
+              command=next_story)
+avatar("face.png", size=62, id="ring", screen=home, describe="mara",
+       command=open_story)
+
+def next_story():
+    story.set_src("story2.jpg")
+~~~
+
+`set_src()` takes a file from the app's folder or a URL, as `image()` does; the
+files it names are packaged with the app. A `border-color` and `border-width`
+on a round avatar draw a ring around the picture, not over it.
+
+## Icons
+
+`icon=` takes any of the 2,000+ Material Icons, by the name fonts.google.com/icons
+shows with spaces as underscores: `favorite_border`, `chat_bubble_outline`,
+`cameraswitch`, `add_comment`. The glyphs ship with ApkPy (Apache 2.0), and
+the phone gets the same paths as vector drawables. To find one:
+
+~~~ python
+from apkpy_lib import icons
+icons.search("heart")    # ['favorite', 'favorite_border', 'heart_broken', ...]
+~~~
+
+A name that is not in the set draws a plain circle and reports `U2015`.
+
 ## Responsive layouts
 
 Describe how the same component tree rearranges:
@@ -349,6 +564,61 @@ ApkPy supports the layout properties needed for application interfaces, includin
 - relative/absolute positioning, offsets and z-index.
 
 Use responsive composition for major structural changes and CSS for sizing/alignment inside a structure.
+
+### Floating over the screen
+
+`position: absolute` on a screen's own component takes it out of the column
+and puts it on a layer over the content, fixed while the content scrolls --
+a floating button, a composer or a player bar pinned to the bottom. Inside a
+container with `position: relative`, it is placed in that container instead.
+
+~~~python
+home = Screen(id="home", scroll=True)
+label("Stories", id="title", screen=home)
+button("", id="fab", icon="add", describe="New story", screen=home,
+       command=new_story)
+~~~
+
+```css
+fab { position: absolute; right: 20px; bottom: 24px;
+      width: 56px; height: 56px; border-radius: 28px; }
+```
+
+An absolute box with no `width` is as wide as its content, so `right: 12px`
+puts a column of buttons against the right edge; with both `left` and `right`
+it stretches between them. On a screen with a bottom bar the layer ends above
+the bar. A tap that lands on none of its components reaches the content below.
+
+In the Previewer the layer is drawn the same way, but a desktop widget cannot
+be see-through: a transparent component over a picture, the camera or a map
+shows its parent's colour where the phone shows what is behind it.
+
+### Rows that start at the start
+
+A `display: flex` row with no `justify-content` centres what it holds, and has
+since the first release -- a row of buttons under a form looks right that way.
+Chips, a caption made of two labels, an avatar with a name: write where the row
+starts.
+
+~~~ css
+chips { display: flex; flex-direction: row; justify-content: flex-start; gap: 8px; }
+~~~
+
+A `Theme` gives the `body` a 12px `gap` and a 12px `padding`, and the body is
+folded into every container. A row that should be tight -- icons inside a pill,
+a list of actions under a photo -- says so with `gap: 0px`.
+
+### Aligning one child
+
+`align-self` moves one child across its parent. On a screen's own component
+it is what puts your reply on the right of a chat:
+
+```css
+their_message { max-width: 260px; align-self: flex-start; }
+my_message    { max-width: 260px; align-self: flex-end; }
+```
+
+A child narrower than the screen is otherwise centred.
 
 ## Accessibility
 

@@ -53,14 +53,21 @@ the phone and do nothing in the Previewer, which is the divergence 1.6.0 and
 
 ## Not verified
 
-- **NFC on a phone:** direct checks covered settings, turning the radio off and
-  on, and the reader controls. A later report said the feature worked but did
-  not identify a tag or the operations tried. Do not read this as certified
-  physical read/write.
+- **NFC on a phone:** *(updated 2026-09-20)* direct checks covered settings,
+  turning the radio off and on, and the reader controls. The maintainer then
+  reported reading one NDEF tag and writing to a second one on a physical
+  phone. That is one person, one handset and two tags -- enough to say a read
+  and a write happened, not enough to call NFC certified across tag types,
+  chipsets and manufacturers.
 - **Contacts on a phone:** the recorded check opened and cancelled the picker.
   Native editor saving, provider behaviour, accounts, OEM editors and rotation
   still need an end-to-end device test.
-- **Native blocks on a phone:** `javac` proves a block compiles; it does not
+- **Native blocks on a phone:** *(updated 2026-09-20)* the example was
+  installed on a Xiaomi 25069PTEBG running Android 16 and both blocks
+  answered: the synchronous one read **92%**, matching `dumpsys battery`,
+  and the asynchronous one reported back through `done` on the UI thread.
+  For a block you write yourself the limit is unchanged: `javac` proves a
+  block compiles; it does not
   prove the Android API inside it answers what you expect. ApkPy also cannot
   check that a block's Java and its `preview=` agree -- inside a block, that
   promise is the app author's.

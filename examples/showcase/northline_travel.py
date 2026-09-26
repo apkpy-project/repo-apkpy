@@ -88,7 +88,7 @@ for page, title, copy in [
 bottom_nav(
     [trip, discover, saved, account],
     labels=["Trip", "Discover", "Saved", "Account"],
-    icons=["train", "search", "heart", "person"],
+    icons=["local_shipping", "search", "heart", "person"],
 )
 
 style = """

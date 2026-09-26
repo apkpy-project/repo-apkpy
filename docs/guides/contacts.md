@@ -48,6 +48,10 @@ All `on_result` callbacks receive `(ok, value)` on the UI thread. On failure,
 | `contacts.edit(id, on_result=None)` | Editor-return JSON; the native app owns save/cancel |
 | `contacts.settings(on_result=None)` | `"opened"` after opening the app's Android settings |
 
+Those signatures are what they say: every argument can be given by name or 
+by position, and `on_result` is the last one, so `contacts.pick("phone", picked)`
+is the same call. Naming it is still clearer, and it is what the examples do.
+
 Row shape:
 
 ```json

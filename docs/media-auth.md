@@ -83,6 +83,16 @@ audio.repeat()
 
 The <code>start</code> value can be an index or the selected source URL.
 
+A source or a cover that is a file in the app's folder -- `"track1.mp3"`,
+`"covers/night.jpg"` -- is packaged with the app: audio in `res/raw`,
+pictures in `res/drawable`, found again on the phone by the same name. The
+same goes for the `image` of `grid()`, `carousel()` and rich `list_view()`
+items. Until 1.11.0 only web addresses worked on a phone: a local playlist
+stayed at 0:00 and a shelf of local covers was blank, while the Previewer
+played and showed them.
+
+When the queue ends (repeat off), play starts the last track again.
+
 ## Bind a player screen
 
 ~~~ python
@@ -112,6 +122,21 @@ audio.controls(
 
 Moving the bound range seeks through the track. The labels, artwork and buttons stay synchronized with playback.
 
+A button with an icon and no text -- or `variant="icon"` -- is drawn the way
+every player draws it: `play_arrow` and `pause` swap, and shuffle and repeat
+light up in the button's `active-color` (`repeat_one` while one track
+repeats). A button with words keeps them: "Play"/"Pause", "Shuffle: on/off",
+"Repeat: off/all/one", or the texts you pass.
+
+~~~ css
+np_shuffle, np_repeat { active-color: #1ED760; }
+~~~
+
+Tapping the bound shuffle button turns shuffle on and off, and the repeat
+button goes off → all → one, on both runtimes. A button with a `command=` of
+its own keeps it. The progress range takes its `accent-color` for the bar and
+the thumb.
+
 ## Favourites
 
 ~~~ python
@@ -120,6 +145,11 @@ audio.liked_list(liked_tracks)
 ~~~
 
 The binding watches the current track and refreshes the button/list automatically.
+
+An icon button swaps `favorite_border` for `favorite` in its `active-color`;
+one with words shows `liked=` or `unliked=`. The mini-player's play/pause is a
+drawn icon too. Until 1.11.0 all three wrote emoji -- ❤️, ▶, ⏸ -- which the
+Previewer drew as empty circles and some phones as colour emoji.
 
 ## User playlists
 

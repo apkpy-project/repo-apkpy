@@ -115,6 +115,15 @@ searches text. That is decided from the source, never from the running value.
 list held in a name, and over the result of `split()`. A `range()` index is a
 number, so `i + 1` and `i % 2` are arithmetic.
 
+**Calling your own functions**
+
+By position, by name, or both: `total(price, vat=23)` and `total(vat=23,
+price=9)` line up with the parameters the function declares. ApkPy does not
+read default values, so every parameter has to be given; a missing one, a
+repeated one, or a name the function does not have stops the build with
+[`U2037`](friendly-errors.md). Before 1.10.1 the names were dropped in silence
+and the generated Java did not compile.
+
 **Values**
 
 Assignment to one name, and `+=`, `-=`, `*=`, `/=` and `%=`. List and dict

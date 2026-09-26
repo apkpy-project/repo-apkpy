@@ -140,6 +140,9 @@ quoted in an issue.
 | `U2033` | Python ApkPy has no translation for, which used to compile to nothing at all |
 | `U2035` | A `native` block the build cannot read: no `preview=`, a value computed at run time, or a call that does not match the declaration |
 | `U2036` | A helper module that cannot be merged: the `from ... import` form, a name defined in two files, or a screen declared outside `writehere.py` |
+| `U2037` | A call to one of your functions that does not match it: a parameter missing, given twice, or a name the function does not have |
+| `U2038` | A function that builds UI used where it cannot be expanded -- from a tap, a callback or another function -- or a loop that builds UI from data that arrives while the app runs |
+| `U2039` | A `lambda` default the phone cannot keep: `lambda v=count: ...` where `count` is assigned again, is the variable of a loop that stays a loop, or is computed (`v=a + b`). A literal or a name bound once is kept, as in Python |
 
 #### U2033 in a bit more detail
 
@@ -179,6 +182,8 @@ vocabulary.
 | `D2011` | A query filter that does not suit the field |
 | `D2012` | Field options that contradict each other |
 | `D2013` | `offset=` without `limit=` |
+| `D2014` | A comparison given nothing to compare against: `db.gt(field, None)` |
+| `C4004` | Something in a `db.schema()` list that is neither a declaration nor the name of one |
 
 ### P3001 Previewer runtime
 
@@ -209,8 +214,15 @@ vocabulary.
 | Code | Meaning |
 | --- | --- |
 | `J7001` | A `background_job()` option with no WorkManager equivalent |
-| `J7002` | `run=` names a function that is not in this file |
+| `J7002` | `run=` names a function that is not in this file (a job, `service.every` or `service.once`) |
 | `J7003` | `observe(on_change=)` did not receive a one-argument function |
+| `J7004` | A job body calls something that needs a screen -- a component, a dialog, a permission request, navigation |
+| `J7005` | A job body calls something only written for screens so far -- uploads, WebSockets, location |
+
+J7004 and J7005 come from the build *and* from the Previewer, with the same
+words: the desk stops the job when the body reaches the call, instead of
+running what the phone refuses. See
+[What a job body can call](background-jobs.md#what-a-job-body-can-call).
 
 A job body that raises is reported in full as well, with the job name, the
 attempt number, the payload keys and the fact that the item returns to the

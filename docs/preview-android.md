@@ -175,6 +175,31 @@ same antialiasing pass every `icon=` goes through, and they take the app bar's
 colours. They used to be block characters borrowed from the system font, which
 at that size read as a row of dashes.
 
+The screen starts below the strip, as the phone's does: every screen root fits
+the system windows. The Previewer used to lay the content out from the top of
+the window, so a 16px padding put a row of chips half under the clock, and
+`height: 100%` was measured on the whole window instead of what is left.
+
+On a screen without an app bar the clock and icons are light or dark against
+the colour behind them -- on both runtimes, with the same threshold
+(`theme.LIGHT_SURFACE_LUMINANCE`). The phone used to choose from day or night
+mode alone, so a dark chat or player in a light app had a dark clock on a dark
+strip.
+
+### Over a picture
+
+Tk has no transparent widgets. A button, label or row with a transparent
+background placed over an image -- a close button on a story, a caption, a
+camera's shutter ring -- was a square of whatever colour sat behind the image.
+Now an image and the camera view remember what they show, and each
+transparent widget over one paints the part of the picture it covers under its
+own content. Shapes are drawn with alpha, so a glass button (`#55000000`)
+darkens the picture as it does on the phone.
+
+What it cannot do: a label's text over a picture is centred on it (Tk draws a
+label's image and text together), and something transparent over another
+widget -- not a picture -- still shows its container's colour.
+
 ### A number with no name is a number each side guesses
 
 The mismatches that survive longest are not the loud ones. They are the values
@@ -186,7 +211,7 @@ Two were found and repaired in 1.5.0, and they have the same shape:
 | What | Previewer | Android |
 | --- | --- | --- |
 | `label()` with no stylesheet | 14px | 16sp |
-| the bottom bar's active label | bold, 10pt (13.3px) | normal, 12sp |
+| the bottom bar's label | 10pt (13.3px) | 12sp |
 
 Neither was a rendering bug. Both were two literals, written into two files at
 different times, with no shared name to disagree about. `label()` is the most
@@ -200,11 +225,15 @@ that asserts both sides resolve the same value from the same table is what
 keeps them from drifting again -- a test comparing two hard-coded numbers only
 proves that somebody typed the same thing twice.
 
-When you find one of these, check the platform before choosing a side. The
-bottom-bar label was settled by reading Material's own
-`Widget.MaterialComponents.BottomNavigationView`, which points the active and
-inactive text appearances at the same 12sp caption -- so the phone was right
-and the desktop was inventing a third state signal.
+When you find one of these, check the platform before choosing a side -- and
+on more than one phone. The bottom-bar label was settled by reading Material's
+own `Widget.MaterialComponents.BottomNavigationView`, which gives both states
+the same 12sp caption, and by looking at a phone, and the Previewer lost its
+bold active label as well. That phone had a font theme that drew every bold at
+regular weight, and Material 1.11 turns `itemTextAppearanceActiveBoldEnabled`
+on by default: on every phone whose bold works, the active label had always
+been bold. It is bold again in both runtimes from 1.11.0, read from
+`theme.NAV_ACTIVE_LABEL_BOLD`.
 
 ## Release test
 

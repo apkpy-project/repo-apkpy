@@ -148,6 +148,20 @@ Available comparisons are `eq`, `ne`, `gt`, `gte`, `lt`, `lte`,
 Every filter value is bound as a SQLite parameter. ApkPy does not concatenate
 user input into generated SQL.
 
+Two things a filter does that are worth knowing, because both used to differ
+between the Previewer and the phone and now do not:
+
+- **What someone types is text, not a pattern.** `contains("50%")` looks for
+  rows containing `50%`. The `%` and `_` that mean "anything" in SQL are
+  escaped before the query is built, so a search box cannot accidentally match
+  every row.
+- **`gt`, `gte`, `lt` and `lte` refuse `None`.** Asking which rows are above
+  nothing has no answer, and guessing one silently is worse than stopping:
+  ApkPy raises [`D2014`](friendly-errors.md). Build the list instead --
+  `filters = [db.gte("priority", floor)] if floor else []` -- or use
+  `db.is_null("priority")` when the empty rows are what you want. `eq` and
+  `ne` do take `None`; they ask whether the value is there at all.
+
 ### Update and delete
 
 ```python
@@ -360,6 +374,53 @@ This keeps the database as the source of truth. Feed-level optimistic mutation
 APIs remain useful for remote requests, but local Data Core writes can wait
 for their fast repository callback and avoid a second rollback state.
 
+## Naming a declaration, or writing it where it is used
+
+Both of these build the same app:
+
+```python
+liga = db.relation("notes_tags", notes, tags, "notes_id", "note", "tags",
+                   on_delete="cascade")
+schema = db.schema("apkpy_app", version=1, models=[notes, tags],
+                   relations=[liga])
+```
+
+```python
+schema = db.schema("apkpy_app", version=1, models=[notes, tags], relations=[
+    db.relation("notes_tags", notes, tags, "notes_id", "note", "tags",
+                on_delete="cascade"),
+])
+```
+
+Naming them first reads better once there are a few, and it is what the
+examples do. What a list cannot hold is something ApkPy has to run to find
+out about -- a function call that returns a model, or a list built while the
+app is running -- because the database is generated before any of that
+happens. That stops the build with [`C4004`](friendly-errors.md).
+
+## The same answer on both sides
+
+A field's rules are checked twice over the life of a value -- by the Previewer
+while you build, and by the generated Java on the phone -- so the two have to
+agree or the guarantee is worthless. They are written once, in the library's
+`data_rules` module, and a test walks that table asking each side in turn. The
+Java is not merely inspected: the helper methods are lifted out of the
+generated source, compiled with `javac`, and asked the same questions as the
+Python.
+
+What that pins down:
+
+| | The rule |
+| --- | --- |
+| `max_length` | counts characters, so one emoji counts as one |
+| `db.integer()` | refuses `1.9` rather than truncating it; accepts `2.0` |
+| `db.real()` | refuses `NaN` and infinity |
+| `db.boolean()` | stored and compared as `1`/`0`, in every filter including `in_` |
+| `choices=` | compared after the value is normalised, so `[True, False]` works |
+| `db.json()` | has to be JSON all the way to the end of the text |
+| `db.blob()` | reads back as Base64, and accepts bytes or Base64 |
+| `contains`/`starts_with`/`ends_with` | escape `%` and `_` before building the query |
+
 ## Validation boundary
 
 The 1.3.0 test set covers declarations, constraints, CRUD, `NULL`, JSON,
@@ -382,8 +443,11 @@ Read [Reactive Data](reactive-data.md) before adding relations to an existing
 database: the schema version must increase, and an existing table that needs a
 physical foreign-key clause must be rebuilt through an explicit migration.
 
-Automatic offline synchronization, conflict resolution and persistent network
-jobs remain outside the Data Core and Reactive Data releases.
+Every operation above also runs inside a
+[background job](background-jobs.md#saving-what-the-job-fetched), where it
+answers before the job's next line, and a screen observing the model hears
+about the write. Automatic synchronization with a server and conflict
+resolution remain outside the Data Core releases.
 
 The runnable **Knowledge Vault** example combines indexed search, favorite
 filters, pagination into `virtual_collection`, create/update/delete, a batch

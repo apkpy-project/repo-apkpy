@@ -71,7 +71,7 @@ def read_battery():
     buzz("120", on_result=buzzed)
 
 
-button("Ler bateria", id="read", icon="battery_full", screen=home,
+button("Ler bateria", id="read", icon="bolt", screen=home,
        command=read_battery)
 
 style = """

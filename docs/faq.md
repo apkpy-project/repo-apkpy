@@ -57,6 +57,18 @@ infrastructure. See [Can ApkPy build this?](can-apkpy-build-this.md).
 ApkPy provides encrypted local values and password hashing, but security still
 depends on correct key handling, server authorization and threat modeling.
 
+## Can an AI coding assistant write ApkPy apps?
+
+Yes, once it is told what ApkPy is: no model knows it from its training, and
+left alone an assistant writes Kivy, or Python ApkPy cannot translate. Every
+project made by `apkpy start`, `apkpy init` or `apkpy examples` has an
+`AGENTS.md` (and a `CLAUDE.md` pointing at it) that Codex, Cursor, Copilot,
+Claude Code and others read first; `apkpy agents` adds it to an older
+project. An assistant with web access can also read
+[`llms.txt`](https://repo-apkpy.pages.dev/llms.txt), a map of these docs, and
+[`llms-full.txt`](https://repo-apkpy.pages.dev/llms-full.txt), the docs in one
+file. See [Getting started](getting-started.md).
+
 ## Is the generated project conditional?
 
 Yes. Feature helpers and dependencies are emitted only when the source uses the

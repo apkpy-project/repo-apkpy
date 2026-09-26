@@ -116,7 +116,7 @@ this callback for time-critical background work. Programmatic `cancel()` and
 
 ```text
 notify(title, message, id="apkpy_notification", *,
-       channel="apkpy_default", icon="notifications", style="none",
+       channel="apkpy_default", icon="bell", style="none",
        picture=None, lines=None, actions=None, on_tap=None, on_dismiss=None,
        ongoing=False, progress=None, group=None, when=None)
 ```
@@ -130,7 +130,7 @@ heads-up banner, play a sound or allow the chosen channel.
 | `title`, `message` | required | Notification heading and body |
 | `id` | `"apkpy_notification"` | Reusing an ID replaces that card; different IDs accumulate |
 | `channel` | `"apkpy_default"` | Declare custom channels before posting |
-| `icon` | `"notifications"` | Literal name from the shared icon catalogue; Android uses a monochrome small icon |
+| `icon` | `"bell"` | Literal name from the shared icon catalogue; Android uses a monochrome small icon |
 | `style` | `"none"` | Literal `none`, `big_text`, `big_picture` or `inbox` |
 | `picture` | `None` | Local image or Android `content://` URI; only for `big_picture` |
 | `lines` | `None` | List of strings; only for `inbox` |

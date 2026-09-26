@@ -131,13 +131,28 @@ The list is ours. That is exactly why it is printed in full.
 
 ## What a "no" costs you
 
-Since 1.9.0, a missing capability is not a wait. `native.java()` lets you
-declare the Java for it yourself, with the arguments it takes and the answer
-the Previewer gives instead — see [your own Java](guides/native.md). Most of
-the eighteen above are a handful of lines of Android API inside a block.
+Since 1.9.0, a missing capability is not always a wait. `native.java()` lets
+you declare the Java for it yourself, with the arguments it takes and the
+answer the Previewer gives instead — see [your own Java](guides/native.md).
 
-That is the honest position: ApkPy does not reach them, and it does not stand
-in your way either.
+**Six of the eighteen are written already.** Reading text aloud, opening a
+page, downloading a file, saving a text file where the user will find it,
+dialling a number and putting something in the calendar are in
+[Native recipes](guides/native-recipes.md), copy and paste, each one compiled
+before it was published. Vibration is in
+[the native example](https://github.com/apkpy-project/repo-apkpy/blob/main/examples/31_native_java.py).
+
+**The rest are not a handful of lines, and saying otherwise would be a
+sales pitch.** A block runs and returns: it cannot wait for another screen to
+come back, so the system file picker and receiving a share are out. It is a
+method inside an Activity, so it cannot add a view to the layout — no WebView,
+no charts — and it cannot be a home-screen widget or a quick settings tile,
+which are separate components. AdMob, Play in-app updates and Health Connect
+are SDKs with their own lifecycles; `native.gradle()` can pull them in, but
+what you would write around them is an integration, not a recipe.
+
+That is the honest position: for six of them ApkPy does not stand in your way,
+and for the others it is still "not yet".
 
 ## The other ceiling
 

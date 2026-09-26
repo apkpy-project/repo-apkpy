@@ -5,6 +5,8 @@ description: "native.java() and native.java_async(): declare a Java block with a
 
 # Your own Java
 
+Looking for one that is already written? [Native recipes](native-recipes.md) has six, compiled before they were published.
+
 ApkPy translates a documented subset of Python. When the thing you need is not
 in it, the answer used to be "wait for the next release" -- and editing the
 generated project in Android Studio is not an answer, because `apkpy build`

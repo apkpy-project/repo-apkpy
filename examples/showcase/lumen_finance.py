@@ -55,9 +55,9 @@ label("Recent activity", id="activity_title", screen=home)
 
 list_view(
     [
-        {"title": "Northline Rail", "subtitle": "Travel · Today", "meta": "−$42.80", "icon": "train"},
-        {"title": "Studio invoice", "subtitle": "Income · Yesterday", "meta": "+$1,260", "icon": "payments"},
-        {"title": "Sage Market", "subtitle": "Groceries · 14 Jul", "meta": "−$68.24", "icon": "shopping_bag"},
+        {"title": "Northline Rail", "subtitle": "Travel · Today", "meta": "−$42.80", "icon": "local_shipping"},
+        {"title": "Studio invoice", "subtitle": "Income · Yesterday", "meta": "+$1,260", "icon": "download"},
+        {"title": "Sage Market", "subtitle": "Groceries · 14 Jul", "meta": "−$68.24", "icon": "inventory_2"},
     ],
     id="lumen_activity",
     rich=True,
@@ -78,7 +78,7 @@ for page, title, copy in [
 bottom_nav(
     [home, insights, cards, profile],
     labels=["Home", "Insights", "Cards", "Profile"],
-    icons=["home", "chart", "credit_card", "person"],
+    icons=["home", "chart", "description", "person"],
 )
 
 style = """

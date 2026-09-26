@@ -267,7 +267,7 @@ The ID rule changes the background of <code>save_button</code> without losing th
 
 ## The whole vocabulary
 
-An ApkPy stylesheet is not a browser stylesheet. It reads **87 properties**,
+An ApkPy stylesheet is not a browser stylesheet. It reads **89 properties**,
 and a name outside this table is reported as
 [`U2029`](friendly-errors.md#u2001-components-and-arguments) and ignored:
 
@@ -275,10 +275,10 @@ and a name outside this table is reported as
 | --- | --- |
 | Colour | <code>color</code>, <code>background-color</code>, <code>border-color</code>, <code>pressed-color</code>, <code>focus-color</code>, <code>focus-border-color</code>, <code>accent-color</code>, <code>active-color</code>, <code>hint-color</code>, <code>icon-color</code>, <code>placeholder-color</code>, <code>secondary-color</code>, <code>subtitle-color</code>, <code>title-color</code>, <code>trailing-color</code>, <code>meta-color</code>, <code>badge-color</code>, <code>badge-background-color</code>, <code>item-background-color</code>, <code>item-border-color</code>, <code>divider-color</code>, <code>indicator-color</code>, <code>tint</code> |
 | Type | <code>font-size</code>, <code>font-weight</code>, <code>font-family</code>, <code>font-style</code>, <code>text-align</code>, <code>text-transform</code>, <code>letter-spacing</code>, <code>line-height</code>, <code>title-lines</code>, <code>subtitle-lines</code>, <code>subtitle-size</code>, <code>trailing-size</code>, <code>rows</code>, <code>max-rows</code> |
-| Shape | <code>border-width</code>, <code>border-radius</code>, <code>box-shadow</code> |
+| Shape | <code>border-width</code>, <code>border-radius</code>, <code>box-shadow</code>, <code>item-border-radius</code> |
 | Space | <code>padding</code>, <code>padding-top</code>, <code>padding-right</code>, <code>padding-bottom</code>, <code>padding-left</code>, <code>margin</code>, <code>margin-top</code>, <code>margin-right</code>, <code>margin-bottom</code>, <code>margin-left</code>, <code>gap</code>, <code>divider-width</code>, <code>divider-inset</code> |
 | Size | <code>width</code>, <code>height</code>, <code>min-height</code>, <code>max-width</code>, <code>aspect-ratio</code>, <code>icon-size</code>, <code>item-size</code> |
-| Layout | <code>display</code>, <code>flex-direction</code>, <code>flex-grow</code>, <code>flex-shrink</code>, <code>flex-basis</code>, <code>flex-wrap</code>, <code>justify-content</code>, <code>align-items</code>, <code>align-self</code>, <code>grid-template-columns</code>, <code>grid-column</code>, <code>grid-row</code>, <code>position</code>, <code>top</code>, <code>right</code>, <code>bottom</code>, <code>left</code>, <code>z-index</code> |
+| Layout | <code>display</code>, <code>flex-direction</code>, <code>flex-grow</code>, <code>flex-shrink</code>, <code>flex-basis</code>, <code>flex-wrap</code>, <code>justify-content</code>, <code>align-items</code>, <code>align-self</code>, <code>grid-template-columns</code>, <code>grid-column</code>, <code>grid-row</code>, <code>position</code>, <code>top</code>, <code>right</code>, <code>bottom</code>, <code>left</code>, <code>z-index</code>, <code>badge-position</code> |
 | Effects | <code>opacity</code>, <code>object-fit</code>, <code>filter</code>, <code>scale</code> |
 | Behaviour | <code>transition</code>, <code>press</code>, <code>code-copy</code>, <code>animation-name</code>, <code>animation-duration</code> |
 
@@ -308,6 +308,19 @@ used to look like it did nothing. Only a screen that asks for one is touched.
 
 The Previewer approximates -- Tk has no blurred shadow, so it offsets two
 rounded layers. What matches is the presence and the ordering, not the blur.
+
+### Corners one by one
+
+`border-radius` takes one value for every corner, or four in CSS order --
+top-left, top-right, bottom-right, bottom-left -- which is how a sheet that
+slides up over a map rounds only its top:
+
+```css
+sheet { border-radius: 22px 22px 0px 0px; }
+```
+
+The phone writes each corner to the shape's `<corners>`; the Previewer draws
+them antialiased, one radius per corner.
 
 ### Padding, all four ways
 

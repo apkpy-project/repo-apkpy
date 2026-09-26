@@ -2,6 +2,8 @@
 
 **ApkPy is a Python package (`pip install apkpy`) that transpiles Python UI code into native Android Java and XML. The generated APK does not bundle a Python interpreter and does not use a WebView.**
 
+Documentation, guides and showcase: **[repo-apkpy.pages.dev](https://repo-apkpy.pages.dev/)**
+
 Your Python is read at build time and turned into ordinary Android source — `Activity` classes, layout XML, `res/` resources — so what installs on the phone is a normal Android app. A small app ships at about 1.5 MB, signed and shrunk with R8 (its debug build is about 5 MB) and starts with no interpreter to boot.
 
 You write the whole app in Python with a CSS-style design system, see it on your desktop in a live Previewer, and then either `apkpy run` for an installable `.apk` or `apkpy build` for a project you can open in Android Studio. No Java, no Kotlin, no Android Studio needed.
@@ -18,6 +20,66 @@ See [ApkPy compared with Kivy, BeeWare and Flet](docs/apkpy-vs-kivy-flet-beeware
 **Documentation:** [Start here](docs/index.md) · [End-to-end tutorial](docs/tutorial-end-to-end.md) · [Essential API](docs/reference/essential.md) · [Friendly errors](docs/friendly-errors.md) · [Troubleshooting](docs/troubleshooting.md) · [Showcase](docs/showcase.md) · [Android benchmark](BENCHMARKS.md)
 
 ---
+
+## New in 1.11.0: apps you know, rebuilt in Python
+
+A chat, a music player, a photo feed and a ride app, rebuilt with ApkPy and
+photographed on a phone -- see them in the
+[showcase](https://repo-apkpy.pages.dev/showcase/#apps-you-know-rebuilt). What they needed is in
+this release. A list row can now be built from ordinary components, filled
+from each item and changed on its own:
+
+```python
+def post_row(row):
+    image("{picture}", id="post_pic", parent=row, aspect_ratio="1:1", describe="")
+    button("", icon="favorite_border", active_icon="favorite", active="{liked}",
+           describe="Like", parent=row, command=lambda item: like(item))
+    label("{likes} likes", id="post_likes", parent=row)
+
+feed = virtual_collection(POSTS, row=post_row, id="feed", screen=home)
+```
+
+Every one of the 2,032 Material Icons works in `icon=`; a music app's own
+tracks and covers are packaged with it; and the Previewer draws smooth
+corners, soft shadows and glass over photos, as the phone does.
+
+A header, a card or a bar is now written once and called once per screen:
+`header("Home", home)`, `header("Profile", profile)` — the compiler expands
+each call before translating, so the phone gets the same screens the Previewer
+shows. Called from a tap, it stops the build with `U2038`.
+
+A background job can now keep what it fetched. The data layer and
+`files.download()` run inside a `background_job`, and answer before the job's
+next line — on the phone and in the Previewer — while a screen observing the
+model hears about the write:
+
+```python
+def downloaded(ok, path):
+    if ok:
+        page.insert({"path": path}, on_result=saved)
+
+def work():
+    files.download(PAGE, "page.html", on_result=downloaded)
+
+job = background_job("fetch_page", run=work, requires_network=True)
+```
+
+A job also stopped doing nothing in silence. The Worker used to drop every call
+it could not write — a permission check, a label, even a call to one of your
+own functions — and the job reported `success`. Now it writes what it can and
+stops the build on the rest, with the line: `J7004` when the call needs a
+screen, `J7005` when it is only written for screens so far. The Previewer
+refuses the same calls with the same code.
+
+The database rules the Previewer and the phone used to disagree on — nine of
+them, all silent — now live in one table both sides read.
+
+**A build can stop where it used to pass**, each time because it was shipping
+something broken. Install with `python -m pip install --upgrade apkpy==1.11.0`,
+then regenerate your Android project. See the
+[1.11.0 notes](https://repo-apkpy.pages.dev/version-1.11.0/),
+[what a job body can call](https://repo-apkpy.pages.dev/background-jobs/#what-a-job-body-can-call)
+and the [offline queue example](https://github.com/apkpy-project/repo-apkpy/tree/main/examples/32_offline_queue.py).
 
 ## New in 1.10.0: several files, and numbers that stay numbers
 

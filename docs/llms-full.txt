@@ -1,0 +1,5164 @@
+# ApkPy -- the documentation in one file
+
+> ApkPy turns one Python file into a native Android app. You write screens,
+> components, CSS-like styles and callbacks in `writehere.py`; a desktop
+> Previewer runs it, and ApkPy translates it into a Java/XML/Gradle project
+> that builds an APK. No Python runtime ships in the APK, so only the Python
+> listed under "The Python ApkPy translates" is translated.
+
+Built from the pages of https://repo-apkpy.pages.dev/ by tools/build_llms_full.py; each section
+names the page it came from. The short index is https://repo-apkpy.pages.dev/llms.txt.
+
+# Can ApkPy build this?
+
+Source: https://repo-apkpy.pages.dev/can-apkpy-build-this/
+
+ApkPy can generate a large part of a modern Android client, but it does not
+replace the product backend. Use this page to separate native interface
+capabilities from infrastructure that your application must still own.
+
+Strong client fit
+### Instagram / Facebook
+Virtual feeds, pagination, optimistic likes, uploads, profiles, video, WebSocket events and push notifications.
+You still provide accounts, moderation, recommendations, storage and the social graph.
+
+Strong client fit
+### X / Reddit
+Keyed feed updates, threads, Markdown, trees, votes, live events, notifications and cached local data.
+You still provide ranking, search, anti-abuse systems and canonical server state.
+
+Good foundation
+### WhatsApp-style chat
+Persistent WebSockets, reconnect, queued sends, uploads, push, local SQLite history and encrypted local values.
+ApkPy does not provide an end-to-end encryption protocol, calls or multi-device reconciliation.
+
+Good foundation
+### TikTok / Reels
+Native Media3 video, buffering callbacks, seek, speed, lifecycle-safe release and virtual collections.
+A production vertical pager, recommendation system, CDN and content moderation remain app work.
+
+Strong client fit
+### Spotify-style audio
+Background playback, MediaSession, lock-screen controls, playlists, favourites, offline files and a mini-player.
+No automatic adaptive-quality engine, DRM, guaranteed gapless playback or crossfade is promised.
+
+Strong client fit
+### Uber / Delivery
+Maps, fused location, continuous and background tracking, route calculation, live events and push.
+Dispatch, pricing, ETA models, fraud protection and payments belong to your services.
+
+Strong client fit
+### Notion / Notes
+Native rich text, Markdown, expandable trees, SQLite, encrypted values and responsive layouts.
+Collaborative CRDT editing and a block-editor engine are not built into ApkPy.
+
+Strong client fit
+### Store / Food delivery
+Catalog grids, production feeds, uploads, maps, notifications, local data and API-driven states.
+Inventory, checkout, payments, order validation and fulfilment require a backend.
+
+## What "client fit" means
+
+It means ApkPy already has native generation rules for the interface and device
+features in the row. It does **not** mean a clone can be produced without
+servers, security design, product rules, testing and operations.
+
+| Layer | ApkPy can own | Your application owns |
+| --- | --- | --- |
+| Interface | screens, themes, components, navigation, responsive layout | product design and accessibility review |
+| Client state | reactive state, loading, optimistic mutations, local persistence | canonical business rules and conflict policy |
+| Device | media, notifications, files, location, maps and permissions | consent text, privacy policy and device testing |
+| Network | HTTPS, uploads, WebSockets, reconnect and callbacks | API, authentication authority, rate limits and observability |
+| Delivery | Java/XML/Gradle generation and Android Studio project | signing, store policy, rollout and production monitoring |
+
+## NFC labels and physical shortcuts (1.9.0)
+
+The [NFC API](https://repo-apkpy.pages.dev/guides/nfc/) lets a running app read an equipment
+reference, a museum label or a product link, then look up its own content.
+A tag-writing utility can replace a spare tag's NDEF records with one text or
+URL record. The app still owns inventory, authorization and backend logic.
+
+This does not provide payment-card support, card emulation, secure identity
+from a tag ID, screen-off scanning or launching a closed app. Desktop tags are
+simulated. See [development status and evidence](https://repo-apkpy.pages.dev/version-1.9.0/).
+
+## Contact-aware apps (1.9.0)
+
+An appointment app can choose a customer phone number; a CRM client can search
+the directory with permission; an event app can select an email recipient;
+a customer form can hand off to the native contact editor. The
+[Contacts guide](https://repo-apkpy.pages.dev/guides/contacts/) includes the complete People Desk app.
+
+This provides contact selection and user-mediated editing, not messaging,
+cloud CRM synchronization, bulk address-book changes or a default dialer.
+No direct deletion is included, and closing the editor does not confirm a
+save. Prefer the scoped picker whenever only one detail is needed.
+
+## Pick a complete path
+
+[**Build a production feed**Pages, refresh, retries and optimistic actions.](../guides/feed-api/)
+[**Build a live room**WebSocket lifecycle, queued sends and push hand-off.](../guides/chat-realtime/)
+[**Build a music player**Background audio, MediaSession and saved playlists.](../guides/media-player/)
+[**Build live tracking**Permissions, fused location, routes and background work.](../guides/maps-tracking/)
+
+For exact supported names and methods, use the [modular API reference](https://repo-apkpy.pages.dev/api-reference/).
+
+---
+
+# ApkPy compared with Kivy, BeeWare and Flet
+
+Source: https://repo-apkpy.pages.dev/apkpy-vs-kivy-flet-beeware/
+
+All of these let you write an Android app in Python. They disagree about one
+thing, and everything else follows from it: **is there a Python interpreter
+inside the APK?**
+
+ApkPy is the only one here that answers no. That is its whole reason to exist,
+and it is also the source of its biggest limitation — so this page is as much
+about when *not* to use it.
+
+## The short version
+
+| | Python in the APK? | What draws the screen | `pip` packages | Source |
+| --- | --- | --- | --- | --- |
+| **ApkPy** | **No** — Python is translated to Java at build time | Android's own views (`TextView`, `RecyclerView`, Material) | **No** | Closed |
+| **Kivy** | Yes — CPython is bundled | Its own widgets, drawn with OpenGL | Yes (pure Python; C needs a recipe) | Open |
+| **BeeWare / Toga** | Yes — CPython is bundled | Android's own native widgets | Yes | Open |
+| **Flet** | Yes — CPython is bundled | Flutter | Yes | Open |
+| **Chaquopy** | Yes — CPython is embedded | You write the UI in Kotlin/Java | Yes | Open |
+
+## What each one actually does
+
+**Kivy** ships a Python runtime and draws every button, label and list itself
+with OpenGL. That is why a Kivy app looks like a Kivy app on every platform:
+it is not using the operating system's widgets. It is the oldest and most
+battle-tested of these, and if you need arbitrary Python on a phone it works
+today.
+
+**BeeWare / Toga** also ships a Python runtime, but maps your code onto the
+**real** Android widgets. So it looks native *and* runs real Python — the
+combination ApkPy cannot offer. It is actively developed and targets iOS and
+desktop from the same code.
+
+**Flet** ships a Python runtime and renders with Flutter. You get Flutter's
+Material widgets, which look close to Android's without being Android's, and
+the same code runs on desktop and the web.
+
+**Chaquopy** is the odd one out: it puts Python *inside* a normal Android
+Studio project, so you write your interface in Kotlin or Java and call Python
+for the parts you want in Python. It is the right answer when you already have
+an Android app and want to bring a Python library into it.
+
+**ApkPy** reads your Python file rather than running it, and writes Android
+source: `Activity` classes, layout XML, `res/` drawables and strings. There is
+nothing to interpret on the device. The output is a project you can open in
+Android Studio and read.
+
+## Where ApkPy wins
+
+- **Nothing to boot.** No interpreter starts, because there is not one. The app
+  launches like any other Android app.
+- **Size.** A small app ships at about 1.5 MB, signed and shrunk with R8; its
+  debug build is about 5 MB. One pulling in Firebase, WorkManager, media3 and
+  RecyclerView came to 2 MB. A bundled runtime is the largest single thing in
+  the other approaches.
+- **They are Android's widgets, not lookalikes.** Scrolling, text selection,
+  accessibility services, keyboard behaviour and dark mode are the platform's,
+  because the views are the platform's.
+- **You can read the output.** `apkpy build` gives you a normal Android project.
+  If you outgrow ApkPy, you keep the code.
+- **Errors that name themselves.** Python ApkPy cannot translate stops the build
+  and says which construct and why, instead of producing a blank value.
+
+## Where ApkPy loses, and it is not close
+
+- **No `pip` packages. At all.** `requests`, `numpy`, `pandas`, `pillow` — none
+  of them can come, because there is no interpreter to import them into. Kivy,
+  BeeWare and Flet all run real Python and can. **If your app needs a Python
+  library, stop reading and use one of them.**
+- **Only a subset of Python.** ApkPy translates a
+  [documented vocabulary](https://repo-apkpy.pages.dev/compatibility/) — control flow, functions, lists,
+  dicts, f-strings, `try`/`except`, `math`, the common string methods. `re`,
+  comprehensions in some positions, classes and much else are not in it. The
+  build tells you, but it still tells you no.
+- **Android only.** The others target iOS, desktop, and in some cases the web.
+- **Closed source.** You cannot read the engine, audit it, or fix it yourself.
+  The examples and documentation are public; the transpiler is not.
+- **New, and small.** Kivy has been used in production for over a decade and
+  BeeWare has an organisation behind it. ApkPy has neither yet. That is a real
+  reason to choose something else, and pretending otherwise would not help you.
+
+## Which one to pick
+
+**Use Kivy** if you need real Python with arbitrary packages, you are happy for
+the app to have its own look, and you want the option that has been around
+longest.
+
+**Use BeeWare** if you want native widgets *and* real Python, or you want the
+same code on iOS and desktop. It is the closest thing to "the best of both",
+and the cost is the runtime in the package.
+
+**Use Flet** if you like Flutter's widgets and want desktop and web from the
+same source.
+
+**Use Chaquopy** if you already have an Android app and want to call Python
+from it.
+
+**Use ApkPy** if the app is Android, the interface matters, you want a small
+APK with no interpreter, and your logic fits in ordinary Python — screens,
+forms, lists, a database, network calls, background work. A shop floor tool, an
+internal business app, a form-and-list app with a REST API behind it. That is
+the shape it is built for.
+
+## Frequently asked
+
+**Does the APK contain Python?** No. The Python is translated at build time and
+does not exist on the device.
+
+**Is there a WebView?** No. The screens are Android views.
+
+**Can I use `requests` / `numpy` / any package?** No. Use `https` for network
+calls and `db` for data; for anything genuinely needing a Python library, use
+BeeWare or Kivy.
+
+**Can I open the result in Android Studio?** Yes — `apkpy build` produces a
+normal Android project.
+
+**Is it open source?** No. The engine is closed; examples and documentation are
+public.
+
+---
+
+# Installation
+
+Source: https://repo-apkpy.pages.dev/getting-started/
+
+This guide takes you from a clean Python environment to the Hot Previewer and a native Android build.
+
+## Requirements
+
+- Python 3.8 or newer;
+- a JDK between 17 and 21 for local Android compilation;
+- the Android SDK, either from Android Studio or from `apkpy setup`.
+
+Install or update ApkPy:
+
+~~~ powershell
+python -m pip install --upgrade apkpy
+~~~
+
+Check the Android toolchain:
+
+~~~ powershell
+apkpy doctor
+~~~
+
+If ApkPy cannot find a suitable JDK or Android SDK, let it install a compatible local toolchain:
+
+~~~ powershell
+apkpy setup
+~~~
+
+## Create the first project
+
+~~~ powershell
+apkpy start hello_apkpy
+cd hello_apkpy
+~~~
+
+The project contains `writehere.py`, the source file in which you create screens and app logic.
+
+It also contains `AGENTS.md`, and a `CLAUDE.md` that points at it. No AI model
+knows ApkPy from its training: asked to add a screen, an assistant writes Kivy, or Python ApkPy
+cannot translate. `AGENTS.md` is the file coding assistants (Codex, Cursor, Copilot,
+Claude Code and others) read before they work in a project, and it tells them what ApkPy
+translates, which rules stop the build and which API to reach for. Run `apkpy agents`
+to add it to a project you already have; a copy you have edited is never replaced.
+
+Replace it with:
+
+~~~ python
+from apkpy_lib import Screen, button, label, run, toast
+
+home = Screen(id="home")
+label("My first native screen", id="title", screen=home)
+button("Test action", command=lambda: toast("It works"), screen=home)
+
+style = """
+home {
+    background-color: #09090B;
+    padding: 24px;
+    gap: 16px;
+}
+
+title {
+    color: #FAFAFA;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+button {
+    background-color: #8B5CF6;
+    color: #FFFFFF;
+    border-radius: 14px;
+    padding: 14px;
+}
+"""
+
+if __name__ == "__main__":
+    run(start_screen=home)
+~~~
+
+## Preview, build or run
+
+**Hot Previewer**
+
+~~~ powershell
+python writehere.py
+~~~
+
+Use this during interface development. It starts quickly and lets you test navigation, inputs, state and callbacks on your computer.
+
+**Android Studio project**
+
+~~~ powershell
+apkpy build
+~~~
+
+This creates a ZIP containing the generated Gradle project. Open the extracted project in Android Studio when you want to inspect Java/XML or use Android Studio tooling.
+
+**Installable APK**
+
+~~~ powershell
+apkpy run
+~~~
+
+ApkPy generates the Android project, runs Gradle and places a debug APK beside the project.
+
+Optional installation helpers:
+
+~~~ powershell
+apkpy run --qr
+apkpy run --usb
+~~~
+
+## Start from an example
+
+Use the interactive example picker:
+
+~~~ powershell
+apkpy examples
+~~~
+
+Examples cover basic UI, multiple screens, storage, permissions, background work, camera/gallery, dialogs, location, network images, loading, secure login, REST, SQLite lists and Python loops.
+
+## Recommended workflow
+
+1. Build the screen in `writehere.py`.
+2. Test the behavior in the Hot Previewer.
+3. Run `apkpy build` when checking generated Android code.
+4. Test on an Android emulator or physical device.
+5. Run `apkpy release` only when the app identity and signing key are ready.
+
+Continue with [Core concepts](https://repo-apkpy.pages.dev/core-concepts/).
+
+---
+
+# Core concepts
+
+Source: https://repo-apkpy.pages.dev/core-concepts/
+
+ApkPy has one source language and two execution targets: the desktop Hot Previewer and generated native Android code.
+
+## The source of truth
+
+Your app lives in `writehere.py`. ApkPy parses its Python syntax tree and maps supported operations to Android Java, XML and resources.
+
+The generated Android project is an output, not the place to maintain app behavior. If you rebuild, generated files can be replaced.
+
+## Screens become Activities
+
+~~~ python
+from apkpy_lib import Screen
+
+home = Screen(id="home")
+library = Screen(id="library", scroll=True)
+~~~
+
+Each `Screen` becomes a separate Android Activity. Use `scroll=True` when the complete screen should scroll as one page.
+
+## Components attach to a screen or parent
+
+~~~ python
+from apkpy_lib import container, label
+
+summary = container(id="summary", screen=home)
+label("12 tracks", id="count", parent=summary)
+~~~
+
+Passing `screen=` places a component at the screen root. Passing `parent=` nests it inside a container or composable card.
+
+Keep the returned component when it will change later:
+
+~~~ python
+status = label("Waiting", screen=home)
+status.set_value("Ready")
+status.hide()
+status.show()
+~~~
+
+## Styles use selectors
+
+The global `style` string supports component selectors and ID selectors:
+
+~~~ python
+style = """
+label {
+    color: #A1A1AA;
+    font-size: 14px;
+}
+
+page_title {
+    color: #FAFAFA;
+    font-size: 30px;
+    font-weight: bold;
+}
+"""
+~~~
+
+An ID selector wins over the component selector. A `Theme` supplies the defaults underneath both.
+
+## Callbacks hold app logic
+
+~~~ python
+from apkpy_lib import button, inputs, toast
+
+name = inputs("Your name", screen=home)
+
+def save():
+    value = name.get_value()
+    if value == "":
+        toast("Enter your name first")
+        return
+    toast("Saved: " + value)
+
+button("Save", command=save, screen=home)
+~~~
+
+Keep callbacks small and move reusable behavior into normal Python functions. Supported control flow includes conditions, `for`, `while`, `break`, `continue` and common string/number operations.
+
+## Preview and Android parity
+
+The Previewer simulates Android behavior using desktop widgets. The generated app uses native Android components.
+
+The API and state flow should match, while platform-specific presentation can differ slightly:
+
+| Area | Hot Previewer | Android |
+| --- | --- | --- |
+| UI | Desktop rendering calibrated to Android dimensions | Native Android views |
+| Storage | Encrypted local JSON file | Encrypted SharedPreferences |
+| Database | Python SQLite | Android SQLiteDatabase |
+| Network | Background Python request | Background HttpURLConnection |
+| Audio | Desktop media backend | Android foreground media service |
+| Pickers | Desktop dialogs | Native Material/system dialogs |
+
+Always test device-only functionality on Android before release.
+
+## App entry point
+
+~~~ python
+if __name__ == "__main__":
+    run(start_screen=home, theme=app_theme)
+~~~
+
+Use one `run()` call after the screens, components, navigation and styles have been declared.
+
+---
+
+# Essential API reference
+
+Source: https://repo-apkpy.pages.dev/reference/essential/
+
+This page is the fastest route from an API name to working code. It documents
+the supported public surface exported by `apkpy_lib`; generated Java helper
+classes are implementation details.
+
+For the **1.9.0 NFC API**, use the
+[exact device signatures](https://repo-apkpy.pages.dev/reference/device/#nfc-190) and
+[complete NFC examples](https://repo-apkpy.pages.dev/guides/nfc/). It is not available in published
+1.8.0; callbacks take `(ok, value)`, and writes replace existing tag content.
+
+The same **1.9.0** adds [Contacts](https://repo-apkpy.pages.dev/guides/contacts/): choose a
+phone/email without broad access, list/get with read permission, or open a
+native create/edit form. [Exact signatures](https://repo-apkpy.pages.dev/reference/device/#contacts-190)
+and [People Desk source](../downloads/contacts/people-desk.py) include callback
+contracts and errors. Editor return does not confirm a saved contact.
+
+## Conventions
+
+```python
+from apkpy_lib import Screen, Theme, button, label, run
+
+home = Screen(id="home", scroll=True)
+label("Hello", id="title", screen=home)
+button("Continue", id="continue", command=lambda: None, screen=home)
+
+style = """
+home { padding: 24px; gap: 12px; }
+title { font-size: 28px; font-weight: bold; }
+continue { border-radius: 14px; }
+"""
+
+run(start_screen=home, theme=Theme(mode="dark"))
+```
+
+- Pass `screen=` to attach a top-level component to a screen.
+- Pass `parent=` to put a component inside a `container` or `card`.
+- An `id` is both the stable component name and its CSS-like selector.
+- Network, uploads and typed database work run outside the UI thread. Their
+  callbacks return to the Previewer/Android UI thread.
+- The Previewer exercises layout and application flow. Permissions, Firebase,
+  codecs, background restrictions and GPS still need an Android test.
+
+## App, screens and navigation
+
+| API | Signature | Returns |
+| --- | --- | --- |
+| `Screen` | `Screen(id, background_image=None, scroll=False)` | screen definition |
+| `run` | `run(start_screen=None, theme=None)` | starts the app/Previewer |
+| `bottom_nav` | `bottom_nav(screens, labels=None, icons=None)` | `BottomNav` |
+| `on_click_navigate` | `on_click_navigate(screen, data=None)` | callback suitable for `command=` |
+| `app_bar` | `app_bar(title, leading=None, actions=None, id=None, screen=None)` | app-bar definition |
+| `sliver_app_bar` | `sliver_app_bar(title, image, expanded_height=240, pinned=True, leading=None, actions=None, id=None, screen=None)` | collapsible app bar |
+| `action` | `action(icon, command=None, label=None, id=None)` | app-bar action |
+
+Navigation data is read on the destination screen:
+
+```python
+details = Screen(id="details", scroll=True)
+button(
+    "Open note",
+    command=on_click_navigate(details, {"note_id": 42}),
+    screen=home,
+)
+
+selected_id = details.get_param("note_id", 0)
+```
+
+## Components
+
+| API | Exact public signature |
+| --- | --- |
+| `label` | `label(text, id=None, screen=None, parent=None, variant=None)` |
+| `button` | `button(text, id=None, command=None, screen=None, parent=None, variant=None, icon=None)` |
+| `inputs` | `inputs(placeholder="", id=None, type="text", screen=None, parent=None, on_change=None)` |
+| `image` | `image(src, id=None, screen=None, parent=None, *, placeholder=None, fallback=None, cache=True, fade_in=False, blur=0, tint=None, aspect_ratio=None)` |
+| `video` | `video(src, id=None, screen=None, parent=None, *, poster=None, autoplay=False, controls=True, loop=False, muted=False, preload=True, aspect_ratio="16:9", fit="contain", on_ready=None, on_progress=None, on_end=None, on_error=None)` |
+| `avatar` | `avatar(src, size=48, status=None, id=None, screen=None, parent=None, *, placeholder=None, fallback=None, cache=True, fade_in=True, blur=0, tint=None)` |
+| `container` | `container(id=None, screen=None, parent=None)` |
+| `card` | `card(title=None, subtitle=None, image=None, content=None, actions=None, id=None, variant="elevated", screen=None, parent=None)` |
+| `list_view` | `list_view(items=None, id=None, screen=None, parent=None, on_click=None, rich=False)` |
+
+Common returned-component methods are `get_value()`, `set_value(value)`,
+`show()` and `hide()`. Images expose `set_src()`. Videos expose `play()`,
+`pause()`, `stop()`, `seek(seconds)`, `set_source()`, `set_speed()` and
+`set_muted()`.
+
+Input types include `text`, `password`, `number`, `date`, `time`, `textarea`,
+`select`, `checkbox`, `radio` and `range`. Options and range values are passed
+through `set_items()` or `set_value()` as shown in the component guides.
+
+## Layout
+
+```python
+actions = container(id="actions", screen=home)
+save = button("Save", parent=actions)
+cancel = button("Cancel", variant="outlined", parent=actions)
+
+responsive(
+    mobile=column(save, cancel),
+    tablet=row(save, cancel),
+    breakpoint=600,
+    parent=actions,
+)
+```
+
+| API | Purpose |
+| --- | --- |
+| `row(*children)` | horizontal composition |
+| `column(*children)` | vertical composition |
+| `responsive(mobile, tablet=None, landscape=None, breakpoint=600, ...)` | switches layout by viewport |
+
+## Virtual collections and live state
+
+```python
+feed = virtual_collection(
+    [],
+    template={
+        "title": "{author}",
+        "subtitle": "{message}",
+        "meta": "{time}",
+        "image": "{avatar}",
+    },
+    on_end_reached=load_more,
+    on_refresh=reload,
+    prefetch=4,
+    screen=home,
+)
+```
+
+| Method | Contract |
+| --- | --- |
+| `set_items(items, title=None, subtitle=None, image=None, has_more=True)` | replace the dataset and finish refresh; legacy rich-row keys remain supported |
+| `append_items(items, has_more=True)` | append a page without resetting position |
+| `prepend_items(items)` | insert above the visible anchor |
+| `update_item(id, changes, key="id", optimistic=False)` | patch one keyed row |
+| `remove_item(id, key="id", optimistic=False)` | remove one keyed row |
+| `merge_items(items, key="id")` | update matches and append new keys |
+| `commit(mutation_id=None)` | accept an optimistic snapshot |
+| `rollback(mutation_id=None)` | restore one optimistic snapshot |
+| `finish_load(has_more=True)` | release a failed/empty load latch |
+| `refresh()` | start the guarded refresh callback |
+| `scroll_to_end()` | bring the newest row into view |
+| `scroll_to_top()` | bring the first row into view |
+| `scroll_to_item(id, key="id")` | bring one keyed row into view |
+
+### Rows that take the height they need
+
+`item_height=` accepts a number — every row that height, which is what a feed
+of uniform cards wants — or `"auto"`, where each row wraps its own content:
+
+```python
+thread = virtual_collection(
+    turns,
+    template={"title": "{author}", "markdown": "{message}"},
+    item_height="auto",
+    screen=chat,
+)
+```
+
+A conversation needs `"auto"`: one fixed height gives "yes" the same space as
+a twenty-line answer, so one floats in a void and the other is cut off
+mid-sentence. With `"auto"` the text also stops being clipped to one line
+unless `title-lines` / `subtitle-lines` say otherwise.
+
+### Looking at the message that just arrived
+
+Adding a row does not move the viewport, which is right for a feed and wrong
+for a conversation: you send a question and end up looking at your own
+question while the answer grows below the fold.
+
+```python
+thread.merge_items([{"id": reply_id, "author": "Ora", "message": ""}])
+thread.scroll_to_end()
+```
+
+The scroll is animated over the duration the theme's `motion` preset gives
+the `nav` moment, and `motion="none"` makes it a jump. `scroll_to_item(id)`
+takes the same `key=` the mutations take.
+
+Two honest limits. It moves once, when you call it — it does not follow text
+that keeps arriving, so a long streamed answer still grows past the bottom
+edge. And a very long jump on Android takes longer than the stated duration,
+because the RecyclerView re-aims as it goes and cannot know a row's height
+before laying it out.
+
+### The `avatar` slot
+
+A template slot named `avatar` draws a circle with up to two initials taken
+from its value, over a colour the value itself picks:
+
+```python
+template={"avatar": "{author}", "title": "{author}", "markdown": "{message}"}
+```
+
+The same name lands on the same colour on the phone and in the Previewer —
+one palette, read directly by one and written into the generated Java by the
+other. An empty value hides the circle instead of leaving a coloured hole.
+
+It is a mark for a name, not a picture: for a photo or a remote image, use
+the `image` slot.
+
+### The `markdown` slot
+
+A template slot named `markdown` renders its value as Markdown instead of
+plain text — headings, emphasis, links, lists, quotes and fenced code blocks.
+It is the same renderer the `markdown()` component uses, so a code block looks
+the same in a row as it does on a page.
+
+Put an assistant's answer here rather than in `subtitle`: read as plain text
+with backticks in it, an answer with code in it is not an answer.
+
+Add `code-copy: button;` to the collection's stylesheet — or to a
+`markdown()` component's — and every fenced block gets a tappable **Copy**
+under it that puts exactly that block on the clipboard. A block of code you
+cannot copy is a block of code you retype by hand.
+
+All of these are opt-in. A collection that asks for none of them generates
+the same Java and XML it always did, and never carries the Markdown renderer
+into the APK.
+
+`state(initial, id=None)` returns a reactive value with `get`, `set`,
+`increment`, `decrement`, `toggle`, `bind` and `bind_visibility`.
+
+```python
+count = state(0, id="cart_count")
+badge = label("0 items", screen=home)
+count.bind(badge, template="{value} items")
+button("Add", command=lambda: count.increment(), screen=home)
+```
+
+Use `lifecycle(screen, on_mount=None, on_resume=None, on_pause=None,
+on_destroy=None)` to start and stop screen-owned work.
+
+## Typed SQLite Data Core
+
+```python
+notes = db.model(
+    "notes",
+    fields={
+        "id": db.integer(primary_key=True, auto_increment=True),
+        "title": db.text(required=True, max_length=120),
+        "favorite": db.boolean(default=False),
+        "updated_at": db.datetime(default=db.now()),
+    },
+    indexes=[db.index("idx_notes_updated", ["updated_at"])],
+)
+
+db.schema("notes_app", version=1, models=[notes])
+```
+
+| Area | Public API |
+| --- | --- |
+| Fields | `integer`, `real`, `text`, `boolean`, `datetime`, `json`, `blob`, `now` |
+| Model | `model(name, fields, indexes=None)` and `index(name, fields, unique=False)` |
+| CRUD | `insert`, `insert_many`, `get`, `find`, `update`, `delete`, `count` |
+| Filters | `eq`, `ne`, `gt`, `gte`, `lt`, `lte`, `contains`, `starts_with`, `ends_with`, `in_`, `is_null`, `and_`, `or_` |
+| Order | `asc(name)`, `desc(name)` |
+| Schema | `schema(name, version, models, migrations=None)` |
+| Migration | `migration`, `create_table`, `add_column`, `rename_column`, `create_index`, `rename_index`, `drop_index`, `rename_table`, `sql` |
+
+CRUD callbacks:
+
+| Call | `on_result` receives |
+| --- | --- |
+| `insert` | new row ID |
+| `insert_many` | inserted row count |
+| `get` | JSON object or empty value |
+| `find` | iterable `JsonRows` |
+| `update` / `delete` | affected row count |
+| `count` | integer count |
+
+Every operation accepts `on_error(message)`. Use parameterized filters and
+values; do not build SQL strings with user input.
+
+### Reactive Data
+
+```python
+folder_notes = db.relation(
+    "folder_notes",
+    parent=folders,
+    child=notes,
+    foreign_key="folder_id",
+    parent_as="folder",
+    children_as="notes",
+    on_delete="cascade",
+)
+
+db.schema(
+    "knowledge_vault_live",
+    version=1,
+    models=[folders, notes],
+    relations=[folder_notes],
+)
+
+live_notes = notes.observe(
+    filters=[db.eq("folder_id", active_folder_id)],
+    include=["folder"],
+    screen=notes_screen,
+    on_change=lambda rows: notes_feed.set_items(rows),
+)
+```
+
+| Area | Public API |
+| --- | --- |
+| Relation | `db.relation(name, parent, child, foreign_key, parent_as, children_as, on_delete)` |
+| Eager read | `get(..., include=None)` and `find(..., include=None)` |
+| Observer | `model.observe(..., screen, on_change, on_error=None)` |
+| Observer control | `refresh()`, `update_query(...)`, `close()` |
+
+`on_delete` accepts `restrict`, `cascade` or `set_null`. Includes are limited
+to one level and are loaded in batches. Observers pause and resume with their
+screen, coalesce rapid invalidations and deliver callbacks on the UI thread.
+See [Reactive Data](https://repo-apkpy.pages.dev/reactive-data/) for lifecycle and migration rules.
+
+## HTTP and JSON
+
+```python
+def received(success, body):
+    if success:
+        title.set_value(json_get(body, "title"))
+    else:
+        snackbar("Request failed")
+
+https.get("https://api.example.com/note/42", on_response=received)
+```
+
+`https.get`, `post`, `put`, `patch` and `delete` call
+`on_response(success, body)`. `json_get(json_text, "items.0.title")` safely
+reads a dotted path.
+
+Pass a dict as `data=` and it goes out as JSON with its types intact — a
+number stays a number, and the text a user typed is escaped by the
+serialiser rather than by you:
+
+```python
+https.post(
+    "https://api.example.com/messages",
+    data={
+        "model": "some-model",
+        "max_tokens": 1024,
+        "messages": [{"role": "user", "content": question.get_value()}],
+    },
+    headers={"x-api-key": storage.get("api_key", "")},
+    timeout=120,
+    on_response=answered,
+)
+```
+
+`Content-Type: application/json` is set for you when the body starts with
+`{` or `[` and you did not choose a header yourself. Pass a string as `data=`
+to send anything else — form-encoded bodies, XML — exactly as written.
+
+`timeout=` is in **seconds** and applies to waiting for the response; the
+default is 60 and the ceiling is 600. Raise it when the other end thinks
+before it answers, as a language model does.
+
+## WebSocket
+
+```python
+websocket.connect(
+    "room",
+    "wss://example.com/live",
+    headers={"Authorization": "Bearer " + token},
+    on_open=lambda: status.set_value("Live"),
+    on_message=lambda message: messages.prepend_items([{"text": message}]),
+    on_error=lambda message: status.set_value("Offline · " + message),
+    reconnect=True,
+)
+
+websocket.send("room", "hello")
+websocket.close("room")
+```
+
+`connect()` also accepts `protocols`, `on_close`, `reconnect_delay`,
+`max_reconnect_delay` and `ping_interval`. Sends made during the handshake are
+queued with a bounded limit.
+
+## Storage and cryptography
+
+| Object | Methods |
+| --- | --- |
+| `storage` | `set`, `get`, `delete`, `clear`, `keys` |
+| `crypto` | `hash_password`, `verify_password`, `encrypt`, `decrypt` |
+| `files` | `download`, `path`, `exists`, `delete` |
+
+Encrypted values are tied to the app/device key. Copying only the ciphertext to
+another installation is not a backup strategy. Never ship API secrets in
+client code.
+
+## Overlays and feedback
+
+| API | Callback shape |
+| --- | --- |
+| `bottom_sheet(..., on_select=...)` | selected item |
+| `modal(..., on_confirm=..., on_cancel=...)` | no arguments |
+| `menu` / `popup_menu` / `context_menu` | selected item |
+| `date_picker` / `time_picker` | selected value |
+| `snackbar(message, action=None, on_action=None, duration=3000)` | action callback |
+| `confirm(title, message, on_result=None)` | boolean result |
+
+Overlay objects expose `open()` and `close()`.
+
+## Android integrations
+
+| API | What it controls |
+| --- | --- |
+| `permissions` | runtime permission checks and requests |
+| `notify` / `push` | local notifications and Firebase Cloud Messaging |
+| `camera` / `gallery` | capture and media selection |
+| `location` | current, continuous and foreground-service tracking |
+| `map_view` | tiles, markers, route line, user position and follow mode |
+| `routes` | cancellable driving, walking or cycling route request |
+| `service` | periodic and one-shot WorkManager tasks |
+| `audio` / `video` | background audio and Media3 video |
+| `uploads` | multipart transfer with progress and cancellation |
+
+For setup requirements and complete examples, continue to the
+[module reference](https://repo-apkpy.pages.dev/api-reference/) or the [guide index](https://repo-apkpy.pages.dev/guides/).
+
+---
+
+# Compatibility and limits
+
+Source: https://repo-apkpy.pages.dev/compatibility/
+
+RELEASE CONFIDENCE
+### Know what runs where.
+ApkPy keeps the Previewer and generated Android project on one public API, but a desktop preview is not a device certification. This page separates verified behavior, generated output and application responsibilities.
+
+## Supported toolchain
+
+| Part | Supported range | Notes |
+| --- | --- | --- |
+| Python | 3.8–3.13 | The package declares and tests this range |
+| JDK | 17–21 | Use `apkpy doctor` to detect an incompatible JDK |
+| Android SDK | Android Studio SDK or `apkpy setup` | A real SDK is required for Gradle compilation |
+| Desktop Previewer | Windows, macOS or Linux with Tk support | Native device APIs may use a desktop simulation |
+| Android output | Java, XML and Gradle project | No Python runtime is embedded in the APK |
+
+## Production Feeds behavior
+
+| Capability | Previewer | Generated Android |
+| --- | --- | --- |
+| Virtual list/grid | Reusable pooled widgets | Native `RecyclerView` |
+| End prefetch | Viewport threshold | `RecyclerView.OnScrollListener` |
+| Duplicate request guard | Loading latch | Loading latch |
+| Page insertion | Preserves virtual offset | `notifyItemRangeInserted()` |
+| Pull-to-refresh | Top gesture and `refresh()` | Native `SwipeRefreshLayout` |
+| Prepend | Preserves visible offset | Range insert plus offset restore |
+| Update one item | Repaints the affected pooled row | `notifyItemChanged()` |
+| Remove one item | Closes the removed position | `notifyItemRemoved()` |
+| Merge/rollback | Reconciles the visible dataset | Native `DiffUtil` |
+| Optimistic history | Named in-memory snapshots | Named in-memory snapshots |
+
+## Conditional generation
+
+ApkPy scans the current application before adding support code:
+
+| Your source uses | Generated project receives |
+| --- | --- |
+| Plain `virtual_collection()` | RecyclerView and its adapter |
+| `on_end_reached` | Scroll listener, prefetch threshold and loading latch |
+| `on_refresh` | `SwipeRefreshLayout` dependency and refresh wrapper |
+| `prepend_items()` | Range insertion and scroll-offset restoration |
+| `update_item()` / `remove_item()` | Targeted adapter notifications |
+| `merge_items()` / `rollback()` | `DiffUtil` helper |
+| Optimistic methods | Snapshot maps only for the affected collection |
+
+An application that does not use feeds receives none of this runtime.
+
+## Data Core behavior
+
+| Capability | Previewer | Generated Android |
+| --- | --- | --- |
+| Database engine | Python `sqlite3` | Native `SQLiteOpenHelper` |
+| Operation queue | One ordered worker | One ordered `ExecutorService` |
+| Callback thread | Tk interface thread | Android main `Handler` |
+| Batch binding | SQLite parameters in one transaction | Reused `SQLiteStatement` in one transaction |
+| Schema metadata | `apkpy_schema_meta` | `apkpy_schema_meta` |
+| Destructive migration | Private backup, transaction, restore | Private backup, transaction, restore |
+| Model repository | Runtime model object | Generated repository per model |
+| Foreign keys | SQLite foreign keys enabled | `onConfigure()` enables SQLite foreign keys |
+| Relation include | One batched query per relation | One batched query per relation |
+| Observation | Screen lifecycle + snapshot comparison | Activity lifecycle + generated invalidation tracker |
+
+Projects without `db.model()` receive no typed repositories, data executor,
+schema metadata or migration runtime. Legacy SQL calls remain available.
+
+## What was validated for 1.3.2
+
+**185**transpiler regression checks passed
+
+**21**focused Data Core and Reactive Data checks passed
+
+**Gradle**the generated Reactive Data demo Java compiled successfully
+
+**Strict docs**the complete MkDocs site built without warnings treated as errors
+
+The generated Java was inspected for `SQLiteOpenHelper`, `SQLiteStatement`,
+the single data executor, main-thread callback handler, repositories, indexes,
+foreign keys, batched includes, observer generations, lifecycle hooks,
+selective post-commit invalidation, sequential migrations, `OnScrollListener`,
+`notifyItemRangeInserted`, `notifyItemChanged`, `notifyItemRemoved`, `DiffUtil`
+and per-collection optimistic history. A separate plain collection test checks
+that those helpers are omitted when unused.
+
+These checks prove repeatable generation and compilation. They do not replace
+testing an application's own backend, device permissions, OEM behavior or
+release signing.
+
+## The Python ApkPy translates
+
+ApkPy reads your module and writes Java. It translates a fixed vocabulary of
+Python rather than running it, so this list is the whole of it. Anything
+outside it stops the build with [`U2033`](https://repo-apkpy.pages.dev/friendly-errors/), naming what it
+found -- it used to compile to nothing at all and leave you with a blank value.
+
+**Files**
+
+One `writehere.py`, plus any plain Python modules beside it that it
+imports with `import helpers`. A helper holds functions and constants;
+screens, themes and CSS stay in the application. See
+[More than one file](https://repo-apkpy.pages.dev/guides/modules/). New in 1.10.0.
+
+**Control flow**
+
+`if` / `elif` / `else`, `while`, `break`, `continue`, `return`,
+`try` / `except` / `finally`, and function definitions with arguments.
+A condition compares with `==`, `!=`, `<`, `>`, `<=` or `>=`, tests membership
+with `in` and `not in`, and joins those with `and`, `or` and `not`.
+
+`in` is membership against a list, tuple, set or dict written in the source, a
+list kept at module level, or a `split()` call. Against anything else it
+searches text. That is decided from the source, never from the running value.
+
+`for` loops over `range()`, over a list or tuple written in the source, over a
+list held in a name, and over the result of `split()`. A `range()` index is a
+number, so `i + 1` and `i % 2` are arithmetic.
+
+**Calling your own functions**
+
+By position, by name, or both: `total(price, vat=23)` and `total(vat=23,
+price=9)` line up with the parameters the function declares. ApkPy does not
+read default values, so every parameter has to be given; a missing one, a
+repeated one, or a name the function does not have stops the build with
+[`U2037`](https://repo-apkpy.pages.dev/friendly-errors/). Before 1.10.1 the names were dropped in silence
+and the generated Java did not compile.
+
+**Values**
+
+Assignment to one name, and `+=`, `-=`, `*=`, `/=` and `%=`. List and dict
+literals, indexing (`items[0]`, `items[-1]`, `row["key"]`), slicing text
+(`text[0:2]`), the conditional expression `a if test else b`, and f-strings
+with `{value}`, `{value:.2f}` and `{value:,.2f}`.
+
+A list comprehension is translated in one place: the search callback,
+`on_change=lambda q: notes.set_items([...])`.
+
+**Arithmetic**
+
+`+`, `-`, `*`, `/` and `%` work between values ApkPy knows are numbers: a
+number written in the source, `int(...)` or `float(...)`, a name assigned from
+one of those, and a `range()` index. `/` always gives a float, as in Python.
+Text read from an input or from storage stays text until you convert it, so
+`float(price) * 2` works and `price * 2` stops the build. Between values that
+are not known to be numbers, `+` joins text.
+
+**Builtins and text**
+
+`len`, `int`, `float`, `str`, `round`, `list`, `abs`, `min`, `max`, `sum`, and
+the string methods `upper`, `lower`, `strip`, `replace`, `split`, `title`,
+`find`, `count`, `join`, `startswith` and `endswith`; `isdigit` in a condition.
+
+`split()` gives a list with Python's rules: the separator is text rather than a
+regular expression, empty parts are kept, `maxsplit` is honoured, and with no
+separator it splits on runs of whitespace.
+
+**Lists**
+
+`items.append(x)` works. A list written at module level that the app appends
+to is kept in one process-wide store, so every screen sees the same list --
+exactly as a module-level list behaves in Python.
+
+**math**
+
+Write `import math` and use the standard module; the Previewer gets Python's
+own and the phone gets `java.lang.Math`.
+
+`sqrt` `exp` `log` `log10` `fabs` `pow` `hypot` `floor` `ceil` `trunc`
+`sin` `cos` `tan` `asin` `acos` `atan` `atan2` `degrees` `radians`
+`pi` `e` `tau`
+
+**Where numbers used to disagree, and no longer do**
+
+Three differences between the two runtimes were fixed rather than
+documented away, because each one was invisible until it mattered:
+
+- **`round(2.5)`** gave `2` in the Previewer and `3` on the phone. Python
+  rounds a half to the even neighbour and `Math.round` always rounds up;
+  the generator now emits `Math.rint`, which has Python's rule.
+- **`math.pow(10, 8)`** printed `1.0E8` on the phone and `100000000.0` in
+  the Previewer. Java switches to exponent notation from 1e7 and Python
+  only from 1e16, so numbers are now written out with Python's rule.
+- **`math.floor(2.7)`** printed `2.0` on the phone. `floor`, `ceil` and
+  `trunc` return an `int` in Python 3, and now do here too.
+
+`math.sqrt(-1)` raises on both sides. Java would have returned `NaN` and
+put that word on screen; it now throws, so one `try` / `except` covers the
+Previewer and the phone together.
+
+**Left out on purpose**
+
+`math.log2`, because Java has no `Math.log2` and `log(x)/log(2)` disagrees
+with Python on 8 of the first 60 powers of two. `math.inf` and `math.nan`,
+because Python writes `inf` where Java writes `Infinity`. A translation that
+is right most of the time is worse than one that says no.
+
+**Not translated -- the build stops and says so**
+
+Each of these stops the build with `U2033`, naming the line and a form that
+does compile:
+
+- `%` formatting (`"n=%s" % n`) and `.format()` -- use an f-string;
+- `sorted`, `zfill`, `lstrip`, `rstrip`, and a slice with a step (`text[::2]`);
+- `is`, and chained comparisons such as `0 < x < 10`;
+- a comprehension anywhere except the search callback, module level included;
+- unpacking (`a, b = parts`, `for key, value in pairs:`), `a = b = 0`,
+  `for ... else`, and assigning to an item or an attribute (`row["k"] = v`,
+  `status.text = v`);
+- `not x`, `a or b`, or a comparison used as a value instead of a condition;
+- a tuple or a set used as a value, and a `for` over text, a dict or a set;
+- arithmetic on a value not known to be a number (`price * 2` on text from an
+  input), and repeating text with `*`;
+- an f-string format other than `.2f` or `,.2f`;
+- `json.dumps`, `base64`, `uuid`, `datetime` (use the `datetime` API), `print`,
+  and more than one `except` clause on a `try`.
+
+**When what you need is not here**
+
+The list above is what ApkPy translates, not what Android can do. For the
+rest there is [your own Java](https://repo-apkpy.pages.dev/guides/native/): a named block with the
+Java that runs on the phone and the answer the Previewer gives instead,
+plus the Gradle dependency, manifest line and R8 rule it needs. Inside
+that block the agreement between the two runtimes is yours to keep.
+
+**Differences that do not stop the build**
+
+Everything on the phone is text, and ApkPy decides from the source rather than
+from the running value. These four still give a different answer from Python:
+
+- `text[0]` on text reads it as a list and gives empty text. Slice it instead:
+  `text[0:1]`.
+- `+` on a function's parameter joins text: `n + 1` with `n` set to `1` shows
+  `11`. Convert it first: `int(n) + 1`.
+- `x in name`, where `name` is a local variable holding a list, searches the
+  list's text. Test the call itself (`x in text.split(",")`), a list written in
+  the source, or a list kept at module level.
+- A list shown with `set_value()` reads `["a","b"]` on the phone and
+  `['a', 'b']` in the Previewer.
+
+### Regular expressions — 1.7.0 subset
+
+`re.match`, `re.search`, `re.sub` and `re.findall` now have an Android
+translation in ApkPy **1.7.0**. Use constant Unicode patterns and flags inside callbacks/helper
+functions; input and replacement text may be dynamic.
+
+```python
+import re
+
+def check_text():
+    text = message.get_value()
+    found = re.search(r"\bREF-(?P<code>[0-9]{4,8})\b", text, re.I)
+    if found is not None:
+        reference.set_value(found.group("code"))
+    else:
+        reference.set_value("No reference")
+    matches = re.findall(r"#[\w]+", text)
+    tags.set_items(matches)
+    cleaned.set_value(re.sub(r"\s+", " ", text).strip())
+```
+
+`match` checks the beginning, not the entire string: add `\Z` for full-input
+format checks. Match objects support `group`, `groups`, `start`, `end`, `span`
+and checks against `None`; group selectors must be constant. `findall` returns
+strings without captures, a capture with one group, and grouped sequences with
+multiple captures. Assign its result before iteration or passing it to a list.
+
+Supported flags are `IGNORECASE`, `MULTILINE`, `DOTALL`, `VERBOSE`, `ASCII` and
+`UNICODE` (including short aliases and `|` combinations). Named groups,
+lookahead, greedy/lazy quantifiers, common character classes and boundaries
+are supported. Replacements use Python's `\1` / `\g<name>` syntax; `$` is literal.
+
+Dynamic patterns, `re.compile`, `fullmatch`, `finditer`, `split`, bytes,
+callable replacements, lookbehind, pattern backreferences, conditionals,
+atomic groups and possessive repetition are outside this subset. Unsupported
+forms fail the build with `C1701`; do not assume everything accepted by the
+desktop `re` module can be exported to Android.
+
+The generator fixes Unicode classes and case folding to the **build Python's**
+tables. Use the same Python version for preview and build. Regex calls are
+synchronous: bound input sizes and avoid pathological patterns. Java's native
+regex helper adds no Python runtime, permission or Android dependency, and is
+only emitted when used. This supports format validation and text extraction;
+it does not prove an email address exists or replace server-side validation.
+
+**Never translatable**
+
+`requests`, `numpy`, `pandas`, `os`, `pathlib`, `threading`, `sqlite3` and
+anything else that needs a Python interpreter: there is none on the phone.
+Use `https`, `files`, `db` and `background_job` instead. `U2033` names the
+replacement when it recognises what you reached for.
+
+## Deliberate boundaries
+
+Production Feeds does **not** provide:
+
+- a backend, cursor format or API authentication;
+- automatic offline synchronization;
+- conflict resolution between REST, WebSocket and local database records;
+- durable optimistic transactions after the process is killed;
+- automatic retry queues or request deduplication by HTTP response ID;
+- Paging 3, Room or Firebase as mandatory dependencies;
+- item-level business rules such as who may edit or delete a record.
+
+This division is intentional. ApkPy provides efficient native collection
+behavior while the application retains control over product rules and data
+ownership.
+
+## Previewer versus device
+
+### NFC — new in 1.9.0
+
+The [NFC API](https://repo-apkpy.pages.dev/guides/nfc/) supports foreground tag IDs/metadata, NDEF text and
+URI reading, and a one-record text/URI write to compatible tags. Callbacks are
+`(ok, value)`; tag results are JSON strings read with `json_get()`. Its manifest
+permission is normal, not an Android runtime request. No NFC helper or
+permission is emitted when the app does not call the API.
+
+There is no HCE/card emulation, raw ISO-DEP/APDU, bank-card protocol, MIFARE
+Classic authentication, Beam, cold-start tag launch or screen-off reading.
+Writes replace existing records and are not transactional. A freshly formatted
+tag must be removed and re-presented for independent read-back and capacity.
+The desktop panel is simulation, not physical NFC validation. See the
+[development status](https://repo-apkpy.pages.dev/version-1.9.0/); this API is not in published 1.8.0.
+
+### Contacts — new in 1.9.0
+
+The [Contacts API](https://repo-apkpy.pages.dev/guides/contacts/) supports one phone/email selection,
+display-name search with `limit`/`offset`, detail reads and native create/edit
+forms. Only list/get request `READ_CONTACTS`; no direct deletion or
+`WRITE_CONTACTS` is included. Editor return does not prove a save. The compiler
+omits the helper when unused; no new Android dependency is required.
+
+Search uses literal substrings and ASCII case-insensitive ordering. Paging
+skips a provider cursor, and changes between requests may shift offsets.
+No photos, groups, bulk writes, observers or vCard support is included.
+The fictional desktop simulator cannot validate Android grants, account sync
+or OEM editors. See [verification limits](https://repo-apkpy.pages.dev/version-1.9.0/#contacts).
+
+### Device-only checks
+
+Use the Previewer for layout, callbacks, data flow and rapid iteration. Use an
+Android emulator or physical device before release for:
+
+- permissions and background restrictions;
+- notification channels and lock-screen controls;
+- hardware codecs, camera, microphone, GPS and Bluetooth;
+- lifecycle behavior after process recreation;
+- network security configuration and certificate behavior;
+- keyboard, accessibility, screen density and manufacturer-specific UI.
+
+If the Previewer and Android differ, preserve the Python API and repair both
+the Previewer and generator source. Editing generated Java alone is temporary;
+the next `apkpy build` replaces it.
+
+## Release checklist
+
+- [ ] Create a new virtual environment and install the built wheel.
+- [ ] Run one small example from the installed package.
+- [ ] Generate a fresh Android project with `apkpy build`.
+- [ ] Compile the generated project using JDK 17–21.
+- [ ] Test narrow and wide screens in the Previewer and Android.
+- [ ] Test every backend failure path and rollback.
+- [ ] Confirm `has_more=False` stops repeated page requests.
+- [ ] Check that refresh returns the authoritative first page.
+- [ ] Review the generated manifest and dependencies.
+- [ ] Only then create signing material or publish the package.
+
+Start with the [Data Core guide](https://repo-apkpy.pages.dev/data-core/), continue to
+[Reactive Data](https://repo-apkpy.pages.dev/reactive-data/), then inspect the complete
+[1.3.2 release notes](https://repo-apkpy.pages.dev/version-1.3.2/).
+
+For broader release evidence and the stability contract, continue to
+[Trust and maturity](https://repo-apkpy.pages.dev/trust-maturity/). For the renderer boundary, use
+[Previewer versus Android](https://repo-apkpy.pages.dev/preview-android/).
+
+---
+
+# Components and layouts
+
+Source: https://repo-apkpy.pages.dev/ui-components/
+
+## Text, buttons and inputs
+
+~~~ python
+title = label("Library", variant="headline", screen=home)
+
+search = inputs(
+    "Search tracks",
+    type="search",
+    on_change=lambda query: filter_tracks(query),
+    screen=home,
+)
+
+button(
+    "Continue",
+    variant="filled",
+    icon="arrow_forward",
+    command=open_library,
+    screen=home,
+)
+~~~
+
+Button variants are `filled`, `outlined`, `tonal`, `text`, `danger` and `icon`.
+
+Input types include `text`, `password`, `search`, `number`, `textarea`, `select`, `switch`, `checkbox`, `range`, `radio`, `date` and `time`.
+
+## Containers and composition
+
+~~~ python
+panel = container(id="panel", screen=home)
+label("Account", variant="title", parent=panel)
+inputs("Email", type="text", parent=panel)
+button("Save", variant="filled", parent=panel)
+~~~
+
+Style the parent to control its children:
+
+~~~ css
+panel {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 18px;
+    background-color: var(--surface);
+    border-radius: var(--radius);
+}
+~~~
+
+## Cards
+
+Use a ready-made semantic card:
+
+~~~ python
+from apkpy_lib import card, card_action
+
+premium = card(
+    title="Premium",
+    subtitle="Offline listening and high-quality audio",
+    image="headphones.jpg",
+    content="Available across your signed-in devices.",
+    actions=[
+        card_action("Learn more", variant="text", command=show_details),
+        card_action("Try it", variant="filled", command=start_trial),
+    ],
+    variant="elevated",
+    screen=home,
+)
+~~~
+
+Or compose any supported child manually:
+
+~~~ python
+custom = card(id="custom_card", variant="outlined", screen=home)
+label("Custom content", variant="title", parent=custom)
+button("Open", variant="text", parent=custom)
+~~~
+
+## Lists
+
+Plain and rich rows use the same `list_view`:
+
+~~~ python
+tracks = list_view(
+    [
+        {
+            "title": "Midnight Drive",
+            "subtitle": "Nova",
+            "image": "cover.jpg",
+            "src": "track.mp3",
+        }
+    ],
+    rich=True,
+    on_click=lambda item: audio.play_background(
+        item["src"],
+        title=item["title"],
+        artist=item["subtitle"],
+        art=item["image"],
+    ),
+    screen=home,
+)
+~~~
+
+Update it later:
+
+~~~ python
+tracks.set_items(new_items)
+~~~
+
+Database and HTTP JSON can be mapped directly:
+
+~~~ python
+rows = db.query("SELECT title, artist FROM tracks ORDER BY title")
+tracks.set_items(rows, title="title", subtitle="artist")
+~~~
+
+A tapped row reaches `on_click` whole -- every column the query returned,
+plus `title` and `subtitle` -- so the callback can read the key it needs:
+
+~~~ python
+def remove(item):
+    db.execute("DELETE FROM tracks WHERE id = ?", [item["id"]])
+
+tracks = list_view([], on_click=remove, screen=home)
+tracks.set_items(db.query("SELECT id, title, artist FROM tracks"),
+                 title="title", subtitle="artist")
+~~~
+
+Before 1.11.0 the phone handed over only the text shown, and `item["id"]`
+was that text: the `DELETE` matched nothing, on the phone only.
+
+## Settings rows
+
+A `list_view` shows rows it owns and fills from data. When the rows *are* the
+screen -- a settings list, an account page, a menu -- write them out with
+`list_row`:
+
+~~~ python
+prefs = container(id="prefs", screen=you)
+
+list_row("Default model", subtitle="Answers when you do not pick one",
+         icon="settings", trailing="Opus 5", trailing_icon="chevron_right",
+         id="pref_model", parent=prefs,
+         command=lambda: model_sheet.open())
+list_row("Appearance", icon="image", trailing="Dark",
+         trailing_icon="chevron_right", parent=prefs,
+         command=lambda: theme_sheet.open())
+list_row("Notifications", icon="bell", trailing="Off",
+         trailing_icon="chevron_right", parent=prefs,
+         command=lambda: toast("Nothing to notify you about yet"))
+~~~
+
+Everything except the label is optional. The label sits at the leading edge
+with the icon beside it, the subtitle goes underneath, and `trailing` /
+`trailing_icon` are pinned to the right. The text block takes whatever the
+icon and the trailing pieces leave, so a long label is cut with an ellipsis
+rather than pushing the chevron off the screen.
+
+A row is tapped like a button. `command=` runs a function, and
+`screen.on_click_navigate(button=the_row, to=other_screen)` opens a screen --
+which is what a settings row usually wants.
+
+Three texts, three setters: `set_value()` changes the label,
+`set_trailing()` the value on the right and `set_subtitle()` the second line.
+A slot only exists if the row declared it, so pass `trailing=""` or
+`subtitle=""` for one you intend to fill later.
+
+~~~ python
+pref_model = list_row("Default model", subtitle="", trailing="Opus 5",
+                      trailing_icon="chevron_right", id="pref_model",
+                      parent=prefs)
+
+def refresh():
+    pref_model.set_trailing(storage.get("model", "Opus 5"))
+
+lifecycle(settings, on_resume=refresh)
+you.on_click_navigate(button=pref_model, to=model_screen)
+~~~
+
+Reading the value back in `on_resume` is what makes the row show the choice
+after you come back from the screen that changed it.
+
+### Grouping rows with hairlines
+
+Give the container that holds them a `divider-color` and the rows are
+separated by a hairline, drawn between them and never at the edges. Let the
+group own the surface and the corner radius, and the rows carry no box of
+their own:
+
+~~~ css
+prefs {
+    background-color: var(--surface);
+    border-radius: 16px;
+    padding: 0px;
+    divider-color: var(--border);
+    divider-inset: 58px;   /* start the line past the icon column */
+}
+list_row {
+    background-color: #00000000;
+    border-radius: 0px;
+    padding: 0px 18px;
+    min-height: 60px;
+    subtitle-color: var(--text-secondary);
+    trailing-color: var(--text-secondary);
+    icon-color: var(--text-secondary);
+}
+~~~
+
+Rows stacked in a container sit flush against each other, so the hairline
+lands on the seam. `divider-width` sets the thickness and defaults to 1px.
+Dividers work on any container, not only ones holding rows.
+
+### An empty state in the middle
+
+`flex-grow: 1` on a column child gives it whatever its siblings leave. Put the
+greeting in one and the composer after it, and you get the screen every
+assistant app opens on -- the welcome in the middle, the input at the bottom:
+
+~~~ python
+hero = container(id="hero", screen=chat)
+label("Ora", id="mark", parent=hero)
+label("Back in action", id="greeting", parent=hero)
+
+composer = container(id="composer", screen=chat)
+inputs(placeholder="How can I help you today?", id="field",
+       type="textarea", parent=composer)
+~~~
+
+~~~ css
+hero {
+    flex-grow: 1;              /* take what the composer leaves */
+    justify-content: center;   /* along the column */
+    align-items: center;       /* across it */
+    background-color: #00000000;
+}
+~~~
+
+`justify-content` and `align-items` are the two CSS words for the two halves
+`android:gravity` already had. `center`, `flex-start` and `flex-end` on either
+axis. A column that names neither still centres horizontally, which it always
+did, so nothing already written moves.
+
+### Text that arrives
+
+An answer appearing all at once is the one thing that never happens when you
+talk to an assistant. `stream()` types it in:
+
+~~~ python
+lead.stream("Thinking about that...", speed="fast")
+~~~
+
+And for a chat, add the row empty and stream into one of its fields:
+
+~~~ python
+thread.merge_items([{"id": reply_id, "author": "Ora", "message": ""}])
+thread.stream_item(reply_id, "message", answer)
+~~~
+
+`speed` is `slow`, `normal` or `fast`. `instant` puts the whole thing there at
+once, and so does a theme with `motion="none"` whatever the call said --
+somebody who turned animations off did not ask to watch text type itself.
+
+The rate lives in one table both runtimes read, so the phone and the desktop
+type at the same speed. Text arrives a few characters per tick rather than one
+character every few milliseconds, because a Handler and a Tk `after` both stop
+being accurate below about 10ms and a rate the runtime cannot keep is a rate
+that differs between them.
+
+### A thread that reads as a conversation
+
+A collection row is a card by default, which is right for a feed and wrong for
+a chat. Take the surface away and the turn becomes text on the page:
+
+~~~ css
+/* No height: the thread takes what is left, which is what pins a composer
+   under it to the bottom of the screen instead of leaving it mid-air. */
+thread {
+    item-background-color: #00000000;
+    item-border-color: #00000000;
+    title-color: var(--text-secondary);   /* who is speaking, quietly */
+    subtitle-color: var(--text);          /* what they said, loudly */
+    subtitle-lines: 12;
+}
+~~~
+
+Leave `height` off and the collection takes the space its siblings do not, so
+anything after it sits at the bottom of the screen. Give it a height and it
+stops there, which is what you want inside a scrolling page.
+
+Drop `meta` and `badge` from the `template=` as well -- a timestamp on the
+right and a pill under the text are what make a chat read as a notification
+feed.
+
+### Bubbles
+
+A messenger draws the other way: each message a bubble that hugs its text,
+yours on the right. Give the rows a kind with `variant=`, and style each kind
+with `id:kind`:
+
+~~~ python
+thread = virtual_collection(
+    messages,
+    variant="{kind}",
+    template={
+        "day":  {"meta": "{text}"},
+        "them": {"subtitle": "{text}", "meta": "{time}"},
+        "mine": {"subtitle": "{text}", "meta": "{time} ✓✓"},
+    },
+    id="thread", item_height="auto", screen=chat,
+)
+~~~
+
+~~~ css
+thread { item-background-color: #202C33; item-border-radius: 10px; gap: 6px;
+         subtitle-lines: 30; }
+thread:them { align-self: flex-start; max-width: 80%; }
+thread:mine { align-self: flex-end; max-width: 80%; item-background-color: #005C4B; }
+thread:day  { align-self: center; meta-color: #8696A0; }
+~~~
+
+`align-self` puts a kind of row at the start, the end or the centre;
+`max-width` (pixels or a percentage) is as wide as it may grow, and a short
+message is narrower. `item-border-radius` rounds every row and `gap` spaces
+them. Each kind can have its own `item-background-color`, `title-color`,
+`subtitle-color` and `meta-color`. A collection that sets none of it is drawn
+as it always was.
+
+### A list of conversations
+
+Messaging apps all draw a chat list the same way: the time level with the
+name, and the unread count under the time, round.
+`badge-position: end` does that:
+
+~~~ python
+chats = virtual_collection(
+    rows,
+    template={"avatar": "{name}", "title": "{name}", "subtitle": "{last}",
+              "meta": "{time}", "badge": "{unread}"},
+    id="chats", item_height="auto", on_click=open_chat, screen=home,
+)
+~~~
+
+~~~ css
+chats { badge-position: end; badge-background-color: #21C063; badge-color: #0B141A; }
+~~~
+
+A row with an empty `unread` shows no badge. Without `badge-position`, the badge
+follows the subtitle, as before.
+
+### Rows built from components
+
+The slots above draw a chat list or a track list. A feed post -- a header, a
+photo, a row of actions, a caption -- a comment or a product card is a small
+layout of its own, repeated for every item. Write it once, as a function that
+builds one row, and pass it as `row=`:
+
+~~~ python
+POSTS = [
+    {"user": "mara.vale", "face": "mara.png", "picture": "lisbon.jpg",
+     "likes": "1,284", "caption": "Last light over the river"},
+    # ... what your server or database returns
+]
+
+def like(item):
+    toast("You liked " + item["user"] + "'s post")
+
+def post_row(row):
+    head = container(id="post_head", parent=row)
+    avatar("{face}", size=34, id="post_face", parent=head, describe="{user}")
+    label("{user}", id="post_user", parent=head)
+    image("{picture}", id="post_pic", parent=row, aspect_ratio="1:1", describe="")
+    actions = container(id="post_actions", parent=row)
+    button("", icon="favorite_border", describe="Like", parent=actions,
+           command=lambda item: like(item))
+    button("", icon="send", describe="Share", parent=actions,
+           command=lambda: toast("Share"))
+    label("{likes} likes", id="post_likes", parent=row)
+    label("{caption}", id="post_caption", parent=row)
+
+feed = virtual_collection(POSTS, row=post_row, id="feed", screen=home)
+~~~
+
+~~~ css
+feed_row { background-color: #FFFFFF; padding: 0px 0px 8px 0px; }
+post_head { display: flex; flex-direction: row; align-items: center; gap: 10px; }
+~~~
+
+- The function is called once, with the row as its only argument. What it
+  builds is the template; every item gets a copy.
+- `{field}` in a text, a picture's source or a `describe` is filled from the
+  item. Dotted fields (`{author.name}`) reach into nested data.
+- A `command` that takes an argument receives the row's item -- the same
+  dict `on_click` receives. One that takes none is called as it is.
+- The row is styled as `<id>_row`; everything inside it by its own id, like
+  anywhere else. Rows take the height of what they hold.
+- Pictures can be web addresses, files on the phone or files in the app's
+  folder; the ones the items name are packaged with the app.
+- `set_items()`, `append_items()` and the rest work as they do for slot rows,
+  and a phone recycles the rows: only the ones on screen exist.
+
+On the phone the template becomes a layout of its own, inflated by a
+RecyclerView; in the Previewer the visible rows are drawn from the same
+components.
+
+#### A row that changes: the red heart
+
+A row is drawn from its item, so to change a row, change its item.
+`update_item(id, changes)` patches one item -- found by its `id` field -- and
+draws that row again. Two arguments read a field to decide how a component
+looks:
+
+- `visible="{field}"` on any component shows it only when the field is on.
+- `active="{field}"` on a button shows `active_icon` in the button's
+  `active-color` when the field is on, and `icon` when it is off.
+
+A field is off when it is empty, `false`, `0`, `no`, `off`, `none` or `null`;
+anything else is on.
+
+~~~ python
+POSTS = [
+    {"id": "p1", "user": "mara.vale", "likes": 1284, "liked": "", "sponsored": ""},
+    {"id": "p2", "user": "northline", "likes": 3410, "liked": "yes", "sponsored": "yes"},
+]
+
+def like(item):
+    if item["liked"] == "yes":
+        posts.update_item(item["id"], {"liked": "", "likes": int(item["likes"]) - 1})
+    else:
+        posts.update_item(item["id"], {"liked": "yes", "likes": int(item["likes"]) + 1})
+
+def post_row(row):
+    label("{user}", id="post_user", parent=row)
+    label("Sponsored", id="post_ad", parent=row, visible="{sponsored}")
+    button("", icon="favorite_border", active_icon="favorite", active="{liked}",
+           describe="Like", id="post_like", parent=row,
+           command=lambda item: like(item))
+    label("{likes} likes", id="post_likes", parent=row)
+
+posts = virtual_collection(POSTS, row=post_row, id="posts", screen=home)
+~~~
+
+~~~ css
+post_like { active-color: #FF3040; }
+~~~
+
+The heart turns red and the count goes up on that post alone, and back again
+on the next tap. The phone draws both icons at build time, the lit one in
+`active-color`.
+
+## Rich text, Markdown and trees
+
+Use `rich_text()` for exact inline spans, `markdown()` for structured documents
+and `tree_view()` for recursive expandable data. Android generates native
+selectable text and a recycled hierarchy rather than a WebView.
+
+~~~ python
+rich_text(
+    [
+        {"text": "Status: ", "bold": True},
+        {"text": "ready", "bold": True, "color": "#22C55E"},
+    ],
+    screen=home,
+)
+
+markdown("## Notes\n\n- [x] Native text", screen=home)
+
+tree_view(
+    [{
+        "title": "Workspace",
+        "children": [{"title": "Release notes"}],
+    }],
+    screen=home,
+)
+~~~
+
+[See the complete native rich-content guide](https://repo-apkpy.pages.dev/rich-content/).
+
+## Carousels and grids
+
+~~~ python
+carousel(albums, on_click=open_album, screen=home)
+grid(categories, cols=2, on_click=open_category, screen=home)
+~~~
+
+Rich items can contain `title`, `subtitle`, `image` and application-specific fields such as `src`.
+
+A card's title is white and its subtitle grey unless the component says
+otherwise, on a dark shelf or a light one:
+
+~~~ css
+recent { title-color: #FFFFFF; subtitle-color: #B3B3B3; }
+mixes  { color: #111111; }      /* the title, when title-color is not given */
+~~~
+
+The page's `body` colour does not reach a card. Until 1.11.0 the phone painted
+white and grey whatever the stylesheet said, and the Previewer took the body's
+text colour instead -- dark titles on a dark shelf, on the desktop only.
+
+## Pictures
+
+An `image()` or `avatar()` can be tapped, and an image can change what it shows:
+
+~~~ python
+story = image("story1.jpg", id="story", screen=viewer, describe="Story",
+              command=next_story)
+avatar("face.png", size=62, id="ring", screen=home, describe="mara",
+       command=open_story)
+
+def next_story():
+    story.set_src("story2.jpg")
+~~~
+
+`set_src()` takes a file from the app's folder or a URL, as `image()` does; the
+files it names are packaged with the app. A `border-color` and `border-width`
+on a round avatar draw a ring around the picture, not over it.
+
+## Icons
+
+`icon=` takes any of the 2,000+ Material Icons, by the name fonts.google.com/icons
+shows with spaces as underscores: `favorite_border`, `chat_bubble_outline`,
+`cameraswitch`, `add_comment`. The glyphs ship with ApkPy (Apache 2.0), and
+the phone gets the same paths as vector drawables. To find one:
+
+~~~ python
+from apkpy_lib import icons
+icons.search("heart")    # ['favorite', 'favorite_border', 'heart_broken', ...]
+~~~
+
+A name that is not in the set draws a plain circle and reports `U2015`.
+
+## Responsive layouts
+
+Describe how the same component tree rearranges:
+
+~~~ python
+profile_panel = container(id="profile_panel")
+details_panel = container(id="details_panel")
+
+responsive(
+    mobile=column(profile_panel, details_panel),
+    tablet=row(profile_panel, details_panel),
+    breakpoint=600,
+    screen=home,
+)
+~~~
+
+The Android build chooses the appropriate layout for the available width. In the Previewer:
+
+~~~ python
+device("responsive")
+~~~
+
+Resize the window to test the breakpoint.
+
+## CSS flex and grid
+
+ApkPy supports the layout properties needed for application interfaces, including:
+
+- `display`, `flex-direction`, `flex-wrap` and `gap`;
+- `justify-content`, `align-items` and `align-self`;
+- `flex-grow`, `flex-shrink` and `flex-basis`;
+- grid columns/rows, spans and gaps;
+- width, height, min/max sizes, margins and padding;
+- relative/absolute positioning, offsets and z-index.
+
+Use responsive composition for major structural changes and CSS for sizing/alignment inside a structure.
+
+### Floating over the screen
+
+`position: absolute` on a screen's own component takes it out of the column
+and puts it on a layer over the content, fixed while the content scrolls --
+a floating button, a composer or a player bar pinned to the bottom. Inside a
+container with `position: relative`, it is placed in that container instead.
+
+~~~python
+home = Screen(id="home", scroll=True)
+label("Stories", id="title", screen=home)
+button("", id="fab", icon="add", describe="New story", screen=home,
+       command=new_story)
+~~~
+
+```css
+fab { position: absolute; right: 20px; bottom: 24px;
+      width: 56px; height: 56px; border-radius: 28px; }
+```
+
+An absolute box with no `width` is as wide as its content, so `right: 12px`
+puts a column of buttons against the right edge; with both `left` and `right`
+it stretches between them. On a screen with a bottom bar the layer ends above
+the bar. A tap that lands on none of its components reaches the content below.
+
+In the Previewer the layer is drawn the same way, but a desktop widget cannot
+be see-through: a transparent component over a picture, the camera or a map
+shows its parent's colour where the phone shows what is behind it.
+
+### Rows that start at the start
+
+A `display: flex` row with no `justify-content` centres what it holds, and has
+since the first release -- a row of buttons under a form looks right that way.
+Chips, a caption made of two labels, an avatar with a name: write where the row
+starts.
+
+~~~ css
+chips { display: flex; flex-direction: row; justify-content: flex-start; gap: 8px; }
+~~~
+
+A `Theme` gives the `body` a 12px `gap` and a 12px `padding`, and the body is
+folded into every container. A row that should be tight -- icons inside a pill,
+a list of actions under a photo -- says so with `gap: 0px`.
+
+### Aligning one child
+
+`align-self` moves one child across its parent. On a screen's own component
+it is what puts your reply on the right of a chat:
+
+```css
+their_message { max-width: 260px; align-self: flex-start; }
+my_message    { max-width: 260px; align-self: flex-end; }
+```
+
+A child narrower than the screen is otherwise centred.
+
+## Accessibility
+
+Accessibility fails quietly. An image with no description is announced as
+nothing at all; text at 3:1 against its background is unreadable for a good
+share of people and looks fine to whoever chose the colours. Neither shows up
+in a build, a test or a screenshot — so ApkPy says it during the build.
+
+### Describing what has no words
+
+~~~python
+image("shelf.png", id="shelf", screen=home, describe="Aisle 4, third shelf")
+image("divider.png", id="rule", screen=home, describe="")      # decoration
+button("", id="settings", screen=home, icon="settings", describe="Settings")
+~~~
+
+`describe=` becomes `android:contentDescription`. **An empty description is a
+decision, not an omission**: it marks the element as decorative and TalkBack
+skips it, instead of announcing a file name. A button with words already
+announces those words and needs nothing.
+
+### What the build tells you
+
+A `U2035` report lists what it found and lets the build finish — every app in
+existence has an image somebody forgot to describe, and refusing to build over
+it would only teach people to switch the check off.
+
+~~~
+home.photo (image): nothing to announce. Add describe="...", or describe=""
+                    if it is decoration.
+home.save (button): text is 3.90:1 against its background; 16sp needs 4.5:1.
+home.tiny (button): height is 32dp, under the 48dp a fingertip needs.
+~~~
+
+The numbers are WCAG's and Material's, not opinions:
+
+| | Minimum |
+| --- | --- |
+| Body text | 4.5:1 |
+| Large text — 18pt (24sp), or 14pt bold (18.7sp) | 3:1 |
+| Anything you tap | 48dp |
+
+**Large text is measured in points, not in sp**
+
+WCAG says 18pt, or 14pt bold; Android sizes text in sp, and 1pt is 1.333sp
+at the default density. So the thresholds are **24sp and 18.7sp** — writing
+them as 18 and 14 would let 18sp body text pass at 3:1 when it needs 4.5:1.
+
+Text is already emitted in `sp`, so it grows when someone has enlarged the
+system font — nothing to do there.
+
+---
+
+# Themes and styling
+
+Source: https://repo-apkpy.pages.dev/themes-styling/
+
+## Global theme
+
+~~~ python
+from apkpy_lib import Theme
+
+app_theme = Theme(
+    mode="dark",
+    primary="#8B5CF6",
+    secondary="#22D3EE",
+    background="#09090B",
+    surface="#18181B",
+    text="#FAFAFA",
+    text_secondary="#A1A1AA",
+    border="#3F3F46",
+    error="#FCA5A5",
+    success="#4ADE80",
+    radius=16,
+    spacing=14,
+    font_family="sans-serif",
+)
+~~~
+
+Pass the theme to `run()`:
+
+~~~ python
+run(start_screen=home, theme=app_theme)
+~~~
+
+The theme styles screens, text, buttons, inputs, containers, cards, lists, navigation, player surfaces and Android system bars.
+
+## Design tokens
+
+Reference normalized theme values from CSS:
+
+~~~ css
+body {
+    background-color: var(--background);
+    color: var(--text);
+}
+
+panel {
+    background-color: var(--surface);
+    border-color: var(--border);
+    border-radius: var(--radius);
+    padding: var(--spacing);
+}
+
+danger_action {
+    background-color: var(--error);
+}
+~~~
+
+Available tokens:
+
+`primary`, `secondary`, `background`, `surface`, `text`, `text_secondary`, `on_primary`, `error`, `success`, `border`, `radius`, `spacing`, `motion`, `nav_indicator`, `font-family`, `surface_low`, `surface_high`, `border_subtle`, the seven steps `text-xs` to `text-3xl` and the three `leading-*` multipliers.
+
+A dash reads as an underscore, so `var(--text-secondary)` and
+`var(--text_secondary)` are the same token.
+
+### A ramp instead of a number
+
+Seven steps, so a heading and a caption are two names rather than two guesses.
+They are multiples of `Theme(font_size=14)`, and they resolve to Material's
+own sp values rather than to a geometric series -- one ratio lands on 29.3
+where the platform says 32, and the two renderers round it differently.
+
+| Token | Default | Typical use |
+| --- | --- | --- |
+| `--text-xs` | 11px | overline, timestamps, a tab label |
+| `--text-sm` | 12px | captions, helper text under a field |
+| `--text-base` | 14px | dense list rows |
+| `--text-lg` | 16px | body text -- what `label()` uses when asked nothing |
+| `--text-xl` | 20px | a section heading |
+| `--text-2xl` | 24px | a screen title |
+| `--text-3xl` | 32px | a number to be read across the room |
+
+~~~ css
+title   { font-size: var(--text-2xl); line-height: var(--leading-tight); }
+body    { font-size: var(--text-lg);  line-height: var(--leading-normal); }
+caption { font-size: var(--text-sm);  color: var(--text-secondary); }
+~~~
+
+`--leading-tight`, `--leading-normal` and `--leading-loose` are 1.2, 1.45 and
+1.7. `line-height` reads a bare number as a multiple of the font size on both
+sides, so the multipliers work anywhere a length does.
+
+Raising the base moves all seven together:
+
+~~~ python
+run(start_screen=home, theme=Theme(font_size=18))
+~~~
+
+A heading that was 20sp becomes 26sp, body text 21sp, a display number 41sp --
+proportional, in one edit rather than seventeen.
+
+### Planes between the background and the surface
+
+A card has to sit *on* a surface. A well has to sit *under* one. A divider
+should separate without shouting.
+
+~~~ css
+sheet { background-color: var(--surface-high); }
+well  { background-color: var(--surface-low); }
+group { divider-color: var(--border-subtle); divider-width: 1px; }
+~~~
+
+When the app declares its own `surface`, `background` or `border`, the three
+are **derived from those colours** rather than from Material's palette -- so a
+warm theme does not grow a cold grey slab in the middle of it.
+
+| Token | How it is derived |
+| --- | --- |
+| `--surface-high` | the surface, 6% toward the text |
+| `--surface-low` | 55% of the way from the surface to the background |
+| `--border-subtle` | 35% from the surface toward the border |
+
+Like every other theme colour, all three are written into layouts and
+drawables as resource references, so `values-night/` answers them and
+`appearance.set()` moves them while the app runs.
+
+**A subtle divider is not always the better one**
+
+If a theme's `border` already sits close to its surface, it is already
+playing the quiet role and there is no room underneath it. Render it and
+look before you swap a working divider for `--border-subtle`.
+
+### A token in the wrong kind of slot
+
+`--text` is a colour and `--text-lg` is a size, three characters apart. Using
+one where the other belongs raises **`U2031`** instead of failing quietly --
+a colour in a size slot would otherwise turn `#211F26` into 21px and simply
+look wrong. A composite value such as `0 3px 8px var(--border)` is left alone.
+
+### Tokens work without a theme
+
+An app that never calls `run(theme=...)` still has a theme: the
+generated `apkpy_theme.xml` is written from ApkPy's default
+Material palette. `var(--primary)` reads that palette and
+resolves to `#6750A4`, which is the same colour the built app
+uses for a filled button.
+
+~~~ python
+from apkpy_lib import Screen, button, label, run
+
+home = Screen(id="home")
+label("Welcome", id="title", screen=home)
+button("Continue", id="go", variant="filled", screen=home)
+run(start_screen=home)          # no theme named
+
+style = """
+title { color: var(--primary); }
+"""
+~~~
+
+Declaring a theme changes what the token resolves to, never whether it
+resolves.
+
+### Switching appearance while the app runs
+
+```python
+from apkpy_lib import appearance
+
+appearance.set("light")     # "dark", "light" or "system"
+appearance.get()            # what is in force
+```
+
+The choice is remembered, so the app opens the way it was left.
+
+**A remembered choice outranks `Theme(mode=...)`**
+
+`Theme(mode="dark")` is where the app *starts*, not a setting it re-applies
+on every launch -- otherwise choosing light would last until the next
+restart and no further. Once anything has called `appearance.set(...)`,
+that choice wins.
+
+This surprises people while they are still writing the app: you change
+`mode="dark"`, run it, and nothing looks different. In the Previewer the
+choice lives in `apkpy_storage.json`, **next to your main script** rather
+than in the folder you ran the command from. Delete that key (or the file)
+and the app goes back to opening the way it declares itself. On the phone,
+the same reset is Settings > Apps > your app > Storage > Clear data.
+
+What makes this possible is that a colour which came from a token is not
+written into the layout at all -- a reference to it is:
+
+```xml
+<!-- res/layout/activity_screen_chat.xml -->
+<TextView android:textColor="@color/apkpy_text" ... />
+```
+
+```xml
+<!-- res/values/apkpy_theme.xml -->
+<color name="apkpy_text">#1D1B20</color>
+
+<!-- res/values-night/apkpy_theme.xml -->
+<color name="apkpy_text">#F5F4EF</color>
+```
+
+Android answers that reference from one table or the other depending on the
+mode in force. Switching costs nothing at run time: the resource system does
+the work while the layout inflates.
+
+**A colour you wrote by hand is left exactly as you wrote it.**
+`#C96442` in a stylesheet was a decision, not a default, and a decision that
+changes on its own is a bug. Only tokens move.
+
+#### Where the second palette comes from
+
+You declare one appearance; ApkPy builds the other from the same `Theme`. The
+accent carries over and the surfaces flip:
+
+| Token | In the counterpart |
+| --- | --- |
+| `primary`, `secondary`, `on_primary`, `error`, `success` | kept |
+| `background`, `surface`, `text`, `text_secondary`, `border` | from the opposite palette |
+
+A background you chose at `#1B1B19` was chosen *because* the mode was dark.
+Carrying it into light mode would give a light mode that is still dark -- a
+switch that appears to do nothing.
+
+An app that never calls `appearance.set(...)` is pinned to the mode it
+declared, on a phone set either way, exactly as before.
+
+### A name with no token behind it
+
+`var(--muted)` is not a token, so it is reported as
+**U2028** the moment the stylesheet is read -- by the
+Previewer and by `apkpy build` alike, since both resolve
+tokens through the same module:
+
+~~~ text
+APKPY U2028 - This stylesheet asks for a theme token that does not exist
+
+Received:
+  title { color: var(--muted); }
+
+How to fix:
+  1. Did you mean var(--text_secondary)?
+  2. The tokens are: background, border, error, font-family, motion,
+     nav_indicator, on_primary, primary, radius, secondary, spacing,
+     success, surface, text, text_secondary.
+~~~
+
+A colour of your own goes in as itself -- `#C96442` -- rather
+than through `var()`.
+
+## Cascade
+
+Styles resolve in this order:
+
+~~~ text
+Theme defaults → component selector → component ID
+~~~
+
+~~~ css
+button {
+    border-radius: 12px;
+}
+
+save_button {
+    background-color: var(--secondary);
+}
+~~~
+
+The ID rule changes the background of `save_button` without losing the shared button radius.
+
+## The whole vocabulary
+
+An ApkPy stylesheet is not a browser stylesheet. It reads **89 properties**,
+and a name outside this table is reported as
+[`U2029`](https://repo-apkpy.pages.dev/friendly-errors/#u2001-components-and-arguments) and ignored:
+
+| Area | Properties |
+| --- | --- |
+| Colour | `color`, `background-color`, `border-color`, `pressed-color`, `focus-color`, `focus-border-color`, `accent-color`, `active-color`, `hint-color`, `icon-color`, `placeholder-color`, `secondary-color`, `subtitle-color`, `title-color`, `trailing-color`, `meta-color`, `badge-color`, `badge-background-color`, `item-background-color`, `item-border-color`, `divider-color`, `indicator-color`, `tint` |
+| Type | `font-size`, `font-weight`, `font-family`, `font-style`, `text-align`, `text-transform`, `letter-spacing`, `line-height`, `title-lines`, `subtitle-lines`, `subtitle-size`, `trailing-size`, `rows`, `max-rows` |
+| Shape | `border-width`, `border-radius`, `box-shadow`, `item-border-radius` |
+| Space | `padding`, `padding-top`, `padding-right`, `padding-bottom`, `padding-left`, `margin`, `margin-top`, `margin-right`, `margin-bottom`, `margin-left`, `gap`, `divider-width`, `divider-inset` |
+| Size | `width`, `height`, `min-height`, `max-width`, `aspect-ratio`, `icon-size`, `item-size` |
+| Layout | `display`, `flex-direction`, `flex-grow`, `flex-shrink`, `flex-basis`, `flex-wrap`, `justify-content`, `align-items`, `align-self`, `grid-template-columns`, `grid-column`, `grid-row`, `position`, `top`, `right`, `bottom`, `left`, `z-index`, `badge-position` |
+| Effects | `opacity`, `object-fit`, `filter`, `scale` |
+| Behaviour | `transition`, `press`, `code-copy`, `animation-name`, `animation-duration` |
+
+It is a warning, not a failure -- the build carries on, the way it does for an
+icon name the catalogue does not have. What it buys you is the difference
+between "that value did not work" and "that name does not exist", which is the
+difference between adjusting and guessing.
+
+```css
+card { elevation: 4px; }     /* U2029: did you mean box-shadow? */
+card { background: #fff; }   /* U2029: did you mean background-color? */
+```
+
+### Depth
+
+`box-shadow` is written to Android as `android:elevation`, and the first pixel
+value in the declaration is the depth:
+
+```css
+card { box-shadow: 0 6px 16px #00000030; }   /* 6dp */
+```
+
+Android draws that shadow *outside* the view's own box, and a `ViewGroup`
+clips its children to its padding. ApkPy stops the clipping on the parents of
+anything that asks for a shadow, which is the other half of why `box-shadow`
+used to look like it did nothing. Only a screen that asks for one is touched.
+
+The Previewer approximates -- Tk has no blurred shadow, so it offsets two
+rounded layers. What matches is the presence and the ordering, not the blur.
+
+### Corners one by one
+
+`border-radius` takes one value for every corner, or four in CSS order --
+top-left, top-right, bottom-right, bottom-left -- which is how a sheet that
+slides up over a map rounds only its top:
+
+```css
+sheet { border-radius: 22px 22px 0px 0px; }
+```
+
+The phone writes each corner to the shape's `<corners>`; the Previewer draws
+them antialiased, one radius per corner.
+
+### Padding, all four ways
+
+`padding` reads the way CSS reads: one value, two, three or four, and the long
+names on top of them.
+
+```css
+card { padding: 16px; }              /* every side */
+card { padding: 8px 16px; }          /* vertical, horizontal */
+card { padding: 4px 8px 12px; }      /* top, horizontal, bottom */
+card { padding: 0 20px 24px 20px; }  /* top, right, bottom, left */
+card { padding: 10px; padding-bottom: 30px; }
+```
+
+## The ones worth a paragraph
+
+### Button labels
+
+Material shouts button labels, so ApkPy uppercases them -- `"Opus 5"` reaches
+the screen as `OPUS 5`. `text-transform: none` opts out, which is what a chip,
+a pill or a chat composer wants:
+
+~~~ css
+model_chip {
+    text-transform: none;
+    border-radius: 999px;
+}
+~~~
+
+`uppercase` and `none` are the two values offered, because they are the two
+Android can express as a display attribute (`android:textAllCaps`).
+`capitalize` and `lowercase` would mean rewriting the label at build time and
+would then not apply to text you set while the app runs -- so ApkPy reports
+them as `U2021` instead of half-doing them. Write the label with the casing you
+want and use `text-transform: none`.
+
+### A settings row instead of a fat pill
+
+A button centres its label, and three of them stacked read as three pills, not
+as a list. `text-align: left` moves the label to the leading edge and brings
+the icon with it -- on Android that is `android:gravity="start"` plus
+`app:iconGravity="start"`, which is the difference between Material's
+icon-and-label-in-the-middle and a settings row:
+
+~~~ css
+pref_model, pref_theme, pref_bell {
+    background-color: var(--surface);
+    text-align: left;
+    text-transform: none;
+    letter-spacing: 0px;
+    padding: 0px 18px;
+    min-height: 52px;
+    border-radius: 16px;
+    width: 100%;
+}
+~~~
+
+`left`, `center` and `right` are the three values, and they are written to
+Android as `start` / `center` / `end` so a right-to-left locale mirrors the row
+without the app asking. `justify` is reported as `U2022` rather than half-done:
+it needs `android:justificationMode`, which arrived at API 26 while ApkPy
+targets 24, so it would be an effect only newer phones ever showed.
+
+Alignment needs room to move something. A label in a `display: flex` row is
+sized to its own content -- the same as a shrink-to-fit box in CSS -- so give
+it `width: 100%` if you want the alignment to bite.
+
+`text-align: center` on the app bar centres its title, the way a settings
+screen or a chat header usually wants it:
+
+~~~ css
+app_bar { text-align: center; font-family: "Tiempos"; }
+~~~
+
+Android centres it in the whole toolbar rather than in what the leading icon
+and the actions leave over, and the Previewer copies that -- otherwise the
+title drifted left as soon as an action appeared.
+
+### Tracking and leading
+
+`letter-spacing` opens or tightens the gaps between letters, and `line-height`
+sets how tall one line of text stands. They are what makes a small-caps section
+header read as a header and a paragraph read as prose:
+
+~~~ css
+kicker  { font-size: 11px; font-weight: bold; letter-spacing: 1.2px; }
+name    { font-size: 24px; letter-spacing: -0.4px; }
+blurb   { font-size: 14px; line-height: 1.6; }
+~~~
+
+`letter-spacing` takes `px` or `em` (`0.08em` and `1.28px` mean the same thing
+at 16px) and negative values, which is what a large heading usually wants.
+`line-height` follows CSS: a bare number is a multiple of the font size, a
+length is the height of the line itself. `normal` on either one leaves the
+component's own spacing alone.
+
+Write `letter-spacing: 0px` on a button when you mean it. Material tracks
+button labels at about `0.089em` on its own, so a row that says nothing keeps
+that spacing on the phone.
+
+**What the Previewer does not do.** Tk has no tracking and no line spacing on a
+label, so the Previewer shows the right words at the right size without the
+gaps between them. What it does honour is the measuring: `letter-spacing`
+changes where a button's label wraps and how wide the button asks to be, and
+`line-height` adds the leading above and below the text, so a single line takes
+the same height it takes on the phone. A paragraph that wraps comes out shorter
+in the Previewer than on the device, by the leading of each line after the
+first. Check that one on a phone.
+
+### Your own typeface
+
+Everything above is spacing. The font is the part that makes an app stop
+looking like every other app built with the same tool. Point `font()` at the
+files and name the family in CSS:
+
+~~~ python
+from apkpy_lib import font
+
+font("Tiempos",
+     regular="fonts/Tiempos-Regular.ttf",
+     bold="fonts/Tiempos-Bold.ttf",
+     italic="fonts/Tiempos-Italic.ttf")
+
+theme = Theme(font_family="Tiempos")
+~~~
+
+~~~ css
+app_bar     { font-family: "Tiempos"; }   /* the title, in the serif */
+account_name { font-family: "Tiempos"; font-size: 26px; }
+body        { font-family: sans-serif; }  /* and the reading, in the sans */
+~~~
+
+The Android build copies the files into `res/font`, writes the `<font-family>`
+that maps weights onto them, and reaches them through `app:fontFamily` -- the
+AppCompat attribute, because the framework one only learned to take a font
+resource at API 26 and ApkPy targets 24. The Previewer loads the same files
+into the session without installing anything on your machine.
+
+Serif for the things that carry the name and sans for the things people read
+is most of what makes a screen look designed, and it costs two declarations.
+
+**Four slots, and no more.** `regular`, `bold`, `italic` and `bold_italic` are
+what both sides can address: Tk has a family plus the two modifiers, and
+Android expresses the same four as `fontWeight`/`fontStyle` pairs. A `medium`
+or a `semibold` would render on the phone and not on the desktop, so `font()`
+refuses them (`U2024`) rather than half-doing it. If you need a third weight,
+register it as its own family and name it where you want it.
+
+A slot you leave out is synthesised -- faux bold, a sheared italic -- by
+Android and by Tk alike, so the two agree about what they are faking. A file
+that is missing or is not a `.ttf`/`.otf` is reported at build time (`U2025`,
+`U2026`) and that slot is dropped; the family still ships with whatever
+survived, and a family with nothing left is never referenced by a layout.
+
+**What the Previewer does not do.** Loading a font file into Tk is
+platform-specific. Windows and Linux work. macOS declines, falls back to the
+nearest system family and says so once in the console -- driving CoreText
+through ctypes without a Mac to test on is how you put a crash in someone
+else's Previewer. The APK is unaffected either way.
+
+Text drawn by Android rather than by your layout does not pick the family up
+yet: the labels in a `bottom_nav` and the rows of a `virtual_collection` stay
+on the system font. The app bar title does carry it, through a generated text
+appearance.
+
+### Borderless surfaces
+
+`border-width: 0` means no border, focused or not, and `background-color:
+#00000000` is a transparent surface -- an input that sits directly on the
+container behind it, with no box of its own. Both work in the Previewer and on
+the phone.
+
+~~~ css
+composer {
+    background-color: var(--surface);
+    border-color: var(--border);
+    border-width: 1px;
+    border-radius: 28px;
+    padding: 16px;
+}
+
+field {
+    background-color: #00000000;
+    border-width: 0px;
+    placeholder-color: var(--text-secondary);
+}
+~~~
+
+Colours are written the way Android reads them: `#RRGGBB` or `#AARRGGBB`, and
+the `#RGB` / `#ARGB` shorthands expand to those. Anything else is reported as
+`U2020` at build time rather than throwing while the screen is created.
+
+### A composer that grows with what you write
+
+On a `type="textarea"`, `rows` is the height it starts at and `max-rows` is
+where it stops growing. Between the two it follows the text:
+
+~~~ css
+field {
+    rows: 1;
+    max-rows: 6;
+}
+~~~
+
+One line is the right start for a reply box -- two fixed lines are half an
+empty composer waiting -- and six is where a draft stops eating the thread.
+Past the ceiling the field scrolls instead of growing.
+
+Without `max-rows` the ceiling stays what it always was: twice `rows`, and
+never less than eight.
+
+### Copying a code block
+
+`code-copy: button` puts a tappable **Copy** under every fenced block a
+`markdown()` component or a collection's `markdown` slot renders. It copies
+that block and nothing else -- not the paragraph above it, not the whole
+message.
+
+~~~ css
+thread { code-copy: button; }
+~~~
+
+On Android 13 and later the system shows its own confirmation, so the app
+stays quiet; below that it says "Copied" itself.
+
+### A row of controls
+
+`display: flex; flex-direction: row` lays children across, and an empty
+`flex-grow: 1` container is the spacer that pushes the rest to the far edge:
+
+~~~ css
+controls {
+    display: flex; flex-direction: row; align-items: center;
+    gap: 8px; width: 100%;
+}
+spacer  { flex-grow: 1; }
+chip    { flex-grow: 0; flex-shrink: 0; }
+~~~
+
+Each child asks for the width of its own content, the same as Android's
+`wrap_content`. When the row is wider than the screen, `flex-shrink` decides
+what gives: the default of `1` squeezes the children, and Android answers a
+squeezed button by wrapping its label mid-word. `flex-shrink: 0` keeps a pill
+at its natural width instead — and then a row that still does not fit is
+clipped rather than wrapped. Neither is a good look, so count the row: on a
+400dp phone, four or five controls is the ceiling.
+
+A hidden child takes no space in either runtime, so swapping one control for
+another with `show()` / `hide()` re-flows the row rather than leaving a gap.
+
+### Rows that hold more than a line
+
+A list or collection row shows one line of title and one of subtitle, and cuts
+the rest off. That is right for a list and wrong for a chat, where the message
+*is* the content:
+
+~~~ css
+thread {
+    height: 430px;
+    subtitle-lines: 4;
+    item-background-color: var(--surface);
+    title-color: var(--text);
+    subtitle-color: var(--text-secondary);
+}
+~~~
+
+`title-lines` does the same for the title. The row's own height still does the
+cutting off, so raise `item_height=` alongside it.
+
+## Responsive style rules
+
+Use media rules when only style values change across widths:
+
+~~~ css
+content {
+    padding: 18px;
+}
+
+@media (min-width: 600px) {
+    content {
+        padding: 32px;
+        max-width: 900px;
+    }
+}
+~~~
+
+Use `responsive()` when the component arrangement itself must change.
+
+## Animations
+
+~~~ css
+@keyframes appear {
+    from { opacity: 0; scale: 0.96; }
+    to   { opacity: 1; scale: 1; }
+}
+
+hero_card {
+    animation: appear 320ms ease-out;
+}
+~~~
+
+Keep motion brief and functional. Confirm the result in both the Previewer and Android build.
+
+---
+
+# Screens and navigation
+
+Source: https://repo-apkpy.pages.dev/navigation/
+
+## Navigation drawer
+
+A bottom bar runs out at five destinations. Past that -- and for anything with
+projects, folders or an account behind it -- the panel that slides in from the
+leading edge is the shape people expect:
+
+~~~ python
+chat = Screen(id="chat")
+projects = Screen(id="projects")
+artifacts = Screen(id="artifacts")
+
+menu = drawer(
+    [chat, projects, artifacts],
+    labels=["New chat", "Projects", "Artifacts"],
+    icons=["add", "folder", "description"],
+    header="Ora",
+    subtitle="you@example.com",
+)
+
+app_bar("New chat",
+        leading=action("menu", command=lambda: menu.open()),
+        screen=chat)
+~~~
+
+Declared once for the whole app, like `bottom_nav`. Each item starts the screen
+it names, the open screen stays highlighted, and the back button closes the
+panel before it leaves the screen. `menu.close()` closes it from anywhere.
+
+Style the panel with its `id`:
+
+~~~ css
+menu {
+    background-color: var(--surface);
+    color: var(--text);
+    subtitle-color: var(--text-secondary);
+    active-color: var(--primary);
+}
+~~~
+
+**Declare it after your screens.** A drawer needs every screen to exist, and
+your app bars usually come with those screens -- so the `drawer(...)` call
+naturally lands below the app bars that open it. That is fine: the compiler
+looks for it before it reads any function body. What it cannot do is find a
+drawer built inside a loop or an `if`, because it reads your module rather than
+running it.
+
+## Navigate between screens
+
+~~~ python
+home = Screen(id="home")
+details = Screen(id="details")
+
+open_button = button("Open details", screen=home)
+home.on_click_navigate(button=open_button, to=details)
+~~~
+
+The standalone helper also works inside callbacks:
+
+~~~ python
+button(
+    "Open",
+    command=lambda: on_click_navigate(details),
+    screen=home,
+)
+~~~
+
+## Pass data
+
+~~~ python
+button(
+    "Open track",
+    command=lambda: on_click_navigate(
+        details,
+        data={"title": "Midnight Drive", "track_id": "42"},
+    ),
+    screen=home,
+)
+
+title = label("", screen=details)
+title.set_value(details.get_param("title", "Unknown track"))
+~~~
+
+Values are passed as Android Intent extras and as screen parameters in the Previewer.
+
+## Change another screen
+
+On a phone every `Screen` is its own Android Activity. A function running on
+one screen can still set a label, show or hide a component, or fill a list
+that belongs to another: the screen that owns it applies the change when it
+comes to the front, or at once if it already is.
+
+~~~ python
+home = Screen(id="home")
+stats = Screen(id="stats")
+
+total = label("", id="total", screen=stats)
+done_list = list_view([], id="done_list", screen=stats)
+
+def refresh():
+    counted = db.query("SELECT COUNT(*) AS n FROM habits")
+    total.set_value(f"Habits: {counted[0]['n']}")        # a label on Stats
+    finished = db.query("SELECT name FROM habits WHERE done_on = ?",
+                        [datetime.date()])
+    done_list.set_items(finished, title="name")          # a list on Stats
+
+def mark_done(item):                                     # runs on Home
+    db.execute("UPDATE habits SET done_on = ? WHERE id = ?",
+               [datetime.date(), item["id"]])
+    refresh()
+
+habits = list_view([], id="habits", on_click=mark_done, screen=home)
+~~~
+
+`set_value()`, `show()`, `hide()` and `set_items()` reach another screen; if
+several arrive before it comes back, the last one wins, as in the Previewer.
+Reading another screen's component with `get_value()` does not, and neither do
+the other list operations (`append_items()`, `merge_items()`,
+`update_item()`): keep a value you need to read in `state()` or the database,
+and change such a list from code on its own screen, for example with
+`lifecycle(stats, on_resume=refresh)`.
+
+Before 1.11.0 these calls did nothing on a phone, while the Previewer, where
+every screen lives in one window, showed them working.
+
+## Bottom navigation
+
+~~~ python
+bottom_nav(
+    [home, library, settings],
+    labels=["Home", "Library", "Settings"],
+    icons=["home", "list", "settings"],
+)
+~~~
+
+Use bottom navigation for two to five top-level destinations. Call it once at module level, outside a screen or callback.
+
+## Fixed app bar
+
+~~~ python
+app_bar(
+    "Library",
+    leading="menu",
+    actions=[
+        action("search", command=open_search, label="Search"),
+        action("favorite", command=open_favourites, label="Favourites"),
+    ],
+    screen=library,
+)
+~~~
+
+Accessibility labels describe icon-only actions on Android.
+
+### Getting back out
+
+A leading `arrow_back` with no `command=` of its own means "leave this
+screen". It needs no wiring:
+
+~~~ python
+model_screen = Screen(id="model_screen")
+
+app_bar(
+    "Default model",
+    leading=action("arrow_back", label="Back"),
+    screen=model_screen,
+)
+~~~
+
+On Android that compiles to `finish()`, which returns to whichever screen
+started this one. The Previewer keeps the same history and the arrow walks it
+back, so a settings screen behaves the same in both.
+
+Give the arrow a `command=` and it does that instead -- useful when leaving
+has to save a draft first, though you then own the navigation too.
+
+**Alt+Left** stands in for the phone's Back gesture in the Previewer, which
+matters for a screen that draws no arrow of its own. On both, an open
+`drawer()` closes before Back leaves the screen, and Back at the first screen
+does nothing.
+
+## Collapsible app bar
+
+Use a sliver bar with a scrollable screen:
+
+~~~ python
+album = Screen(id="album", scroll=True)
+
+sliver_app_bar(
+    "Midnight Drive",
+    image="album-cover.jpg",
+    expanded_height=260,
+    pinned=True,
+    leading="arrow_back",
+    screen=album,
+)
+~~~
+
+The image header collapses while content scrolls and can leave the toolbar pinned.
+
+## Persistent mini-player
+
+~~~ python
+mini_player(open=player_screen)
+~~~
+
+The mini-player appears above bottom navigation, follows the current background track and opens the specified player screen.
+
+It takes the theme's surface and text colours unless it has its own. Give it an
+`id` -- or style `mini_player` -- when a dark player lives in a light app:
+
+~~~ python
+mini_player(open=player_screen, id="mini")
+~~~
+
+~~~ css
+mini { background-color: #3B1F2B; color: #FFFFFF; subtitle-color: #D6C2CA; }
+~~~
+
+`color` is the title and the play/pause icon, `subtitle-color` the artist.
+
+---
+
+# Overlays and content states
+
+Source: https://repo-apkpy.pages.dev/overlays-states/
+
+Overlays are declared once and opened from a callback. They do not occupy normal screen layout space.
+
+## Bottom sheet
+
+~~~ python
+playlist_sheet = bottom_sheet(
+    "Add to playlist",
+    content="Choose where to save this track.",
+    items=["Focus", "Training", "Favourites"],
+    on_select=lambda name: audio.add_to_playlist(name),
+    close_text="Not now",
+)
+
+button("Add to playlist", command=playlist_sheet.open, screen=home)
+~~~
+
+## Modal
+
+~~~ python
+delete_dialog = modal(
+    "Delete download?",
+    content="The track will remain in your library.",
+    confirm_text="Delete",
+    cancel_text="Cancel",
+    on_confirm=lambda: files.delete("track.mp3"),
+)
+~~~
+
+## Menus and tooltips
+
+~~~ python
+more = button("More", variant="icon", icon="more_vert", screen=home)
+
+popup_menu(
+    anchor=more,
+    items=["Share", "Download", "Remove"],
+    on_select=handle_option,
+)
+
+context_menu(
+    target=track_row,
+    items=["Play next", "Add to playlist"],
+    on_select=handle_track_option,
+)
+
+tooltip(more, "More options")
+~~~
+
+Desktop right-click maps to Android long-press for context menus.
+
+## Pickers and snackbar
+
+~~~ python
+date_dialog = date_picker(
+    title="Choose a date",
+    on_select=lambda value: selected_date.set_value(value),
+)
+
+time_dialog = time_picker(
+    title="Choose a time",
+    on_select=lambda value: selected_time.set_value(value),
+)
+
+snackbar(
+    "Track removed",
+    action="Undo",
+    on_action=restore_track,
+    duration=4000,
+)
+~~~
+
+## Loading skeleton
+
+~~~ python
+loading = skeleton(
+    variant="music_card",
+    count=4,
+    visible=True,
+    screen=library,
+)
+~~~
+
+Available variants are `music_card`, `list`, `card` and `text`. Use `loading.show()` and `loading.hide()`.
+
+## Empty and error states
+
+~~~ python
+empty = empty_state(
+    "No tracks yet",
+    message="Add music to see it here.",
+    icon="library_music",
+    action="Explore",
+    on_action=open_explore,
+    visible=False,
+    screen=library,
+)
+
+failed = error_state(
+    "Could not load the library",
+    message="Check the connection and try again.",
+    retry=load_library,
+    retry_text="Try again",
+    visible=False,
+    screen=library,
+)
+~~~
+
+A typical async flow hides all states, shows the loading state, then reveals either content, empty state or error state after the result arrives.
+
+---
+
+# Data Core
+
+Source: https://repo-apkpy.pages.dev/data-core/
+
+ApkPy 1.3.0 adds a typed layer above the existing SQLite API. You declare the
+shape of local data once; ApkPy validates it in the Previewer and generates a
+native `SQLiteOpenHelper`, a shared data executor and one Java repository per
+model for Android.
+
+There is no Python interpreter, Room database or WebView inside the APK.
+Projects that do not declare `db.model()` keep the old output and receive none
+of the new repositories or migration runtime.
+
+## A complete model
+
+```python
+from apkpy_lib import db
+
+notes = db.model(
+    "notes",
+    fields={
+        "id": db.integer(primary_key=True, auto_increment=True),
+        "title": db.text(required=True, max_length=120),
+        "content": db.text(default=""),
+        "favorite": db.boolean(default=False),
+        "priority": db.integer(default=0, min_value=0, max_value=5),
+        "metadata": db.json(optional=True),
+        "attachment": db.blob(optional=True),
+        "updated_at": db.datetime(default=db.now()),
+    },
+    indexes=[
+        db.index(
+            "idx_notes_favorite_updated",
+            ["favorite", "updated_at"],
+        ),
+    ],
+)
+
+schema = db.schema(
+    name="my_app",
+    version=1,
+    models=[notes],
+)
+```
+
+`datetime` values are stored as UTC epoch milliseconds. `json` is validated
+before insertion and decoded again in query results. A blob should stay small;
+large images, audio and documents belong in the file system, with their path
+stored in the database.
+
+### Field options
+
+| Option | Purpose |
+| --- | --- |
+| `required=True` | Refuse missing and null values |
+| `optional=True` | Explicitly allow null |
+| `default=value` | Supply a value when insertion omits the field |
+| `primary_key=True` | Mark the model identity field |
+| `auto_increment=True` | Integer primary keys only |
+| `unique=True` | Add a uniqueness constraint |
+| `min_value` / `max_value` | Bound numeric values |
+| `max_length` | Bound text length |
+| `choices=[...]` | Accept only a known set of values |
+
+Indexes may contain one or several fields. Pass `unique=True` to
+`db.index()` for a composite unique index. Create indexes for filters and sort
+paths that the interface actually uses; unnecessary indexes make writes more
+expensive.
+
+## Asynchronous CRUD
+
+Typed operations never run SQLite work on the UI thread. Results and errors
+return through callbacks on the interface thread.
+
+```python
+def created(note_id):
+    status.set_value("Saved note #" + str(note_id))
+    load_page()
+
+def failed(message):
+    status.set_value("Database error · " + str(message))
+
+notes.insert(
+    {
+        "title": title_input.get_value(),
+        "content": content_input.get_value(),
+        "favorite": favorite_input.get_value(),
+        "priority": priority_input.get_value(),
+        "metadata": {"source": "editor"},
+    },
+    on_result=created,
+    on_error=failed,
+)
+```
+
+The result contract is small and predictable:
+
+| Operation | `on_result` value |
+| --- | --- |
+| `insert()` | inserted ID |
+| `insert_many()` | number of inserted records |
+| `get()` | one object, or `""` when absent |
+| `find()` | `JsonRows`, iterable and accepted by collection components |
+| `update()` | affected row count |
+| `delete()` | affected row count |
+| `count()` | matching row count |
+
+### Read one row
+
+```python
+def note_loaded(note):
+    if note == "":
+        status.set_value("Note not found")
+    else:
+        title_input.set_value(note["title"])
+        content_input.set_value(note["content"])
+
+notes.get(42, on_result=note_loaded, on_error=failed)
+```
+
+### Find, filter, order and page
+
+```python
+def page_loaded(rows):
+    notes_feed.set_items(rows, has_more=len(rows) == 30)
+
+notes.find(
+    filters=[
+        db.eq("favorite", True),
+        db.contains("title", search_input.get_value()),
+        db.gte("priority", 2),
+    ],
+    order_by=[db.desc("updated_at")],
+    limit=30,
+    offset=0,
+    on_result=page_loaded,
+    on_error=failed,
+)
+```
+
+Available comparisons are `eq`, `ne`, `gt`, `gte`, `lt`, `lte`,
+`contains`, `starts_with`, `ends_with`, `in_` and `is_null`. Combine them with
+`and_()` and `or_()`; order with `asc()` and `desc()`.
+
+Every filter value is bound as a SQLite parameter. ApkPy does not concatenate
+user input into generated SQL.
+
+Two things a filter does that are worth knowing, because both used to differ
+between the Previewer and the phone and now do not:
+
+- **What someone types is text, not a pattern.** `contains("50%")` looks for
+  rows containing `50%`. The `%` and `_` that mean "anything" in SQL are
+  escaped before the query is built, so a search box cannot accidentally match
+  every row.
+- **`gt`, `gte`, `lt` and `lte` refuse `None`.** Asking which rows are above
+  nothing has no answer, and guessing one silently is worse than stopping:
+  ApkPy raises [`D2014`](https://repo-apkpy.pages.dev/friendly-errors/). Build the list instead --
+  `filters = [db.gte("priority", floor)] if floor else []` -- or use
+  `db.is_null("priority")` when the empty rows are what you want. `eq` and
+  `ne` do take `None`; they ask whether the value is there at all.
+
+### Update and delete
+
+```python
+notes.update(
+    {"favorite": True, "priority": 5},
+    filters=[db.eq("id", note_id)],
+    on_result=lambda affected: load_page(),
+    on_error=failed,
+)
+
+notes.delete(
+    filters=[db.eq("id", note_id)],
+    on_result=lambda affected: load_page(),
+    on_error=failed,
+)
+```
+
+An empty filter list intentionally targets all records. Keep the filter next
+to destructive UI actions so the scope is easy to review.
+
+## Batches and transactions
+
+`insert_many()` compiles prepared bindings once and runs the complete batch in
+one transaction. If any record fails validation or a database constraint, no
+record from that batch is committed.
+
+For several different operations, use `db.transaction()`:
+
+```python
+def create_workspace(tx):
+    workspace_id = tx.insert(
+        workspaces,
+        {"name": "Research"},
+    )
+    tx.insert_many(
+        notes,
+        [
+            {"title": "Inbox", "priority": 1},
+            {"title": "Decisions", "priority": 4},
+        ],
+    )
+    return workspace_id
+
+db.transaction(
+    run=create_workspace,
+    on_result=workspace_created,
+    on_error=failed,
+)
+```
+
+Inside `run`, use only the supported `tx.insert`, `insert_many`, `get`, `find`,
+`update`, `delete` and `count` operations. They execute in order on one database
+connection. An exception rolls the complete transaction back.
+
+## Explicit migrations
+
+Existing users already have data. Changing the current model is not enough:
+increase the schema version and provide every consecutive step.
+
+```python
+migration_1_2 = db.migration(
+    from_version=1,
+    to_version=2,
+    operations=[
+        db.add_column(
+            notes,
+            "favorite",
+            db.boolean(default=False),
+        ),
+        db.create_index(
+            notes,
+            "idx_notes_favorite_updated",
+            ["favorite", "updated_at"],
+        ),
+    ],
+)
+
+schema = db.schema(
+    name="my_app",
+    version=2,
+    models=[notes],
+    migrations=[migration_1_2],
+)
+```
+
+Supported operations are:
+
+- `create_table(model)`;
+- `add_column(model, name, field)`;
+- `rename_column(model, old, new)`;
+- `create_index(model, name, fields, unique=False)`;
+- `rename_index(model, old, new)`;
+- `drop_index(model, name)`;
+- `rename_table(model, new_name)`;
+- `sql(statement, params)` for an exceptional, parameterized change.
+
+A migration must move exactly one version. ApkPy refuses missing steps,
+downgrades and a changed schema hash without a version increase.
+
+Operations that may destroy information require `destructive=True`. Before
+such a path, ApkPy checkpoints and closes SQLite, writes a private backup and
+then applies the sequence in one transaction. Failure restores the backup and
+keeps the old version.
+
+```python
+migration_2_3 = db.migration(
+    2,
+    3,
+    operations=[
+        db.sql(
+            "DELETE FROM notes WHERE archived = ?",
+            [True],
+            destructive=True,
+        ),
+    ],
+    destructive=True,
+)
+```
+
+## Generated Android architecture
+
+When a typed schema is present, ApkPy emits:
+
+- `ApkpyDatabase.java`: one shared `SQLiteOpenHelper`, schema metadata,
+  validation and migration logic;
+- `ApkpyDataExecutor.java`: a single ordered `ExecutorService` and a main
+  thread `Handler`;
+- one `<Model>Repository.java` per model, with prepared statements,
+  projections, filters and result conversion.
+
+Bulk insertion uses `SQLiteStatement` in a single transaction. Activities call
+repositories and receive callbacks; they do not own database connections.
+
+```java
+private static final ExecutorService IO =
+    Executors.newSingleThreadExecutor();
+private static final Handler MAIN =
+    new Handler(Looper.getMainLooper());
+```
+
+The Android database contains `apkpy_schema_meta`, which records schema name,
+version, hash and migration history. This is internal; application records
+remain in the declared tables.
+
+## Existing SQL API
+
+The original `db.execute()`, `db.query()`, `db.begin()`, `db.commit()` and
+`db.rollback()` calls remain available. A typed schema and legacy SQL can exist
+in the same app, but new code should use models where validation and migrations
+matter.
+
+Typed models do not encrypt every field automatically. Use `crypto.encrypt()`
+before inserting values that must be recoverable, or store secrets through the
+encrypted `storage` API. Passwords should be hashed, not encrypted.
+
+## Knowledge Vault pattern
+
+A screen can own its filters and let the model own database execution. The
+callback receives rows on the interface thread and can hand them directly to a
+virtual collection:
+
+```python
+page_size = 30
+page_offset = 0
+
+def library_loaded(rows):
+    library_feed.set_items(rows, has_more=len(rows) == page_size)
+    library_status.set_value(
+        "Loaded " + str(len(rows)) + " notes"
+    )
+
+def database_failed(message):
+    library_feed.finish_load()
+    library_status.set_value("Database error · " + str(message))
+
+def reload_library():
+    notes.find(
+        filters=[
+            db.contains("title", search_input.get_value()),
+            db.eq("favorite", favorites_input.get_value()),
+        ],
+        order_by=[
+            db.desc("priority"),
+            db.desc("updated_at"),
+        ],
+        limit=page_size,
+        offset=page_offset,
+        on_result=library_loaded,
+        on_error=database_failed,
+    )
+```
+
+Writes do not update the list until SQLite confirms them:
+
+```python
+def create_note():
+    notes.insert(
+        {
+            "title": title_input.get_value(),
+            "content": content_input.get_value(),
+            "favorite": favorite_input.get_value(),
+            "priority": priority_input.get_value(),
+        },
+        on_result=lambda note_id: reload_library(),
+        on_error=database_failed,
+    )
+```
+
+This keeps the database as the source of truth. Feed-level optimistic mutation
+APIs remain useful for remote requests, but local Data Core writes can wait
+for their fast repository callback and avoid a second rollback state.
+
+## Naming a declaration, or writing it where it is used
+
+Both of these build the same app:
+
+```python
+liga = db.relation("notes_tags", notes, tags, "notes_id", "note", "tags",
+                   on_delete="cascade")
+schema = db.schema("apkpy_app", version=1, models=[notes, tags],
+                   relations=[liga])
+```
+
+```python
+schema = db.schema("apkpy_app", version=1, models=[notes, tags], relations=[
+    db.relation("notes_tags", notes, tags, "notes_id", "note", "tags",
+                on_delete="cascade"),
+])
+```
+
+Naming them first reads better once there are a few, and it is what the
+examples do. What a list cannot hold is something ApkPy has to run to find
+out about -- a function call that returns a model, or a list built while the
+app is running -- because the database is generated before any of that
+happens. That stops the build with [`C4004`](https://repo-apkpy.pages.dev/friendly-errors/).
+
+## The same answer on both sides
+
+A field's rules are checked twice over the life of a value -- by the Previewer
+while you build, and by the generated Java on the phone -- so the two have to
+agree or the guarantee is worthless. They are written once, in the library's
+`data_rules` module, and a test walks that table asking each side in turn. The
+Java is not merely inspected: the helper methods are lifted out of the
+generated source, compiled with `javac`, and asked the same questions as the
+Python.
+
+What that pins down:
+
+| | The rule |
+| --- | --- |
+| `max_length` | counts characters, so one emoji counts as one |
+| `db.integer()` | refuses `1.9` rather than truncating it; accepts `2.0` |
+| `db.real()` | refuses `NaN` and infinity |
+| `db.boolean()` | stored and compared as `1`/`0`, in every filter including `in_` |
+| `choices=` | compared after the value is normalised, so `[True, False]` works |
+| `db.json()` | has to be JSON all the way to the end of the text |
+| `db.blob()` | reads back as Base64, and accepts bytes or Base64 |
+| `contains`/`starts_with`/`ends_with` | escape `%` and `_` before building the query |
+
+## Validation boundary
+
+The 1.3.0 test set covers declarations, constraints, CRUD, `NULL`, JSON,
+datetime conversion, compound indexes, ordering, paging, atomic batches,
+transaction rollback, migration paths, schema hashes, downgrade refusal and
+destructive backup recovery. The generated Knowledge Vault project also
+compiles with Gradle as a real Android debug APK.
+
+The [cross-framework Android benchmark](https://repo-apkpy.pages.dev/benchmark/) intentionally uses an
+in-memory list. It measures the small application/runtime floor and should not
+be read as a SQLite performance test.
+
+## Continue with Reactive Data
+
+Data Core 1.3.0 is the local model, query and migration foundation. ApkPy
+1.3.1 adds one-to-many `db.relation()` declarations, batched `include` reads
+and lifecycle-safe `observe()` queries without changing these CRUD contracts.
+
+Read [Reactive Data](https://repo-apkpy.pages.dev/reactive-data/) before adding relations to an existing
+database: the schema version must increase, and an existing table that needs a
+physical foreign-key clause must be rebuilt through an explicit migration.
+
+Every operation above also runs inside a
+[background job](https://repo-apkpy.pages.dev/background-jobs/#saving-what-the-job-fetched), where it
+answers before the job's next line, and a screen observing the model hears
+about the write. Automatic synchronization with a server and conflict
+resolution remain outside the Data Core releases.
+
+The runnable **Knowledge Vault** example combines indexed search, favorite
+filters, pagination into `virtual_collection`, create/update/delete, a batch
+transaction and v1-to-v2 migration.
+
+---
+
+# Reactive Data
+
+Source: https://repo-apkpy.pages.dev/reactive-data/
+
+ApkPy 1.3.1 extends [Data Core](https://repo-apkpy.pages.dev/data-core/) with controlled one-to-many
+relations and observable queries. A successful write invalidates only the
+models that changed; active queries that depend on those models rerun on the
+ordered database executor and deliver their result on the interface thread.
+
+There is no polling, Room, LiveData, Flow, WebView or Python runtime in the
+Android application. The callback remains explicit: your app decides whether
+the new rows update a `virtual_collection()`, a counter or another component.
+
+## Declare a one-to-many relation
+
+```python
+from apkpy_lib import db
+
+folders = db.model(
+    "folders",
+    fields={
+        "id": db.integer(primary_key=True, auto_increment=True),
+        "name": db.text(required=True),
+    },
+)
+
+notes = db.model(
+    "notes",
+    fields={
+        "id": db.integer(primary_key=True, auto_increment=True),
+        "folder_id": db.integer(required=True),
+        "title": db.text(required=True),
+        "updated_at": db.datetime(default=db.now()),
+    },
+)
+
+folder_notes = db.relation(
+    "folder_notes",
+    parent=folders,
+    child=notes,
+    foreign_key="folder_id",
+    parent_as="folder",
+    children_as="notes",
+    on_delete="cascade",
+)
+
+schema = db.schema(
+    "reactive_vault",
+    version=1,
+    models=[folders, notes],
+    relations=[folder_notes],
+)
+```
+
+The parent must have a primary key. The child foreign key must exist and have
+the same type. Relation names and aliases must be unique inside their model
+scope.
+
+### Delete policies
+
+| Policy | Result when the parent is deleted |
+| --- | --- |
+| `restrict` | SQLite refuses deletion while children exist |
+| `cascade` | SQLite deletes the related children in the same commit |
+| `set_null` | SQLite clears the child key; the field must use `optional=True` |
+
+ApkPy enables `PRAGMA foreign_keys=ON` in both the Previewer and generated
+Android database. These are real SQLite constraints, not checks performed only
+by the Python-facing API.
+
+## Load related records
+
+Pass one or more aliases to `include`:
+
+```python
+folders.find(
+    include=["notes"],
+    order_by=[db.asc("name")],
+    on_result=folders_loaded,
+    on_error=database_failed,
+)
+
+notes.get(
+    selected_note_id,
+    include=["folder"],
+    on_result=note_loaded,
+    on_error=database_failed,
+)
+```
+
+The first query adds a `notes` list to every returned folder. The second adds
+a `folder` object, or `None` when the optional parent does not exist.
+
+Includes never execute one query per row. ApkPy reads the main page first and
+then runs one bound query per included relation, grouping keys into safe
+chunks. `limit` and `offset` apply to the main records; child collections are
+ordered by their primary key.
+
+Only one level is accepted in 1.3.1. An include such as
+`"notes.attachments"` fails with a clear error instead of hiding an expensive
+recursive query.
+
+## Observe a query
+
+```python
+def notes_changed(rows):
+    notes_feed.set_items(rows)
+    update_count.set(update_count.get() + 1)
+
+def database_failed(message):
+    error_message.set_value(str(message))
+
+notes_live = notes.observe(
+    filters=[db.eq("folder_id", active_folder_id.get())],
+    order_by=[db.desc("updated_at")],
+    include=["folder"],
+    limit=50,
+    screen=notes_screen,
+    on_change=notes_changed,
+    on_error=database_failed,
+)
+```
+
+`screen` is required. It gives the subscription an unambiguous lifecycle:
+
+- `on_resume`: run the initial query or catch up after returning;
+- `on_pause`: suspend delivery and database reruns;
+- `on_destroy`: detach the subscription permanently.
+
+Every callback receives `JsonRows` on the UI thread. The data layer does not
+import or mutate UI components itself.
+
+### Change the active query
+
+```python
+def search_changed(text):
+    notes_live.update_query(
+        filters=[
+            db.eq("folder_id", active_folder_id.get()),
+            db.contains("title", text),
+        ],
+        order_by=[db.desc("updated_at")],
+    )
+```
+
+Omitted arguments keep their previous value. `update_query()` increments a
+generation number, ignores any late result from the previous configuration
+and immediately schedules the new query while the screen is active.
+
+Use `notes_live.refresh()` to force the same query. Use
+`notes_live.close()` when a subscription should end before the screen is
+destroyed.
+
+## Writes require no manual reload
+
+```python
+def create_note():
+    notes.insert(
+        {
+            "folder_id": active_folder_id.get(),
+            "title": title_input.get_value(),
+        },
+        on_result=lambda note_id: status.set_value(
+            "Saved #" + str(note_id)
+        ),
+        on_error=database_failed,
+    )
+```
+
+After the commit, the `notes` model is invalidated. Any active observer that
+depends on `notes` reruns. A folder query with `include=["notes"]` also
+depends on that model and receives the updated child list.
+
+Updates, deletes and successful batches follow the same rule. A transaction
+collects all changed models and publishes one combined invalidation only after
+commit. Failed writes and rollbacks do not notify observers.
+
+When several writes arrive while a query is already running, invalidations
+are coalesced into at most one follow-up query. Identical result snapshots do
+not trigger duplicate `on_change` callbacks unless `refresh()` explicitly
+forces delivery.
+
+## Generated Android architecture
+
+When `observe()` is used, ApkPy adds two small conditional files:
+
+- `ApkpyDataInvalidationTracker.java`, shared across Activities;
+- `ApkpyQuerySubscription.java`, which owns lifecycle, generations,
+  coalescing and snapshot comparison.
+
+Repositories notify the tracker only after a successful commit. Includes and
+foreign keys stay in `ApkpyDatabase.java`; all reads still run through the
+single `ApkpyDataExecutor`. Projects without `db.relation()` receive no
+relation metadata or hydration path. Projects without `observe()` receive no
+tracker or subscription runtime.
+
+## Migrations and existing databases
+
+Adding a relation changes the schema hash and requires a version increase.
+New tables can receive a foreign key through normal table creation. SQLite
+cannot attach a physical foreign-key clause to an existing table with
+`ALTER COLUMN`, so an existing child table must be rebuilt in a documented
+manual migration: create the replacement table, copy validated rows, replace
+the old table and recreate indexes.
+
+Do not add the relation declaration at the old version. ApkPy will reject the
+changed hash rather than silently running without the expected constraint.
+
+## Current limits
+
+Version 1.3.1 intentionally supports:
+
+- one-to-many relations only;
+- one include level;
+- eager, batched loading through `include`;
+- changes committed through ApkPy data APIs.
+
+It does not include one-to-one or many-to-many helpers, recursive trees, lazy
+loading, cross-process observation, external SQLite change detection,
+offline-first synchronization or conflict resolution. Transaction reads stay
+flat in this version.
+
+See [Version 1.3.1](https://repo-apkpy.pages.dev/version-1.3.1/) for the release validation and
+[Data Core](https://repo-apkpy.pages.dev/data-core/) for models, CRUD, filters, transactions and
+migrations.
+
+---
+
+# Background jobs and the offline queue
+
+Source: https://repo-apkpy.pages.dev/background-jobs/
+
+Some work should not depend on a screen staying open. Uploading a photo,
+sending a message written on the underground, flushing a queue of likes,
+synchronising local edits: all of it has to survive the user leaving the app,
+the network disappearing, Android reclaiming the process and the phone
+restarting.
+
+`background_job()` declares that work once. The Previewer runs it against an
+on-disk queue; Android runs it as a
+[WorkManager](https://developer.android.com/topic/libraries/architecture/workmanager)
+`OneTimeWorkRequest`.
+
+```python
+from apkpy_lib import background_job, storage
+
+def sync_notes():
+    sync_job.progress(20, "Reading local changes")
+    folder = sync_job.input("folder_id")
+    storage.set("last_synced_folder", folder)
+    sync_job.progress(100, "Synchronised")
+
+sync_job = background_job(
+    "sync_notes",
+    run=sync_notes,
+    requires_network=True,
+    retry="exponential",
+    unique=True,
+)
+```
+
+Queue work from anywhere in the interface:
+
+```python
+sync_job.enqueue({"folder_id": "12"})
+```
+
+## Declaring a job
+
+| Argument | Meaning | Android |
+| --- | --- | --- |
+| `run` | the function executed in the background | the generated `Worker` body |
+| `requires_network` | only run with connectivity | `NetworkType.CONNECTED` |
+| `requires_unmetered` | only run on an unmetered network | `NetworkType.UNMETERED` |
+| `requires_charging` | only run while charging | `setRequiresCharging(true)` |
+| `requires_battery_not_low` | skip while the battery is low | `setRequiresBatteryNotLow(true)` |
+| `retry` | `"exponential"` or `"linear"` | `BackoffPolicy` |
+| `retry_seconds` | first backoff delay, minimum 10 | `setBackoffCriteria` |
+| `unique` | one named chain instead of parallel work | `enqueueUniqueWork` |
+| `on_conflict` | `"append"`, `"keep"` or `"replace"` | `ExistingWorkPolicy` |
+
+`on_conflict` is what turns a job into a real queue:
+
+- **`"append"`** — every `enqueue` joins the end of the chain and runs in
+  order. This is the default and the one an outbox wants.
+- **`"keep"`** — a new `enqueue` is ignored while work is already pending. Use
+  it for a refresh that must not stack up.
+- **`"replace"`** — the pending work is cancelled and replaced by the new
+  request.
+
+**Why append maps to APPEND_OR_REPLACE**
+
+ApkPy generates `ExistingWorkPolicy.APPEND_OR_REPLACE` for `"append"`.
+Plain `APPEND` cancels newly appended work when the previous item failed
+or was cancelled, which would silently break an offline queue after its
+first failure.
+
+## Inside the job
+
+The `run` function executes off the interface thread — on Android it is a
+`Worker` that can run with the app closed. Talk to the interface through
+`progress()` and `observe()`, not by calling `set_value()` on components.
+
+```python
+def upload_photo():
+    upload_job.progress(10, "Preparing")
+    path = upload_job.input("path")
+
+    if upload_job.attempt() == "3":
+        upload_job.fail()
+        return
+
+    if not_ready(path):
+        upload_job.retry()
+        return
+
+    upload_job.progress(100, "Uploaded")
+```
+
+| Call | Meaning |
+| --- | --- |
+| `job.input(key)` | a value passed to `enqueue({...})` |
+| `job.attempt()` | which attempt this is, starting at `"1"` |
+| `job.progress(percent, message)` | publish progress to observers |
+| `job.retry()` | run again after the backoff |
+| `job.fail()` | stop permanently, no further attempts |
+
+`retry()` and `fail()` mark the attempt rather than jumping out, so the result
+is identical in both runtimes. Add `return` when you want to stop immediately.
+
+A job's `return` ends the work and nothing else: the value goes nowhere, in
+either runtime. What the job *did* travels through `storage`, the database or
+a `notify()` -- the outcome travels through `retry()` and `fail()`.
+
+**attempt() counts one message, not the queue**
+
+`attempt` stays at `1` while everything succeeds first time, because it
+counts the tries of a single queued item. It is the same value Android
+exposes as `getRunAttemptCount()`, normalised to start at one.
+
+### What a job body can call
+
+On the phone the body is a `Worker`, and a Worker has no screen. What it can
+do, it does; what it cannot, **stops the build** with the line it is on --
+and the Previewer stops the job with the same code when the body reaches the
+call, instead of letting the desk run what the phone refuses.
+
+| Runs inside a job | Stops the build |
+| --- | --- |
+| the data layer: `insert`, `find`, `update`, `delete`, `count`, `db.transaction()` | `set_value()`, `get_value()` and every other component method -- **J7004** |
+| `files.download()`, `files.path()`, `files.exists()`, `files.delete()` | `observe()` on a model -- it belongs to a screen -- **J7004** |
+| `storage`, `db.execute()`, `db.query()` | `permissions.request()` -- **J7004** |
+| `https` (synchronous in the Worker) | `alert()`, `confirm()`, `snackbar()`, navigation -- **J7004** |
+| `notify()` and `notifications` | `audio`, `sensors`, pickers, `auth.login()`, `billing` -- **J7004** |
+| `permissions.has()`, `toast()`, `share()`, `clipboard.copy()` | `uploads`, `websocket`, `location` -- **J7005** |
+| your own functions, however deep | `camera`, `contacts`, `nfc`, `wallpaper` -- their own codes, build only for now |
+
+**J7004** means the call needs a screen: no translation will make it work in
+the background, so move it -- report with `job.progress()` and show it from
+`job.observe()`, or do the screen work before `enqueue()`. **J7005** means the
+call *could* run in the background but is only written for screens today; do
+it on a screen and hand the job what it needs through `enqueue({...})`.
+
+The rule follows your calls: a helper the job calls is held to it too, and the
+error points at the helper's line. The same rule applies to the body of
+`service.every()` and `service.once()`, which are Workers as well.
+
+### Saving what the job fetched
+
+The offline queue most apps want is a job that downloads or asks for
+something and keeps it. Inside a job the data layer and `files.download()`
+answer **before the next line** -- the Worker is already off the main thread,
+so it runs the operation where it is, and the Previewer does the same:
+
+```python
+page = db.model("page", fields={
+    "id": db.integer(primary_key=True, auto_increment=True),
+    "path": db.text(),
+})
+schema = db.schema("offline", version=1, models=[page])
+
+def downloaded(ok, path):
+    if ok:
+        page.insert({"path": path}, on_result=saved)   # runs inside the job
+
+def work():
+    files.download(PAGE, "page.html", on_result=downloaded)
+    # here the file is on disk and the row is written
+
+job = background_job("fetch_page", run=work, requires_network=True)
+saved_pages = page.observe(on_change=count, screen=home)
+```
+
+The screen's `observe()` hears about the write the same way it hears about a
+write made on a screen, and re-queries on its own side, so `count` may set a
+label. The callbacks of the job -- `downloaded`, `saved` -- are part of the
+body: what they may call is what the body may call.
+
+`playground/job_bodies_lab` is this example as a running app.
+
+**Before this, a job could compile and do nothing**
+
+The Worker used to drop every call it could not write, without a word --
+`if permissions.has("CAMERA"): ...` became an empty `try`, and a call to
+one of your own functions vanished. A job that reported `success` might
+have run none of its body.
+
+## Observing progress
+
+```python
+def queue_changed(status):
+    queue_state.set_value("Queue · " + status["state"])
+    queue_detail.set_value(
+        "pending " + status["pending"] + " · " + status["progress"] + "%"
+    )
+
+sync_job.observe(on_change=queue_changed, screen=home)
+```
+
+`on_change` receives one JSON status document in both runtimes:
+
+| Key | Values |
+| --- | --- |
+| `state` | `idle`, `enqueued`, `running`, `retry`, `success`, `failed`, `cancelled`, and `waiting_network` in the Previewer |
+| `progress` | `0` to `100`, as reported by `progress()` |
+| `message` | the last message passed to `progress()` |
+| `pending` | items waiting to run |
+| `running` | items running now |
+| `attempt` | attempt number of the current item |
+
+Every value is a string, matching the generated `_jsonGet` accessor, so
+`"pending " + status["pending"]` behaves the same on the desktop and on the
+phone.
+
+What each state carries -- the same document on both sides, built by one rule
+(`apkpy_lib/job_rules.py`) that the generated `ApkpyJobs.status()` translates:
+
+| `state` | When | `progress` | `message` | `attempt` |
+| --- | --- | --- | --- | --- |
+| `running` | an item is running -- this wins over everything else | what it reported | what it reported | this attempt, from `1` |
+| `retry` | nothing running, an item waiting out its backoff | `0` | `Retrying in 30 s (attempt 1)` | the attempt that failed |
+| `enqueued` | nothing running, fresh items waiting | `0` | empty | `0` |
+| `success` | the last item finished | `100` | its last `progress()` message | its attempt |
+| `failed` | the last item called `fail()` | `0` | its last `progress()` message | its attempt |
+| `cancelled` | `cancel()` was the last thing | `0` | empty | `0` |
+| `idle` | nothing has ever finished | `0` | empty | `0` |
+
+The result of the last item outlives the app: a screen opened tomorrow still
+reads `success` and the message the job ended with. WorkManager clears a
+finished job's progress, so the generated Worker keeps its last word where
+`status()` reads it. The retry message is worked out from the job's own
+`retry=` and `retry_seconds=` -- WorkManager's formula, the same number on
+both sides.
+
+The screen does not poll. On Android the observer is attached to
+`getWorkInfosByTagLiveData(...)`, so it survives rotation and is re-delivered
+when the Activity resumes — including after the process was killed and the
+queue restored.
+
+## Cancelling
+
+```python
+sync_job.cancel()
+```
+
+Drops everything still queued and abandons the attempt currently running,
+exactly like `WorkManager.cancelUniqueWork`.
+
+## Generated Android output
+
+An app that declares one job receives:
+
+- **`ApkpyJobs.java`** — the runtime: one `enqueue_<job>` entry point per
+  declared job carrying its constraints, backoff and policy, plus `cancel`
+  and the `status` collector that turns a list of `WorkInfo` into the JSON
+  document above.
+- **`<Job>JobWorker.java`** — the transpiled `run` function, with
+  `getInputData()`, `setProgressAsync()` and the attempt result.
+
+WorkManager stores the queue in its own database, so pending work outlives
+process death and a reboot without any code in the app. The
+`androidx.work:work-runtime` dependency is added to `build.gradle` only when a
+worker is actually generated.
+
+Apps that never call `background_job` receive none of it: no runtime class, no
+worker and no WorkManager dependency.
+
+## Previewer behaviour
+
+The Previewer implements the same contract on the desktop so the loop stays
+fast:
+
+- the queue is stored in `~/.apkpy/jobs` and restored when the script starts
+  again, the way WorkManager restores work after a reboot;
+- `requires_network` holds the queue while the machine is offline and drains
+  it when the connection returns;
+- retries use the same backoff policy and the same ten-second floor;
+- `unique` and `on_conflict` reproduce the same policies.
+
+Connectivity is decided by checking that the machine has a route *and* that a
+well-known host answers on port 443. The route alone is not enough: virtual
+adapters from Hyper-V, WSL, VirtualBox or a VPN keep a route alive with the
+Wi-Fi switched off.
+
+## Deliberate limits
+
+- The `run` function supports the same background-safe subset as
+  `service.every` -- see [What a job body can call](#what-a-job-body-can-call).
+  Anything outside it stops the build rather than being left out.
+- `https` is **synchronous** inside the generated Worker and **asynchronous**
+  in the Previewer. Decide the outcome in the body of the job; calling
+  `job.retry()` from an `on_response` callback arrives too late on the
+  desktop. See [Previewer versus Android](https://repo-apkpy.pages.dev/preview-android/).
+- Periodic work stays with [`service.every`](https://repo-apkpy.pages.dev/native-features/). A job is
+  one-shot work you queue; a service is a schedule.
+- There is no cross-device sync, no conflict resolution and no server
+  component. A job is local work with a persistent queue.
+
+A complete application using all of this is in the
+[end-to-end tutorial](https://repo-apkpy.pages.dev/tutorial-end-to-end/), and the release notes for this
+feature are in [Version 1.3.2](https://repo-apkpy.pages.dev/version-1.3.2/).
+
+---
+
+# Data, network and security
+
+Source: https://repo-apkpy.pages.dev/data-security/
+
+For an end-to-end local example, start with
+[SQLite and protected local data](https://repo-apkpy.pages.dev/guides/sqlite-security/).
+
+## Encrypted key/value storage
+
+~~~ python
+storage.set("display_name", "Marta")
+name = storage.get("display_name", "Guest")
+
+storage.delete("display_name")
+storage.clear()
+keys = storage.keys()
+~~~
+
+Storage values are encrypted automatically before being written. Existing plain-text values from older versions remain readable for migration.
+
+- Android uses AES-256-GCM with a key held by Android Keystore.
+- The Previewer uses an authenticated local encryption format and a device key.
+
+Encrypted values are device-bound by design. A copied storage file is not a
+portable backup -- the key that opens it never leaves the phone.
+
+**Which is why backup has to leave it alone**
+
+Android's auto-backup copies preferences to a new phone, but the Keystore
+key does not travel. A restored app would decrypt every value to `""` and
+report it as never saved -- silent data loss, noticed months later. ApkPy
+excludes the encrypted store from both cloud backup and direct
+device-to-device transfer, so the data stays home rather than arriving
+corrupted. If you want it to travel, encrypt it with a password instead.
+
+## Encryption that travels
+
+~~~ python
+box = crypto.encrypt("the secret", password="open sesame")
+crypto.decrypt(box, password="open sesame")     # "the secret"
+crypto.decrypt(box, password="wrong")           # ""
+~~~
+
+With `password=`, the key comes from that password instead of from the phone,
+and the result is portable: encrypt on the phone, open it on the desktop, in a
+Python script, or with `openssl`. Nothing but the password is needed to open
+it -- and nothing but the password can.
+
+The format is `pw1$rounds$salt$nonce$box`, all hex: PBKDF2-HMAC-SHA256 over
+200,000 rounds for the key, then AES-256-GCM. Both runtimes write and read the
+same thing, which is the whole point -- a box that only ApkPy could open would
+not be portable at all.
+
+A wrong password and tampered data both return `""`. GCM's tag fails before
+anything comes out, which is why an authenticated cipher is worth the extra
+bytes.
+
+**The Previewer needs one package for this**
+
+Python has no AES of its own, so the desktop side uses `cryptography`:
+`pip install cryptography`, or `pip install apkpy[crypto]`. The built
+Android app needs nothing extra. Calling it without the package raises
+`U2032`, which says exactly that.
+
+## Random that cannot be guessed
+
+~~~ python
+crypto.token()        # 16 bytes as hex
+crypto.token(32)      # longer
+~~~
+
+For session ids, one-time links and nonces. `random.choice()` and
+`random.randint()` stay on the ordinary generator on purpose -- shuffling a
+list is not a secret -- but two of its outputs give away the rest, so it must
+never hold one.
+
+## Hashing data
+
+~~~ python
+crypto.hash("some text")          # SHA-256, as hex
+crypto.hash_file(path)            # the same, read in chunks
+~~~
+
+For integrity and comparison: has this file changed, are these two the same,
+have I seen this before. `hash_file` reads a `content://` handle from
+`files.pick` as happily as a path.
+
+**Not for passwords.** SHA-256 is fast by design, which is exactly what
+somebody guessing them wants. Use `crypto.hash_password`.
+
+## Two-factor codes
+
+~~~ python
+crypto.totp("JBSWY3DPEHPK3PXP")                  # "492039"
+crypto.totp(secret, digits=8, period=60)
+~~~
+
+The digits an authenticator app shows, from the base32 secret a QR code
+carries. RFC 6238: HMAC-SHA1 over the number of periods since 1970. It is
+entirely local -- no network, no account -- which is why an authenticator
+works on a plane.
+
+Spaces and case are forgiven, because people copy these by hand. A secret that
+is not base32 returns `""` on both sides.
+
+This one is checked against the six vectors published in the RFC itself, so it
+is the rare piece of ApkPy that can be proven right rather than merely
+reviewed.
+
+## Screens that cannot be photographed
+
+~~~ python
+secure_screen(vault)     # just that screen
+secure_screen()          # every screen
+~~~
+
+Android's `FLAG_SECURE`: screenshots and recordings come out black, and the
+app is blank in the recents carousel. Banking and messaging apps use it for
+exactly this.
+
+**The Previewer cannot honour it and does not pretend to** -- Tk has no
+equivalent, and a desktop capture tool would grab the window anyway. On the
+phone the flag is invisible too, right up until somebody tries to capture the
+screen.
+
+## Password hashing
+
+Passwords should be hashed, not encrypted:
+
+~~~ python
+stored_hash = crypto.hash_password(password)
+is_valid = crypto.verify_password(candidate, stored_hash)
+~~~
+
+The default is salted PBKDF2 with 200,000 iterations. The stored value contains the algorithm, iteration count, salt and derived hash — never the original password.
+
+Use two-way encryption only for values the application must read back:
+
+~~~ python
+encrypted = crypto.encrypt("private note")
+plain_text = crypto.decrypt(encrypted)
+~~~
+
+Decryption returns an empty string for malformed, altered or foreign-device values.
+
+## SQLite
+
+~~~ python
+db.execute(
+    "CREATE TABLE IF NOT EXISTS tracks "
+    "(id INTEGER PRIMARY KEY, title TEXT, artist TEXT)"
+)
+
+db.execute(
+    "INSERT INTO tracks(title, artist) VALUES (?, ?)",
+    ["Midnight Drive", "Nova"],
+)
+
+rows = db.query(
+    "SELECT id, title, artist FROM tracks WHERE artist = ?",
+    ["Nova"],
+)
+~~~
+
+Always use `?` placeholders for user-controlled values. Parameter binding prevents SQL injection and correctly handles apostrophes and special characters.
+
+Queries return a JSON array string so the same value can cross the Previewer/Android boundary:
+
+~~~ python
+title = json_get(rows, "0.title")
+track_list.set_items(rows, title="title", subtitle="artist")
+~~~
+
+Transactions group writes:
+
+~~~ python
+db.begin()
+db.execute("UPDATE accounts SET balance = balance - ? WHERE id = ?", [10, 1])
+db.execute("UPDATE accounts SET balance = balance + ? WHERE id = ?", [10, 2])
+db.commit()
+~~~
+
+Call `db.rollback()` when a grouped operation fails.
+
+## HTTPS
+
+~~~ python
+def loaded(success, response):
+    if success:
+        result.set_value(json_get(response, "title"))
+    else:
+        result.set_value("Request failed")
+
+https.get(
+    "https://api.example.com/tracks/42",
+    headers={"Authorization": "Bearer " + auth.token()},
+    on_response=loaded,
+)
+~~~
+
+Full REST operations:
+
+~~~ python
+https.post(url, data={"title": "New"}, headers=headers, on_response=done)
+https.put(url, data={"title": "Replacement"}, headers=headers, on_response=done)
+https.patch(url, data={"title": "Changed"}, headers=headers, on_response=done)
+https.delete(url, headers=headers, on_response=done)
+~~~
+
+Requests run away from the UI thread. A 4xx/5xx response delivers the server response body to the callback, which is useful for structured API errors.
+
+## Security boundaries
+
+Encryption at rest does not make every value safe:
+
+- do not embed permanent service secrets in `writehere.py`;
+- use OAuth with PKCE or short-lived tokens for user authorization;
+- use HTTPS for all remote APIs;
+- validate server responses and user input;
+- keep signing keys outside the repository and back them up securely;
+- remember that a determined user can inspect any client application.
+
+For privileged operations, keep the secret and authorization decision on a server you control.
+
+## Certificate pinning
+
+Android checks that a server's certificate chains to a trusted authority. It
+does not check *which* authority — so anyone who can obtain a certificate the
+phone trusts can read the traffic, and on a managed device that includes
+whoever installed the company's own root. Pinning says which public key is
+acceptable for one host, and nothing else is.
+
+~~~python
+from apkpy_lib import https
+
+https.pin("api.example.com", [
+    "sha256/K87oWBWM9UZfyddvDfoxL+8lpNyoUB2ptGtn0fv6G2Q=",   # in use
+    "sha256/JbQbUG5JMJUoI6brnx0x3vZF6jilxsapbXGVfjhN8Fg=",   # the spare
+], expires="2027-06-01", subdomains=True)
+~~~
+
+This becomes `res/xml/apkpy_network_security.xml` and a manifest attribute, so
+Android applies it **underneath every HTTP library in the app**. Done in code
+it would only cover the requests that remembered to ask.
+
+**Two pins, and the second one is not optional**
+
+An app pinned only to the certificate you can see today stops reaching its
+own server the day that certificate is replaced — every copy, at once,
+fixable only by a store update people may not install for weeks. The spare
+is what turns a renewal back into a routine, so a set with one pin is
+refused while you build.
+
+Use the pin of the *next* certificate, or of the issuing authority.
+
+`expires` is the date Android stops enforcing the set. It is a safety valve
+rather than a schedule: past it the app keeps working with ordinary
+certificate checking instead of refusing to connect for ever.
+
+### The Previewer checks the pins for you
+
+A mistyped pin is otherwise invisible until the app is on somebody's phone,
+refusing to reach its own server. The Previewer opens a real handshake with the
+host the first time you call it, and if nothing matches it **refuses the
+request and prints the pin the host is actually using** — ready to paste. This
+needs the optional `cryptography` package; without it the check is skipped
+rather than guessed.
+
+A **debug** build keeps trusting certificates you installed yourself, so a
+proxy still works while you develop. Android reads that block only when the app
+is debuggable, so a release build is untouched.
+
+---
+
+# Your own Java
+
+Source: https://repo-apkpy.pages.dev/guides/native/
+
+Looking for one that is already written? [Native recipes](https://repo-apkpy.pages.dev/guides/native-recipes/) has six, compiled before they were published.
+
+ApkPy translates a documented subset of Python. When the thing you need is not
+in it, the answer used to be "wait for the next release" -- and editing the
+generated project in Android Studio is not an answer, because `apkpy build`
+rewrites that project every time.
+
+`native` gives the gap a shape. You do not paste Java into the middle of an
+app; you declare a **function** with a name, arguments and one answer, and you
+say what the Previewer answers instead.
+
+```python
+from apkpy_lib import Screen, button, label, native, run
+
+home = Screen(id="home")
+reading = label("", id="reading", screen=home)
+
+battery = native.java(
+    "batteryLevel",
+    imports=["android.os.BatteryManager", "android.content.Context"],
+    code="""
+        BatteryManager bm = (BatteryManager)
+                context.getSystemService(Context.BATTERY_SERVICE);
+        return String.valueOf(bm.getIntProperty(
+                BatteryManager.BATTERY_PROPERTY_CAPACITY));
+    """,
+    preview=lambda: "87",
+)
+
+def show():
+    reading.set_value("Battery: " + battery() + "%")
+
+button("Read", id="read", command=show, screen=home)
+run(start_screen=home)
+```
+
+## Why `preview=` is not optional
+
+The Previewer cannot run Java. A block without a desktop answer would work on
+the phone and do nothing on your desk -- the exact divergence that made
+[1.6.0](https://repo-apkpy.pages.dev/version-1.6.0/) and [1.8.0](https://repo-apkpy.pages.dev/version-1.8.0/) what they were.
+So `preview=` is required, and the build stops without it.
+
+`preview=` is a promise you make. ApkPy cannot check that your Java and your
+Python agree; it can only make sure both exist.
+
+## An answer that arrives later
+
+Most Android APIs call you back. `native.java_async()` hands your block a
+`done`, which you may call from **any thread**: the generated wrapper moves it
+to the UI thread before your Python callback runs.
+
+```python
+buzz = native.java_async(
+    "buzz",
+    args=("millis",),
+    imports=["android.os.Vibrator", "android.os.VibrationEffect"],
+    code="""
+        Vibrator vibrator = (Vibrator) context.getSystemService(
+                android.content.Context.VIBRATOR_SERVICE);
+        if (vibrator == null || !vibrator.hasVibrator()) {
+            done.run(false, "no vibrator");
+            return;
+        }
+        vibrator.vibrate(VibrationEffect.createOneShot(
+                Long.parseLong(millis.trim()),
+                VibrationEffect.DEFAULT_AMPLITUDE));
+        done.run(true, "ok");
+    """,
+    preview=lambda millis, done: done(True, "ok"),
+)
+
+def buzzed(ok, reason):
+    status.set_value("Buzzed" if ok else "No buzz: " + reason)
+
+buzz("120", on_result=buzzed)
+```
+
+`on_result` has to be a function you defined with `def`: the generated Java
+calls it by name, so a lambda has nothing to call. It is answered `(ok, value)`,
+like every other callback in ApkPy.
+
+## What a block is given, and what it is not
+
+| Inside the block | |
+| --- | --- |
+| the arguments you declared in `args=` | all `String`, like everything else the generator writes |
+| `context` | the Activity, as a `Context` |
+| `done` | `java_async` only: `done.run(true, "value")` |
+
+A block does **not** see the inside of the generated code. Those fields are
+named by the generator and change between versions; an app reaching into them
+would break on an upgrade with nothing to warn you.
+
+## The build around the code
+
+An SDK is rarely just code. These three go with it:
+
+```python
+native.gradle("implementation 'com.example:sdk:2.1.0'")
+native.manifest(permission="android.permission.VIBRATE")
+native.manifest(feature="android.hardware.nfc")
+native.manifest(xml='<service android:name="com.example.sdk.SyncService" />')
+native.keep("com.example.sdk.**")
+```
+
+- `gradle` adds one dependency line to the generated `app/build.gradle`.
+- `manifest(permission=)` asks for it like any permission ApkPy asks for;
+  `manifest(feature=)` writes `<uses-feature ... required="false">`, so the Play
+  Store still shows your app to phones without that hardware; `manifest(xml=)`
+  adds your own element inside `<application>`.
+- `keep` writes an R8 rule. Since 1.8.0 `apkpy release` shrinks the app, and a
+  class only reached by reflection disappears without one.
+
+## What the generator writes
+
+Each block becomes a private method of the screen's Activity:
+
+```java
+/** native.java("batteryLevel") -- writehere.py:8 */
+private String _apkpyNative_batteryLevel() {
+    final android.content.Context context = this;
+    BatteryManager bm = (BatteryManager)
+            context.getSystemService(Context.BATTERY_SERVICE);
+    return String.valueOf(bm.getIntProperty(
+            BatteryManager.BATTERY_PROPERTY_CAPACITY));
+}
+```
+
+Run `apkpy build` and read it. The Java inside is yours, unchanged; a mistake
+in it is a `javac` error about your own lines.
+
+## What stops the build
+
+Every one of these is `U2035`, and each names the line:
+
+- `preview=` missing, or not something callable;
+- `code=` that is an f-string, or any argument computed while the app runs --
+  the build **reads** your module, it never runs it;
+- a `native.java` block with no `return`, or a `native.java_async` block that
+  never calls `done`;
+- a call with the wrong number of arguments, a keyword the block does not take,
+  or an async block used where a value is expected;
+- `on_result=` that is not a function you defined;
+- a block called from the body of a `background_job`: a block is a method of a
+  screen's Activity, and a job runs in a Worker with no screen;
+- `native.manifest(xml=)` that rewrites `<application>`, and
+  `native.gradle()` that is not a dependency line.
+
+## The boundary of the guarantee
+
+Inside the translated subset, ApkPy promises the Previewer and the phone agree,
+and that promise is tested. Inside a `native` block that promise is yours: your
+Java and your `preview=` are two pieces of code that only you can keep in step.
+
+That is the trade. It is worth making when the alternative is waiting -- and
+worth telling us about, because what people put in these blocks is the list of
+what ApkPy should translate next.
+
+---
+
+# More than one file
+
+Source: https://repo-apkpy.pages.dev/guides/modules/
+
+ApkPy reads one `writehere.py` and does not translate Python classes, so for a
+long time an application had nowhere to put anything: every screen, every
+callback and every piece of arithmetic landed in the same file. The largest app
+in this repository is 212 lines, and that is not a coincidence.
+
+Now `writehere.py` can import plain Python modules that sit next to it.
+
+```python
+import money
+
+from apkpy_lib import Screen, label, run
+
+home = Screen(id="home")
+total = label("", id="total", screen=home)
+
+total.set_value(money.euros(1999))     # EUR 19.99
+```
+
+```python
+# money.py, beside writehere.py
+CURRENCY = "EUR"
+
+def euros(cents):
+    whole = cents / 100
+    return CURRENCY + " " + str(round(whole, 2))
+```
+
+The helper is merged into your application before anything is translated, so
+`money.euros` becomes an ordinary method of the generated Activity and
+`CURRENCY` becomes a field. The Previewer needs nothing special: beside the
+script, this is the import Python already does.
+
+Run [the complete example](https://github.com/apkpy-project/repo-apkpy/tree/main/examples/modules)
+with `python writehere.py`, then build it with `apkpy run`.
+
+## What a helper holds
+
+**Functions and constants.** Screens, themes, widgets and CSS stay in
+`writehere.py`, where ApkPy reads them in the order they appear. A helper that
+declares a `Screen` or calls `Theme(...)` stops the build with
+[`U2036`](https://repo-apkpy.pages.dev/friendly-errors/) rather than being quietly ignored.
+
+A helper may import another helper. They are merged innermost first, so a
+helper can call the one it imports.
+
+## Only `import helpers`, not `from helpers import`
+
+```python
+import money            # yes
+import money as m       # yes
+from money import euros # refused, with U2036
+```
+
+This is deliberate. ApkPy merges the whole file into one namespace, so the
+`from` form would leave your app holding names that the Previewer's real Python
+would not — a difference between the desktop and the phone that would only
+appear later, which is the failure this project spends its time removing.
+
+For the same reason, a name defined in two files stops the build. In one
+namespace there is no way to keep both, and picking one silently is worse than
+asking you to rename it.
+
+## Numbers that stay numbers
+
+A function parameter used to be text, always, because "everything is String" is
+how values cross the boundary between your Python and the generated Java. That
+is right at the boundary and wrong inside the function: `cents / 100` stopped
+the build even when every call passed a number.
+
+Now the call sites decide. A parameter counts as a number when the function is
+called at least once and **every** call passes something ApkPy can prove is
+one:
+
+- a number written in the source, `2` or `19.99`;
+- `int(...)`, `float(...)` or `len(...)`;
+- arithmetic between those;
+- a name the whole module only ever assigns from them;
+- another function of yours whose every `return` is a number.
+
+That last one is what lets helpers feed each other:
+
+```python
+def with_vat(cents):
+    return cents + cents * VAT / 100
+
+def euros(cents):
+    return CURRENCY + " " + str(round(cents / 100, 2))
+
+total.set_value(euros(with_vat(2449)))      # EUR 30.12
+```
+
+Everything else stays text. One call site that passes a value ApkPy cannot
+prove is a number — including a keyword argument, which does not say which
+position it fills — and the parameter is text again for every call.
+
+This is deliberately narrow. Anything ApkPy says yes to here becomes real
+arithmetic in the generated Java, and a wrong yes would turn a sum into glued
+text without a word. Text and numbers only have to agree on the phone and on
+the desktop; they do not have to be guessed.
+
+## Functions that build UI
+
+A header, a card or a bar that appears on several screens is written once, as
+a function, and called once per screen:
+
+```python
+def header(title, subtitle, screen):
+    label(title, id="screen_title", screen=screen)
+    label(subtitle, id="screen_subtitle", screen=screen)
+
+def stat(name, value, screen):
+    box = card(id="stat", screen=screen)
+    label(name, id="stat_name", parent=box)
+    number = label(value, id="stat_value", parent=box)
+    return number
+
+header("Today", "One run a day keeps the streak alive.", today)
+distance = stat("Distance", "0.0 km", today)      # distance.set_value(...) later
+
+for week, km in [("This week", "18.4 km"), ("Last week", "22.1 km")]:
+    stat(week, km, history)
+```
+
+The Previewer runs this as Python. For the phone -- which lays out every screen
+before the app runs -- ApkPy puts each call's body where the call is before it
+translates anything, with the arguments in place of the parameters and the
+function's own names made unique to that call. The phone ends up with the same
+components on the same screens; a test runs the same app both ways and compares
+them screen by screen.
+
+- **Return a component to use it later.** `distance = stat(...)` binds
+  `distance` to the label the function returned.
+- **The same `id=` on every copy is fine.** It is what the CSS reads, so
+  `#stat` styles every card; each copy still gets its own view on the phone.
+- **`screen.id` and joined text are worked out while compiling**, so
+  `id="back_" + screen.id` and `f"on {screen.id}"` give each screen its own.
+- **A module-level `for` that builds UI is unrolled** -- over a list written
+  in the file, a list defined at the top of it, or `range(N)`, including
+  `for name, value in [(...), ...]:`.
+- **A function can live in a helper file**, and one UI function can call
+  another.
+
+Called from a button, a callback or a job, a UI function would build a screen
+that already exists; that stops the build with
+[`U2038`](https://repo-apkpy.pages.dev/friendly-errors/), as does a loop that builds UI from data that
+only arrives while the app runs -- that is what `list_view()` and
+`virtual_collection()` are for.
+
+## What this does not do
+
+- **There are still no classes.** A helper holds functions and constants --
+  and, now, functions that build UI.
+- **Only files beside your application.** No packages, no subfolders, no
+  `from . import`. An import ApkPy does not recognise is left exactly as it
+  was, so `import math` and everything the compiler already reads keep working.
+- **Parameters travel as text.** The Java signature is still `String cents`;
+  what changed is that arithmetic inside the body is allowed to treat it as a
+  number.
+
+## Checked for this change
+
+- 29 focused tests, plus 1,151 feature tests, 35 general tests and 258
+  transpiler checks.
+- 100 example apps and documented snippets transpiled before and after:
+  nothing that built stopped building.
+- The example above was rendered in the Previewer and built with Gradle —
+  `BUILD SUCCESSFUL` — and the generated Java read by hand.
+- Installed on a Xiaomi 25069PTEBG running Android 16 and driven: the example opened,
+  showed `EUR 30.12` — the arithmetic crossing the file boundary, right on
+  the device — and survived a rotation with the values intact.
+
+---
+
+# Friendly errors
+
+Source: https://repo-apkpy.pages.dev/friendly-errors/
+
+DEBUG THE APP, NOT THE TRACEBACK
+### Errors written for the person fixing them.
+ApkPy turns Python, Previewer, Data Core, compiler and Android build failures into short diagnostics that explain where the problem is, why it happened, what was received and what to change.
+[Start with `apkpy preview`](#run-with-friendly-startup-diagnostics)
+[Browse the error codes ↓](#error-families)
+
+What stays available
+**The original exception is never discarded.**
+Use the short correction first. Turn on debug mode only when you need the complete Python traceback.
+
+01**Find it**The relevant file, line and source statement.
+
+02**Understand it**Why the rule exists, plus the received and expected values.
+
+03**Fix it**Ordered actions based on the actual failure.
+
+## One error, without the noise
+
+```text
+APKPY E1401 - Text and a non-text value were joined
+
+Context:
+  Previewer callback
+
+Where:
+  writehere.py:42
+  total_label.set_value("Items: " + len(rows))
+
+What happened:
+  can only concatenate str (not "int") to str
+
+Why this happened:
+  Python does not convert automatically when joining with +. This is the
+  most common Previewer callback failure, because progress values, counts
+  and ids arrive as numbers.
+
+Expected:
+  every part of the expression as text
+
+How to fix:
+  1. Convert the non-text value first, for example 'Items: ' + str(len(rows)).
+
+Read more:
+  https://repo-apkpy.pages.dev/friendly-errors/#p3001-previewer-runtime
+```
+
+This output is intended to be useful without a community answer or a search
+through a long traceback. **Why this happened** is the part that matters most:
+it explains the rule that was broken, not just the symptom.
+
+## Run with friendly startup diagnostics
+
+Use the ApkPy command when testing an application:
+
+```powershell
+apkpy preview
+```
+
+This catches import and startup failures as well as errors raised after ApkPy
+has loaded. Tkinter callback failures use the same format automatically while
+the Previewer is running.
+
+For a Python syntax error, `apkpy preview` is important: plain
+`python writehere.py` fails before Python can import ApkPy, so no library can
+replace that interpreter-owned syntax traceback.
+
+## Read a diagnostic
+
+| Section | Meaning |
+| --- | --- |
+| `APKPY E1102` | Stable category code that can be searched in the docs or an issue |
+| `Context` | The layer that failed, such as Previewer, Data Core or Android compiler |
+| `Where` | Application file, line, column and source line when available |
+| `What happened` | The concise failure reported by Python or ApkPy |
+| `Why this happened` | The rule that was broken, and why ApkPy enforces it |
+| `Received` / `Expected` | The contract mismatch when ApkPy knows both sides |
+| `How to fix` | Specific next actions, ordered from most likely to least likely |
+| `Read more` | The page covering this family |
+| `Technical details` | Original exception type and message |
+
+## Error families
+
+Every message ApkPy raises is mapped to one of these codes, with its own
+explanation and corrections. The code is stable, so it can be searched here or
+quoted in an issue.
+
+### E1001 Python and environment
+
+| Code | Meaning |
+| --- | --- |
+| `E1001` | Python could not parse the file: a missing colon, quote, bracket or parenthesis |
+| `E1101` | A required module is not installed in the interpreter that is running |
+| `E1102` | An ApkPy public name is misspelled or comes from another version |
+| `E1201` | A name is used above the line that creates it |
+| `E1301` | A required file or path was not found |
+| `E1401` | Text and a non-text value were combined |
+| `E1402` | A value is outside an ApkPy contract that has no more specific code |
+| `E1999` | An unexpected error that does not match a known family yet |
+
+### U2001 Components and arguments
+
+| Code | Meaning |
+| --- | --- |
+| `U2001` | A component was created without `screen=` or `parent=` |
+| `U2002` | `screen=` received something that is not a `Screen` |
+| `U2003` | An argument that needs an ApkPy component received something else |
+| `U2004` | A callback argument received a value instead of a function |
+| `U2005` | An argument that only accepts an ApkPy factory (`action()`, `db.index()`, ...) |
+| `U2006` | A value outside the accepted set for that argument |
+| `U2007` | A numeric argument of the wrong kind, or outside its range |
+| `U2008` | An argument with the wrong container type (dict, list, string) |
+| `U2009` | `aspect_ratio` was not a ratio ApkPy can divide |
+| `U2010` | `responsive()` arrangements do not hold the same components |
+| `U2011` | An icon name that is not in the Material set |
+| `U2012` | A structural limit was exceeded (nesting depth, payload size) |
+| `U2013` | A feed operation that requires `virtual_collection()` |
+| `U2014` | An argument that needs a specific ApkPy object, such as a `Theme` |
+| `U2015` | An icon name that is not in the ApkPy catalogue |
+| `U2020` | A colour Android cannot parse (only `#RGB`, `#RGBA`, `#RRGGBB`, `#AARRGGBB`) |
+| `U2021` | A `text-transform` ApkPy cannot express on both sides |
+| `U2022` | A `text-align` ApkPy cannot express on both sides (`justify`) |
+| `U2023` | A `font()` family declared with no files |
+| `U2024` | A font slot beyond the four both runtimes can address |
+| `U2025` | A font file that is not `.ttf` or `.otf` |
+| `U2026` | A font file named by `font()` that is not on disk |
+| `U2027` | A module constant joined from a name declared further down |
+| `U2028` | `var(--name)` naming a theme token that does not exist |
+| `U2029` | A stylesheet property no renderer reads, so nothing applied it |
+| `U2031` | A theme token used in a slot of the wrong kind (a colour where a size belongs, or the reverse) |
+| `U2032` | `crypto.encrypt(..., password=...)` in the Previewer without the `cryptography` package |
+| `U2033` | Python ApkPy has no translation for, which used to compile to nothing at all |
+| `U2035` | A `native` block the build cannot read: no `preview=`, a value computed at run time, or a call that does not match the declaration |
+| `U2036` | A helper module that cannot be merged: the `from ... import` form, a name defined in two files, or a screen declared outside `writehere.py` |
+| `U2037` | A call to one of your functions that does not match it: a parameter missing, given twice, or a name the function does not have |
+| `U2038` | A function that builds UI used where it cannot be expanded -- from a tap, a callback or another function -- or a loop that builds UI from data that arrives while the app runs |
+| `U2039` | A `lambda` default the phone cannot keep: `lambda v=count: ...` where `count` is assigned again, is the variable of a loop that stays a loop, or is computed (`v=a + b`). A literal or a name bound once is kept, as in Python |
+
+#### U2033 in a bit more detail
+
+ApkPy reads your module and writes Java. It translates a fixed vocabulary of
+Python rather than running it, and anything outside that vocabulary used to be
+dropped without a word: `math.sqrt(x)` became an empty string, a `try:` block
+lost its whole body, and `items.append(x)` produced no line at all. The app
+built, installed and ran, and was simply missing a piece.
+
+The message names the construct and says which of two things it is:
+
+- **A gap.** `math`, `re`, `json` and `base64` all have Java equivalents that
+  ApkPy has not wired up yet. The message says so, and suggests something that
+  compiles today.
+- **A wall.** `requests`, `numpy`, `pandas` and `os` need a Python interpreter,
+  and there is none on the phone. The message points at the ApkPy API that
+  covers the same ground -- `https`, `db`, `files`.
+
+It also catches a mistyped function name (and suggests the one you meant), and
+a modal opened above the line that creates it, which is about order rather than
+vocabulary.
+
+### D2001 Data Core
+
+| Code | Meaning |
+| --- | --- |
+| `D2001` | A name SQLite cannot accept as an identifier |
+| `D2002` | The schema version and the migration chain do not line up |
+| `D2003` | A migration would drop data without `destructive=True` |
+| `D2004` | A required column has no value |
+| `D2005` | A field or index name that does not exist in the model |
+| `D2006` | A value that does not match the column's declared type |
+| `D2007` | A relation declaration or use that is not valid |
+| `D2008` | A schema or model declaration that is not valid |
+| `D2009` | A field or index not built with a `db.*` helper |
+| `D2010` | A migration step with no Java equivalent |
+| `D2011` | A query filter that does not suit the field |
+| `D2012` | Field options that contradict each other |
+| `D2013` | `offset=` without `limit=` |
+| `D2014` | A comparison given nothing to compare against: `db.gt(field, None)` |
+| `C4004` | Something in a `db.schema()` list that is neither a declaration nor the name of one |
+
+### P3001 Previewer runtime
+
+| Code | Meaning |
+| --- | --- |
+| `P3001` | An application callback failed and matched no more specific rule |
+| `P3002` | A component or value is `None` at that point |
+| `P3003` | A key is missing from a record |
+| `P3004` | A list was read past its end |
+| `P3005` | A string was used as if it were a record |
+| `P3006` | Two incompatible types were combined |
+| `P3007` | A value was called as if it were a function |
+| `P3008` | A callback signature does not match what ApkPy passes |
+| `P3009` | A function has no argument with that name |
+| `P3010` | A division used zero as the divisor |
+| `P3011` | `int()` or `float()` received text that is not a number |
+
+### N6001 Network and URLs
+
+| Code | Meaning |
+| --- | --- |
+| `N6001` | A URL without its scheme (`https://`, `wss://`) |
+| `N6002` | A WebSocket connection that did not survive the handshake |
+| `N6004` | The routing service found no route between the points |
+
+### J7001 Background jobs
+
+| Code | Meaning |
+| --- | --- |
+| `J7001` | A `background_job()` option with no WorkManager equivalent |
+| `J7002` | `run=` names a function that is not in this file (a job, `service.every` or `service.once`) |
+| `J7003` | `observe(on_change=)` did not receive a one-argument function |
+| `J7004` | A job body calls something that needs a screen -- a component, a dialog, a permission request, navigation |
+| `J7005` | A job body calls something only written for screens so far -- uploads, WebSockets, location |
+
+J7004 and J7005 come from the build *and* from the Previewer, with the same
+words: the desk stops the job when the body reaches the call, instead of
+running what the phone refuses. See
+[What a job body can call](https://repo-apkpy.pages.dev/background-jobs/#what-a-job-body-can-call).
+
+A job body that raises is reported in full as well, with the job name, the
+attempt number, the payload keys and the fact that the item returns to the
+queue. It runs off the interface thread, so nothing else would show it:
+
+```text
+Context:
+  Background job 'outbox' - attempt 1 of run=deliver_message() raised, so the
+  item goes back to the queue and is retried with backoff (payload keys: text)
+```
+
+An observer that raises is reported the same way, noting that the queue kept
+running while the interface stopped receiving updates.
+
+### C4001 Android compiler
+
+| Code | Meaning |
+| --- | --- |
+| `C4001` | A construct with no supported Android translation |
+| `C4002` | A real-time search filter that could not become a `TextWatcher` |
+| `C4003` | `db.model()` declared without a `db.schema()` |
+
+`C4002` matters more than it looks: the Previewer runs the filter lambda in
+Python, so search keeps working there, while the APK would be generated without
+it. ApkPy reports the divergence rather than shipping it silently.
+
+Compiler diagnostics point at the line in `writehere.py`, not at ApkPy's own
+source. The compiler reads the application as text, so it carries the
+declaration's line through to the report.
+
+### B5001 Android build
+
+| Code | Meaning |
+| --- | --- |
+| `B5001` | The toolchain is incomplete: JDK, Android SDK or Gradle is missing |
+| `B5002` | Gradle ran on a Java version it does not support |
+| `B5003` | The Android SDK is incomplete or its licences are not accepted |
+| `B5004` | Android could not link the generated resources (AAPT) |
+| `B5005` | The generated Java did not compile |
+| `B5006` | Gradle ran out of memory, or its daemon died |
+| `B5007` | Gradle could not download a dependency |
+| `B5008` | The APK was built but the device refused the install |
+| `B5009` | A Gradle failure whose signature ApkPy does not recognise yet |
+
+`apkpy run` and `apkpy release` stream Gradle's output and keep it, so a failure
+is explained instead of leaving a wall of log to scroll through. `Received`
+leads with the line that names the file, the position and the reason:
+
+```text
+Received:
+  ...\app\src\main\java\com\apkpy\app\Screen_homeActivity.java:30: error: cannot find symbol
+  symbol:   variable thisSymbolDoesNotExist
+  location: class Screen_homeActivity
+```
+
+Even `B5009` carries Gradle's own reason and the path of the generated project.
+
+## Common fixes
+
+### A public API name is misspelled
+
+```python
+# Wrong
+from apkpy_lib import bottom_nva
+
+# Right
+from apkpy_lib import bottom_nav
+```
+
+For close matches, `E1102` includes a `Did you mean` suggestion. If the name is
+correct, confirm that installation and execution use the same interpreter:
+
+```powershell
+python -m pip show apkpy
+python -c "import apkpy_lib; print(apkpy_lib.__file__)"
+```
+
+### A callback joins text and a number
+
+```python
+def rows_loaded(rows):
+    total_label.set_value("Items: " + str(len(rows)))
+```
+
+Values that cross to Android are always text, so `uploads` progress,
+`background_job` status and picked file sizes need no conversion. Values
+produced in Python -- `len()`, arithmetic, a count -- still do.
+
+### A Data Core declaration is rejected
+
+`D2001` keeps the exact Data Core cause and adds a likely correction. Check the
+field names, relation aliases, foreign-key type, schema version and migration
+path shown in the diagnostic.
+
+```python
+folder_id = db.integer(optional=True)
+
+folder_notes = db.relation(
+    "folder_notes",
+    parent=folders,
+    child=notes,
+    foreign_key="folder_id",
+    on_delete="set_null",
+)
+```
+
+`set_null` requires an optional foreign key because SQLite must be allowed to
+write `NULL` when the parent is removed.
+
+### The Android toolchain is incomplete
+
+`B5001` reports each required tool separately. Repair and verify it with:
+
+```powershell
+apkpy setup
+apkpy doctor
+```
+
+## Full traceback and opt-out
+
+Friendly mode hides traceback noise; it does not discard it. Enable the full
+traceback for debugging:
+
+```powershell
+apkpy preview --debug
+```
+
+or for any run:
+
+```powershell
+$env:APKPY_DEBUG="1"
+python writehere.py
+```
+
+To temporarily restore Python's default uncaught-exception output before
+importing ApkPy:
+
+```powershell
+$env:APKPY_FRIENDLY_ERRORS="0"
+python writehere.py
+```
+
+When reporting a problem, include the complete `APKPY` diagnostic, the ApkPy
+version and the smallest `writehere.py` that reproduces it. Do not include API
+keys, tokens or personal data.
+
+---
+
+# Build and release
+
+Source: https://repo-apkpy.pages.dev/build-release/
+
+## Application identity
+
+Create the configuration file:
+
+~~~ powershell
+apkpy init
+~~~
+
+Example `apkpy.toml`:
+
+~~~ toml
+[app]
+name = "My ApkPy App"
+application_id = "com.example.myapkpyapp"
+version_name = "1.0.0"
+version_code = 1
+icon = "icon.png"
+~~~
+
+| Field | Purpose |
+| --- | --- |
+| `name` | Label displayed below the app icon |
+| `application_id` | Permanent unique Android/Play Store identifier |
+| `version_name` | Human-readable release version |
+| `version_code` | Integer increased for every store upload |
+| `icon` | Optional square source image for launcher assets |
+
+Do not change `application_id` after publishing the application.
+
+## Development builds
+
+Generate an Android Studio project:
+
+~~~ powershell
+apkpy build
+~~~
+
+Compile a debug APK directly:
+
+~~~ powershell
+apkpy run
+~~~
+
+Install helpers:
+
+~~~ powershell
+apkpy run --qr
+apkpy run --usb
+~~~
+
+## Signed releases
+
+~~~ powershell
+apkpy release
+apkpy release --aab
+~~~
+
+The APK is useful for direct signed distribution. The AAB is the standard upload format for Google Play.
+
+On the first release ApkPy creates a signing keystore under the user's ApkPy configuration directory. Future updates must use the same signing identity.
+
+**Back up the signing key**
+
+Losing the keystore can prevent you from publishing updates under the same application identity. Keep an encrypted backup outside the development computer. Never commit the keystore or its password.
+
+## Your release is shrunk, not renamed
+
+`apkpy release` runs **R8**, Android's own shrinker. It walks the app, works out
+which library code can actually be reached, and drops the rest. A screen using
+two Material widgets was shipping the whole of Material.
+
+Measured on the same app, both signed release builds:
+
+| | APK |
+| --- | --- |
+| before | 4,496 KB |
+| after | **1,536 KB** |
+
+An app pulling in Firebase, WorkManager, media3 and RecyclerView still comes to
+**2,085 KB**.
+
+You do not write anything different. This is a build setting, and your Python,
+your API and your screens are untouched.
+
+### Names stay readable, on purpose
+
+R8 normally also *renames* everything -- `Screen_homeActivity` becomes `a.b.c`.
+ApkPy turns that half off, with `-dontobfuscate` in the generated
+`proguard-rules.pro`.
+
+Renaming would mean two things you would not enjoy. `crash.last()` would hand
+your app a stack trace made of `a.a.b`, and every published version would need
+its mapping file kept forever to read its own crash reports. The size saving is
+in the shrinking, not in the renaming, so ApkPy keeps the saving and skips the
+cost.
+
+Line numbers are kept too, so a stack trace still points at a real line.
+
+If you want obfuscation -- normally as a mild deterrent against someone reading
+your app -- remove that line from `proguard-rules.pro` in the generated project
+and keep the `mapping.txt` that each build produces.
+
+### What it improves, and what it does not
+
+Measured on a phone, cold starts, same app with and without:
+
+| | without R8 | with R8 |
+| --- | --- | --- |
+| APK on disk | 4,496 KB | **1,536 KB** |
+| code resident in RAM | 14,756 KB | **8,964 KB** |
+| total memory (PSS) | 119,169 KB | **113,153 KB** |
+| cold start | 312 / 246 / 233 ms | 270 / 223 / 231 ms |
+
+So: **storage and download shrink a lot**, and **memory drops by about 6 MB**,
+because the code your app never calls is no longer mapped into it.
+
+**Start-up barely moves.** The difference above is inside the noise of three
+runs, and you should not expect users to feel it. Code that is never called is
+also never loaded, so removing it saves the space it occupied rather than time
+that was being spent on it.
+
+### The cost
+
+Release builds get slower, because R8 analyses the whole program. On the test
+machine a small app went from 49 s to about 1 m 50 s, and one with Firebase,
+WorkManager and media3 took 2 m 45 s.
+
+`apkpy run` is a development build and does **not** shrink, so your everyday
+loop is unaffected.
+
+### Test a release build before you publish
+
+Shrinking removes code it believes nothing reaches. A library that finds its
+classes by name at run time can defeat that analysis, and the result compiles
+cleanly and fails only when that screen opens.
+
+ApkPy's own libraries were checked on a phone -- WorkManager ran a job to
+completion, media3 decoded audio, Firebase registered for push, RecyclerView
+drew a list, and the camera, gallery and wallpaper flows all worked. Even so,
+install your signed release on a real device and walk through the features that
+touch the network, the camera, notifications and background jobs before you send
+it to anybody.
+
+## Before shipping
+
+- Run `apkpy doctor`.
+- Test every screen in the Previewer and on Android.
+- Test permissions on both a fresh install and a previously denied install.
+- Verify offline/error/loading states.
+- Check background audio and notification controls.
+- Confirm the application ID and version code.
+- Search the generated project for placeholder secrets or test endpoints.
+- Build the exact release artifact that will be distributed.
+
+Android may warn when installing an APK outside an app store. Signing proves update identity and integrity; it does not remove normal sideloading warnings.
+
+---
+
+# Frequently asked questions
+
+Source: https://repo-apkpy.pages.dev/faq/
+
+## Does an ApkPy APK contain Python?
+
+No. ApkPy generates Java, XML, resources and a Gradle project. The APK runs as
+a native Android application without embedding a Python interpreter.
+
+## Can I open the result in Android Studio?
+
+Yes. `apkpy build` creates a normal Android project that can be inspected and
+compiled in Android Studio.
+
+## Does every Python library work on Android?
+
+No. ApkPy translates its documented declarative API and supported Python
+patterns. An arbitrary desktop Python package does not automatically become
+Java.
+
+## Is the Hot Previewer an Android emulator?
+
+No. It is a fast desktop renderer for layout and callbacks. Android permissions,
+services, codecs, FCM, GPS and OEM behavior require an emulator or device.
+
+## Can I read or write NFC tags?
+
+Since **1.9.0**, ApkPy can read tag IDs, NDEF text and URLs and write a single
+text/URL record to a compatible spare tag. See the
+[complete NFC guide and app](https://repo-apkpy.pages.dev/guides/nfc/).
+
+No runtime NFC permission popup is needed: the compiler declares the normal
+permission and optional hardware. The person still has to enable NFC. Reading
+is foreground-only, the desktop panel is a simulator, and writes replace the
+tag's existing records. This is not card emulation or support for bank cards.
+
+## Can I choose or edit a contact?
+
+Since **1.9.0**, `contacts.pick()` selects one phone
+or email without broad address-book permission. `list()`/`get()` ask for read
+access. `create()`/`edit()` open the native editor without `WRITE_CONTACTS`;
+their callback reports editor return, not confirmed saving. There is no direct
+delete API. The Previewer uses fictional data. See the
+[complete guide and People Desk app](https://repo-apkpy.pages.dev/guides/contacts/).
+
+## Can ApkPy build a complete social or delivery app?
+
+It can generate much of the native client. Accounts, moderation, payments,
+recommendations, dispatch and canonical server data remain application
+infrastructure. See [Can ApkPy build this?](https://repo-apkpy.pages.dev/can-apkpy-build-this/).
+
+## Is local data encrypted?
+
+ApkPy provides encrypted local values and password hashing, but security still
+depends on correct key handling, server authorization and threat modeling.
+
+## Can an AI coding assistant write ApkPy apps?
+
+Yes, once it is told what ApkPy is: no model knows it from its training, and
+left alone an assistant writes Kivy, or Python ApkPy cannot translate. Every
+project made by `apkpy start`, `apkpy init` or `apkpy examples` has an
+`AGENTS.md` (and a `CLAUDE.md` pointing at it) that Codex, Cursor, Copilot,
+Claude Code and others read first; `apkpy agents` adds it to an older
+project. An assistant with web access can also read
+[`llms.txt`](https://repo-apkpy.pages.dev/llms.txt), a map of these docs, and
+[`llms-full.txt`](https://repo-apkpy.pages.dev/llms-full.txt), the docs in one
+file. See [Getting started](https://repo-apkpy.pages.dev/getting-started/).
+
+## Is the generated project conditional?
+
+Yes. Feature helpers and dependencies are emitted only when the source uses the
+matching capability.
+
+## What happens to work when the app is closed?
+
+Work declared with `background_job()` is handed to WorkManager, which stores
+the queue in its own database. It survives backgrounding, process death and a
+reboot, and runs when the declared constraints allow it. See
+[Background jobs](https://repo-apkpy.pages.dev/background-jobs/).
+
+## Is ApkPy open source?
+
+Not currently. ApkPy is actively developed as proprietary software. The
+maintainer may choose to open-source the core later and commits to doing so if
+the project is permanently abandoned, allowing others to continue it. A pause
+or slower release cadence does not change the present licence; an open-source
+transition requires an explicit announcement, published source and a named new
+licence. See [Project continuity](https://repo-apkpy.pages.dev/project-continuity/).
+
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Does an ApkPy APK contain Python?",
+      "acceptedAnswer": {"@type": "Answer", "text": "No. ApkPy generates Java, XML, resources and a Gradle project. The APK runs without an embedded Python interpreter."}
+    },
+    {
+      "@type": "Question",
+      "name": "Can I open an ApkPy project in Android Studio?",
+      "acceptedAnswer": {"@type": "Answer", "text": "Yes. ApkPy generates a normal Android Gradle project that can be inspected and compiled in Android Studio."}
+    },
+    {
+      "@type": "Question",
+      "name": "Is the ApkPy Previewer an Android emulator?",
+      "acceptedAnswer": {"@type": "Answer", "text": "No. It is a fast desktop renderer. Device APIs and Android lifecycle behavior must be tested on Android."}
+    },
+    {
+      "@type": "Question",
+      "name": "Is ApkPy open source?",
+      "acceptedAnswer": {"@type": "Answer", "text": "Not currently. ApkPy is proprietary while actively developed. The maintainer may open-source it later and commits to releasing the core as open source if active development is permanently discontinued."}
+    }
+  ]
+}

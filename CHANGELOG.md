@@ -6,6 +6,594 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+---
+
+## [1.11.0] - 2026-09-26
+
+### Added
+
+- **Functions that build UI, reused across screens.** A header, a card or a
+  bar is written once and called once per screen -- `header("Home", home)`,
+  `header("Profile", profile)` -- and `t = stat(...)` binds `t` to the
+  component the function returns. The Previewer always ran this as Python;
+  the compiler refused it (`U2033` on the `label()` inside the function), so a
+  header on five screens was written five times. Now each module-level call is
+  replaced by the function's body before anything is translated, with the
+  arguments in place of the parameters and the function's own names made
+  unique to the call -- the module you would have written by hand. A
+  module-level `for` that builds UI is unrolled the same way, over a list
+  written in the file or `range(N)`, and a UI function may live in a helper
+  file. Called from a tap, a callback or a job, it stops the build with the new
+  `U2038` instead: by then the screens exist. A test runs the same app through
+  the Previewer and the compiler and compares every screen. On a phone, three
+  screens built by two functions showed exactly what the Previewer showed,
+  and the returned card answered to its name.
+
+- **A background job can save what it fetched.** The data layer --
+  `insert`, `insert_many`, `get`, `find`, `update`, `delete`, `count` and
+  `db.transaction()` -- and `files.download()` now run inside a
+  `background_job`, `service.every()` and `service.once()`. That is the
+  offline queue most apps want: download or ask for something, keep it, and
+  let the screen show it.
+
+  Inside a job they answer **before the next line**. The Worker is already
+  off the main thread, so it runs the operation where it is instead of
+  handing it to the data thread; the Previewer keeps the same order inside a
+  job. The callbacks are part of the body, and a screen observing the model
+  still hears about the write and re-queries on its own side.
+
+  Each operation is written once: the repository now builds a Task
+  (`NoteRepository.insertTask(...)`) that a screen submits and a Worker runs
+  here, and the download is one method (`_filesDownloadNow`) that a screen
+  calls on a thread and a Worker calls directly -- no third copy of either.
+  Verified on a phone: a job downloaded a page, saved it from the download's
+  `on_result`, and the screen's observer counted it. The app is
+  [`examples/32_offline_queue.py`](examples/32_offline_queue.py).
+
+- **`AGENTS.md` in every new project, so AI assistants write ApkPy.** No
+  language model knows ApkPy from its training: asked to add a screen, an
+  assistant writes Kivy, or Python that ApkPy cannot translate. `apkpy start`,
+  `apkpy init` and `apkpy examples` now put an `AGENTS.md` beside
+  `writehere.py` -- the file coding assistants read before they work in a
+  project -- with what ApkPy translates, the nine rules that stop a build and
+  the API to reach for, plus a `CLAUDE.md` that points Claude Code at it.
+  `apkpy agents` adds them to a project that already exists. A copy the
+  person has edited is never replaced (`--force` does). A test builds the
+  guide's own examples and checks every API name and error code it cites
+  against the library, so the guide cannot drift from what builds.
+
+  Tried on AI coding assistants that had never seen ApkPy and had no web
+  access, all asked for the same habit tracker. With the first version of the
+  guide the app built, but the assistant pre-built sixteen hidden buttons
+  because nothing told it how to show rows that change, and its stats never
+  reached the other screen on a phone. The guide now carries a list backed by
+  SQLite, today's date, the icon names and the rule for values shown on
+  another screen; the next assistant built a correct app on its first
+  attempt, in a quarter of the time, and it ran in the Previewer as written.
+
+- **`llms.txt` rewritten, and `llms-full.txt`.** The file an assistant with
+  web access reads first still described 1.9.0 and quoted the 590 ms cold
+  start that measured an empty list. It now says what ApkPy is and is not,
+  its limits, its commands and where each answer lives. `llms-full.txt` is
+  nineteen pages of the site in one plain file, built from the pages by
+  `tools/build_llms_full.py`; a test fails when it falls behind them.
+
+- **Native recipes.** Six ready-made `native.java` blocks for capabilities
+  ApkPy has no API for — reading text aloud, opening a page, downloading a
+  file, saving a text file, dialling a number and adding a calendar event.
+  All six were built **and run on a phone**, which changed two of them:
+  `DownloadManager.enqueue()` needs `INTERNET` and was crashing the app,
+  and `resolveActivity()` answers `null` from Android 11 without a
+  `<queries>` entry, so three recipes were refusing on a phone that had a
+  browser, a dialer and a calendar. The guide says plainly which of the
+  remaining gaps a block *cannot* close.
+
+- **One set of database rules instead of two.** The data layer had its rules
+  written twice -- once for the Previewer, once for the Java that goes on the
+  phone -- and an audit found **nine** places where the two copies had drifted
+  apart. Every one of them was silent: the app worked at the desk and answered
+  something else in your hand. `db.in_("flag", [True])` found nothing on
+  Android, `choices=[True, False]` refused every value it was declared to
+  allow, an emoji broke `max_length=1` on the phone but not on the desk,
+  `contains("%")` returned every row on both, and a blob read back as
+  hexadecimal here and Base64 there -- under a comment claiming the two
+  matched.
+
+  Each rule now lives once, in `apkpy_lib/data_rules.py`, next to the modules
+  that already ended this for icons, colours and the box shorthand. A test
+  walks its table and asks both sides: the Previewer by calling the code it
+  really runs, and the compiler by lifting the helper methods **verbatim out
+  of the generated Java**, compiling them with `javac` and putting the same
+  questions to both languages. Twenty-five of them, no disagreements. The day
+  they drift again, that test goes red before anything leaves the house.
+
+  **Five of these change what an app already does**, and all five were a
+  divergence before:
+
+  - Reading a `db.blob()` in the Previewer now gives Base64, like the phone
+    always did, instead of hexadecimal.
+  - `db.gt()`, `db.gte()`, `db.lt()` and `db.lte()` against `None` now stop
+    with the new `D2014` instead of guessing -- the Previewer used to answer
+    with nothing and Android with the opposite rows. `db.eq()` and `db.ne()`
+    are unchanged; asking whether a value is there at all is a real question.
+  - `NaN` and infinity in a `db.real()` are refused. They used to slip past
+    `min_value` and `max_value`, because every comparison with `NaN` is false,
+    and SQLite wrote NULL.
+  - A whole number written with a decimal point -- `2.0`, which is the shape
+    every number out of a JSON response has -- is now accepted by a
+    `db.integer()` field. It was accepted on the phone and refused here.
+  - `%` and `_` typed into `contains()`, `starts_with()` or `ends_with()` are
+    now searched for literally, on both sides. They used to act as wildcards
+    by accident, so searching for a per-cent sign returned everything.
+
+- **Rows built from components: `virtual_collection(items, row=post_row)`.**
+  A row had fixed slots (title, subtitle, image, meta, badge): a feed post,
+  a comment or a product card could not be written, and the photo-feed
+  replica built two posts by hand. `def post_row(row):` now builds one row
+  from ordinary components with `parent=row`; `{field}` in a text, a
+  picture's source or a `describe` is filled from each item, and a command
+  that takes an argument receives the item. The Previewer draws a copy per
+  visible item; the phone gets a layout of its own per row, inflated and
+  recycled by a RecyclerView, its pictures loaded at their own size and
+  cached, and the local ones the items name packaged. Checked on a phone:
+  four posts from data, square photos, the like button names its post.
+
+- **A row that changes.** `visible="{field}"` shows a component of a row only
+  when the item's field is on, and a button's `active="{field}"` shows its
+  `active_icon` in its `active-color`; `update_item(id, {...})` patches one
+  item and draws its row again. What reads as off (`""`, `false`, `0`, `no`,
+  `off`, `none`, `null`) is one tuple both runtimes read
+  (`data_rules.FIELD_OFF`). Checked on a phone: the heart turns red and the
+  count goes from 1284 to 1285 on that post alone, and back; a sponsored
+  post shows "Sponsored", the others do not.
+
+- **All 2,000+ Material Icons.** `icon=` took the 71 names ApkPy drew itself;
+  any Material Icons name works now (`add_comment`, `cameraswitch`,
+  `chat_bubble_outline`...), drawn from the same paths on both runtimes.
+  `icons.search("heart")` finds one. Glyphs from Google's set (Apache 2.0),
+  386 KB compressed in the package.
+
+- **Chat bubbles.** A `virtual_collection` with `variant=` styles each kind of
+  row with `id:kind`: `align-self` and `max-width` make a bubble that hugs its
+  text on one side, `item-border-radius` rounds the rows and `gap` spaces them.
+
+- **`badge-position: end`** draws a chat list as messengers do: the time level
+  with the name, the unread count under it, round.
+
+- **`image(..., command=)`, `avatar(..., command=)`** -- a picture you can tap
+  -- and **`image.set_src(file_or_url)`**, which changes what it shows; the
+  files it names are packaged.
+
+- **Corners one by one:** `border-radius: 22px 22px 0px 0px`.
+
+- **`mini_player(open=..., id=...)` has a stylesheet:** `background-color`,
+  `color` (title and play icon) and `subtitle-color` (artist), on its id or on
+  `mini_player { }`. It could only follow the theme -- a light bar over a dark
+  player screen in a light app.
+
+- **`title-color` and `subtitle-color` on `grid()` and `carousel()`**
+  (`color` also sets the title).
+
+- **A player drawn with icons.** An icon button bound to `audio.controls`
+  swaps `play_arrow`/`pause` and lights shuffle and repeat in its
+  `active-color`; `audio.like_button` swaps `favorite_border`/`favorite`; the
+  mini-player's play/pause is an icon. The text defaults are English words --
+  they were Portuguese with emoji ("⏸ Pausa", "❤️") that the Previewer drew as
+  empty circles.
+
+### Fixed
+
+- **Four showcase apps had empty screens on the phone.** A module-level loop
+  that unpacks -- `for page, title, copy in [(...), ...]:` -- was dropped by the
+  compiler without a word. Afterglow Music lost its three tracks and the title
+  and copy of three tabs; Lumen Finance, Northline Travel and Onda Wellness
+  lost the title and copy of three tabs each. The Previewer showed all of it.
+  The loops that build UI are now unrolled, so those screens are complete; a
+  module-level loop that unpacks and builds nothing stops the build with
+  `U2033` and says why. **The published showcase APKs were built without those
+  components;** the rebuilt ones show every tab on a phone.
+
+- **The bottom bar on a phone, without a `Theme()`.** The bar was painted with
+  the dark fallback and its pill and labels with the light palette -- a lilac
+  pill and dark-grey labels on a navy bar -- while the Previewer drew colours
+  that belong to that bar. The four colours now come from one rule both
+  runtimes read (`theme.nav_colors`). And the 32dp pill covered the top of the
+  active label on the phone; the bar now leaves 4dp between them. Seen on a
+  phone and fixed there.
+
+- **The bottom bar was 56dp on a phone and 64 in the Previewer.** What the
+  bar carries -- 6 above, the 32dp pill, 4 between pill and label, the label,
+  6 below -- adds up to 64, and the Material 2 bar kept its own 56 and sat the
+  label on its bottom edge. The phone's bar now has the Previewer's height
+  (`android:minHeight`), and both read the numbers from one place
+  (`theme.NAV_BAR_DP`). Measured on a phone: 56.0dp before, 64.0dp after.
+
+- **Bold came out regular on phones with a font theme.** On a Xiaomi with a
+  theme font installed, every weight of the system font links to one
+  variable file and the system never turns its weight axis:
+  `font-weight: bold`, a toolbar title, markdown `**bold**` and a button's
+  medium all drew at regular weight -- in every app on that phone, not just
+  ApkPy's. Each screen now measures once whether the system's bold reaches
+  the weight the font's own axis reaches, and only where it does not, gives
+  each text its weight through the axis, in the font the person chose. On a
+  phone whose bold works nothing changes. The new `ApkpyWeight` class does it
+  for every screen, the overlays the app builds, and bold inside a text.
+  Seen on that phone: every bold, before and after.
+
+  Finding it undid a decision. The active tab's label had been made regular
+  in the Previewer because "on the phone only the tint changes" -- measured on
+  this same phone, which had lost every bold. Material 1.11 draws the active
+  label bold (`itemTextAppearanceActiveBoldEnabled`), and every phone whose
+  bold works always showed it that way. The Previewer draws it bold again,
+  and the compiler writes the rule down so a library upgrade cannot move it.
+
+- **A black strip under the bottom bar.** On Android 15 and later an app is
+  drawn under the gesture area, and the screen's root kept that area as
+  padding -- so the page colour showed through beneath the bar, a dark band
+  between the bar and the edge of the phone. The bar now takes that area
+  itself: its colour runs to the edge and its items stay above the gesture
+  handle. The top, where the app bar already did this, is unchanged. On older
+  phones, which draw their own navigation bar, it is painted the bar's colour
+  with icons that show on it. Checked on a phone in five apps, with light bars
+  and dark ones: the bar's colour reaches the last row of the screen.
+
+- **`x["key"]` handed back the whole value on a phone.** Unless the compiler
+  knew `x` was a loop row, a key read on a screen assumed a `list_view` row's
+  "title — subtitle" text: `x["title"]` cut that text, and every other key
+  returned the entire value. `first["name"]` after `first = rows[0]`, a dict
+  written in the source, a `json_get()` record and a tapped row's `"id"` all
+  came back whole -- in the Previewer they read the key. A key now reads the
+  key on every screen, as the background Worker already did.
+
+  And a `list_view` row is the record it came from. `set_items(rows,
+  title=, subtitle=)` kept only the text shown, so a tapped row's
+  `item["id"]` was that text and `DELETE ... WHERE id = ?` matched nothing, on
+  the phone only. The row now keeps every column, plus `title` and `subtitle`,
+  and still shows "title — subtitle"; the Previewer keeps the whole row too.
+  A real-time search on a `list_view` now finds its rows as well.
+
+- **A component changed from another screen was dropped on the phone.** Each
+  screen is its own Activity and only has its own views, so a function
+  running on one screen that set a label or showed a button on another left
+  no trace in the Java: the Previewer updated it, the phone did not. The
+  value is now left for the screen that owns the component, which applies it
+  when it comes to the front -- or at once, if it already is (an `https`
+  answer arriving after the person moved on). The last value written wins,
+  as in the Previewer. `set_value()`, `show()`, `hide()` and `set_items()`
+  are covered -- a list's rows travel as that list would have stored them,
+  normalised by the same code its own screen runs. Reading another screen's
+  component, and the other list operations, still belong on its screen. The
+  published
+  `26_biometric_lock` was one of them: its vault screen's messages ("Could
+  not confirm it was you.") never reached the home screen on a phone.
+
+  Both were found by AI assistants writing a habit tracker from AGENTS.md,
+  and checked on an Android 15 emulator: with the old compiler, tapping a
+  habit did nothing and the stats screen stayed at 0; with this one, both
+  work, and a stats screen brought back to the front shows the new count and
+  the new rows of its two lists. Built with only the box switched off, the
+  same app showed the old rows. The same two apps then passed on a phone
+  (Xiaomi, Android 16).
+
+- **A background job could compile, run, report `success` and do nothing.**
+  The body of a `background_job` -- and of `service.every()` and
+  `service.once()` -- is written into a WorkManager Worker, and the generator
+  for it dropped every call it could not write, without a word.
+  `if permissions.has("CAMERA"): ...` became an empty `try`. So did
+  `note.insert(...)`, `files.download(...)`, `out.set_value(...)` -- and a
+  plain call to one of your own functions, which is how most job bodies are
+  written: the method was generated and never called.
+
+  What a Worker can do, it now does: calls to your functions, however deep,
+  `permissions.has()` (checked against the application's context, since only
+  *asking* needs a screen), `files.delete()`, and -- see Added -- the data
+  layer and `files.download()`. Everything else stops the build with the line
+  it is on -- **`J7004`** when the call needs a screen, **`J7005`** when it
+  could run in the background but is only written for screens so far
+  (uploads, WebSockets, location) -- and the error follows your calls into
+  helpers. The rule
+  lives once, in `apkpy_lib/job_rules.py`, and the Previewer asks it too: a
+  job body that reaches one of those calls stops with the same code and the
+  same words, once, without a retry, instead of the desk running what the
+  phone refuses. An observer setting a label is the screen, not the body, and
+  stays open.
+
+  **This can stop a build that went through before** -- and every such build
+  was shipping a job with part of its body missing. None of the 71 example
+  apps is affected: none had a job body the Worker was cutting short, and
+  every one builds as before.
+
+- **A finished job told the screen something else on the phone.** Seen on a
+  phone, in the Job Bodies Lab: after a success the desk showed
+  `success · done` and the phone `success` with no message and progress `0`
+  -- WorkManager clears a finished job's progress, and the status was built
+  from nothing else. It was not the only disagreement: a job waiting out its
+  backoff was `retry` at the desk and `enqueued` on the phone; enqueuing while
+  one ran flipped the desk to `enqueued` while the phone said `running`; and on
+  the phone a failure still in WorkManager's history outranked the success that
+  came after it.
+
+  The status now has one rule, in `apkpy_lib/job_rules.py`, built from facts
+  both sides have -- what is running, what is pending and with how many
+  attempts used, and the last thing that finished. The Previewer reports
+  through it; the generated `ApkpyJobs.status()` is its translation; and a test
+  lifts that method out of the generated file, compiles it against
+  WorkManager's own classes and gives both the same 18 situations. The Worker
+  now leaves its last message where the status reads it, and the result of the
+  last item survives a restart on both sides.
+
+- **An `https` callback inside a job did not compile.** The Worker ignored
+  the mark that says a callback's first argument is a boolean, so
+  `def got(ok, body)` was declared `String ok` and called with a `boolean`,
+  and `if ok:` became `ok.isEmpty()`. javac refused both, unless the
+  parameter happened to be called `success`. The Worker now reads the same
+  mark as the screens.
+
+- **A transaction that returned a value did not compile, on any screen.**
+  `def seed(tx): ... return total` -- the natural way to hand a result to
+  `on_result` -- was followed by a `return "";` that javac refuses as
+  unreachable. It is written only when the body can end without returning.
+
+- **`service.every(sync, 15)` produced no Worker.** Only `run=` by name was
+  read, so the positional form -- the order the Previewer's own signature
+  gives -- ran at the desk and never on the phone, with nothing said. Both
+  `service.every()` and `service.once()` now read their arguments by
+  position or by name, and a `run=` that names no function in the file stops
+  with `J7002` instead of being skipped.
+
+- **A storage key that was never written answered `None` in the Previewer.**
+  The phone always answered `""`, so `"Last: " + storage.get("step")` worked
+  in your hand and raised a `TypeError` at the desk. An explicit default
+  still wins.
+
+- **A quick click left a button in its pressed colour.** The Previewer eases
+  the fill towards the pressed colour over 90 ms, and releasing sooner --
+  a fast click, or a tap on a touchpad -- let the remaining frames run after
+  the button had redrawn itself. It stayed grey until the next redraw.
+
+- **A declaration written inside `db.schema()` never reached Android.**
+  The schema call collected *variable names* out of its `models=`,
+  `relations=` and `migrations=` lists and dropped everything else, so a
+  `db.model()`, `db.relation()` or `db.migration()` written inline -- ordinary
+  Python, and accepted by the Previewer -- simply was not in the app. No
+  table, no `FOREIGN KEY`, no `ALTER TABLE`, and not a word about any of it:
+  deleting a parent row cleaned up on the desk and left orphans on the phone,
+  and an app that upgraded its schema crashed on somebody else's device with
+  "No migration from version 1".
+
+  Refusing the inline form would only have moved the divergence to the end of
+  the build, so it is read where it is written, by the same parser the named
+  form uses. An entry that is neither a declaration nor the name of one now
+  stops the build with the new `C4004` instead of disappearing.
+
+- **A delete stopped short of the far end of a cascade.** With three models
+  related A to B to C, deleting a row in A cascades all the way to C in
+  SQLite, but the Previewer only told the observers of A and B, so a list
+  watching C went on showing rows that were gone. It walked the relations once
+  instead of repeating until nothing new appeared, which meant the answer
+  depended on the order the relations happened to be declared in -- the same
+  schema, written in the other order, was right. The rule joins the shared
+  table, and the generated Java always did this correctly.
+
+- **Denying a permission once denied it for ever in the Previewer.** The
+  contacts simulator only offered the permission panel from its initial state,
+  so after a plain Deny every later call answered `permission_denied` without
+  asking. Android reopens the dialog after a plain deny; only "do not ask
+  again" is final, which is what the generated Java checks. The effect was not
+  a broken app -- it was that the recovery path, the one that breaks most
+  often in real apps, could not be exercised at the desk at all.
+
+- **A new NFC reader inherited the previous one's tag.** Starting a new
+  session inside a write callback -- `nfc.start(on_tag=other)` -- delivered
+  the finished session's tag to the new handler, with nobody having tapped
+  anything. The checks after the callback only asked whether the reader was
+  started and the screen current, and both survive a restart. The Previewer
+  now holds a session number and compares it after running a callback, which
+  is what the generated Java has always done.
+
+- **A contacts call that ran here and stopped the build.**
+  `contacts.pick("phone", picked)` matches the signature the library
+  publishes -- `pick(kind="phone", on_result=None)` -- and it ran in the
+  Previewer, but the compiler refused it with a `U2033` about too many
+  positional arguments. Its table of contacts arguments listed the options and
+  left the callback out, so it allowed exactly one argument fewer than the
+  signature promised, on all six verbs. Nobody decided that; nfc, camera and
+  flashlight already took a positional callback. The callback is now the last
+  positional slot, the refusal for a genuinely wrong call says how many
+  arguments there are and names them, and a test compares the two sides'
+  arities directly so the next option added to a verb cannot drift again.
+
+- **A cancelled camera was announced as a success.** Only the callback named
+  in an API call was marked as taking a boolean first, so
+  `on_result=lambda ok, value: result(ok, value)` marked the lambda and left
+  `result` with a `String` parameter: `false` arrived as the text `"false"`,
+  which is not empty, and `if ok:` ran the success branch. It said nothing,
+  which is the part that matters. The mark now follows the boolean into every
+  function it is handed to, however many hops. Found in an audit, reproduced,
+  then fixed.
+- **Keyword arguments were dropped from calls to your own functions.**
+  `result(ok=False, value="denied")` declared two parameters and called with
+  none, and there was no diagnostic: the build went on and `javac` failed on
+  generated code nobody wrote by hand. Names are now lined up with the
+  parameters, and a call that cannot be lined up stops the build with the new
+  `U2037`.
+- **Contrast was measured against the wrong background.** The style cascade
+  starts at `body`, which carries the theme's page colour, so every component
+  claimed to paint the page: a container's own background was computed, passed
+  down and never used. White text on a dark card was reported at 1.14:1 when
+  it is 13:1. A check that cries wolf gets switched off.
+- **Four icon names that do not exist.** `battery_full`, `credit_card`,
+  `payments`, `shopping_bag` and `train` are not in the 71-icon catalogue, so
+  both runtimes drew a plain circle -- which reads as a design choice rather
+  than a typo. Two of them were in showcase apps whose APKs are published, one
+  was in the notifications guide people copy from. All replaced with names that
+  exist, the showcase APKs rebuilt, and a test now fails if any example or
+  guide names an icon the catalogue does not have.
+- **A background job that ended in `return` did not compile.** The generated
+  `doWork()` always got a closing `return Result.success();` after its
+  try/catch, without asking whether the body already returned on every path,
+  and in Java a statement that cannot be reached is a compile error. So
+  `def task(): ... return "ok"` -- the most natural way to write a job --
+  stopped the build, on generated code nobody wrote by hand. The published
+  example escaped by accident: it ends in a call, not a return. The guard for
+  exactly this already existed and the Worker simply never used it; it was
+  also blind to `try`/`except`, which hit screen functions the same way.
+  Reproduced, fixed, and both directions pinned by tests -- cutting the
+  closing return where it *is* needed would only trade one compile error for
+  another.
+- **A number bigger than a Java `int` broke the build.** Python counts as high
+  as memory allows; Java's `int` stops at 2,147,483,647. A timestamp in
+  milliseconds written into the source came out as a plain `int` and `javac`
+  refused, with an error about generated code nobody wrote by hand. Such a
+  number now gets the `L` a Java long needs, and one past the long is refused
+  with a reason instead of unreadable output.
+- **A permission named any way but upper case did not build.**
+  `permissions.has("camera")` wrote `Manifest.permission.camera`, and the
+  form the native-features guide shows, `"android.permission.CAMERA"`, wrote
+  `Manifest.permission.android.permission.CAMERA`; javac refused both. An app
+  that asked with `permissions.request()` without `declare_permissions()` did
+  not build either (`PERMISSION_REQ_CAMERA` was never declared). Every form
+  now names the Android constant, asking declares the permission in the
+  manifest, and the Previewer reads `"camera"` and `"CAMERA"` as one.
+- **Closed from recents with the music paused, the player stayed** -- its
+  notification, its media session and the media island of a Xiaomi phone,
+  with the app gone. A paused player now goes with the app, a paused
+  notification can be swiped away (which stops it), and music that is
+  playing keeps playing, as in any music app. Checked on a phone: paused and
+  closed, no session and no notification; playing and closed, still playing.
+- **A music app with its own files played nothing on a phone.** Local
+  tracks in `audio.play()` / `audio.play_playlist()` were never packaged and
+  the media service opened the bare file name: the player stayed at 0:00.
+  Local covers -- `arts=`, and the `image` of `grid()`, `carousel()` and rich
+  `list_view()` items -- were not packaged either, and the phone looked for
+  them as file paths: a shelf of blank cards, a mini-player without its
+  cover. Audio now goes into `res/raw`, pictures into `res/drawable`, and the
+  Activity and the media service find them by the name the compiler gives
+  every picture. Checked on a phone: the replica's three tracks play, with
+  their covers on the shelf, the player and the mini-player.
+- **Shuffle and repeat did nothing when tapped** unless the app wrote
+  `command=audio.shuffle` -- the media guide's own example did not.
+  `audio.controls` wires them now, on both runtimes; a button with a command
+  of its own keeps it.
+- **Play did nothing after the last track.** The finished queue stopped the
+  media service, and play reached a new one with nothing to play. The last
+  queue is kept while the app runs, and play starts its last track again.
+  Shuffle and repeat are read from what the buttons show, not from a new
+  service's defaults.
+- **When the queue ended, the progress bar stayed at the end** and the time
+  read "0:00 / 0:00". It goes back to the start with the last track's length,
+  on both runtimes. The Previewer also cleared the track at the end (its
+  mini-player vanished) and play did nothing there: it keeps the last track
+  on screen and plays it again, as the phone does.
+- **The progress bar of `audio.now_playing` was always sky blue** and a
+  `range` input ignored `accent-color` on the phone, while the Previewer
+  drew both in it.
+- **An avatar's `describe=` never reached the phone** (a story ring was a
+  nameless button to TalkBack), and in a chat list with
+  `badge-position: end` the time shrank to "2..." beside its badge.
+- **English on the phone too:** `confirm()` said "Cancel" in the Previewer
+  and "Cancelar" on the phone; a `radio` with no options offered "Opção 1".
+- **`lambda t=target: ...` in a loop did nothing on a phone.** It is how
+  Python gives each button of a loop its own value, and the Previewer ran it
+  as Python. The compiler read the lambda's parameters and never its
+  defaults: `on_click_navigate(t)` was dropped without a word -- a menu of six
+  buttons built by a loop did nothing on the phone -- and `toast(c)` stopped
+  the build with a Java error about generated code (B5005). Each default is
+  now written into the lambda before translation, which is exact for a
+  literal or a name bound once; a default the program changes later is
+  refused with `U2039` instead of being translated into something Python
+  would not do. Found rebuilding six well-known screens; checked on a phone:
+  the six menu buttons open their screens and the loop's toast shows its own
+  value.
+- **`position: absolute` on a screen's own component was laid out in the
+  column** with everything else, on the phone and in the Previewer: no
+  floating button, no composer or player bar pinned to the bottom. It is on
+  a layer over the content now, fixed while the content scrolls, above the
+  bottom bar if there is one; taps that miss its components reach the
+  content. Every view keeps its id.
+- **A sheet at `bottom: 0` stopped above the navigation bar,** leaving a strip
+  of map under it. It reaches the bottom of the screen now, as a bottom sheet
+  does.
+- **A scrolling screen without a bottom bar drew its title under the
+  clock** on Android 15 and later: with targetSdk 35 the window is
+  edge-to-edge, and that was the only screen root that did not fit the
+  system windows. Six of the published examples had it, the Knowledge Vault
+  tutorial among them.
+- **The clock was dark on a dark screen** in a light app -- a chat, a player,
+  a story. On a screen without an app bar the status icons now follow the
+  colour behind them, read at run time (tokens and night mode included).
+- **An icon-only button's icon sat left of centre** (the like on a post, the
+  send button): MaterialButton kept its 8dp icon padding. Centred now, and
+  a button that is only an icon, with no size in the stylesheet, is a 48dp
+  square -- the touch target Android asks for and what the Previewer draws.
+  Checked on a phone: Onda's profile button.
+- **An avatar's ring was cut at the sides** and drawn over the picture: the
+  stroke is inside the view now.
+- **`margin: 4px 14px 0px 14px` on a label wrote `layout_marginTop` twice,**
+  which AAPT refuses: the app did not build. The shorthand is written out as
+  its four sides first; a label's indent also sees its left side now.
+- **Grid and carousel cards were white on the phone whatever the stylesheet
+  said.**
+- **An absolute box with no width was as wide as the screen,** so
+  `right: 12px` did nothing -- a column of buttons sat on the left edge. It
+  is as wide as its content, as in CSS; with `left` and `right` it
+  stretches between them. Same in the Previewer.
+- **`align-self` on a screen's own component did nothing,** and `max-width`
+  centred every chat bubble, the reply that belongs on the right included.
+- **A label with `flex-grow` had its text centred on the phone** ("Thursday
+  plan" in the published Northline) while the Previewer and CSS keep it at
+  the start.
+
+### Previewer
+
+- **Rounded shapes are antialiased.** Tk fills a polygon without smoothing
+  on Windows, so every rounded button, card, field and ring had stepped
+  edges -- people trying ApkPy took that for what Android would show. Shapes
+  are drawn as images: the flat interior at its own size and the corners at
+  4x, scaled down (1-2 ms at any size). The press tint and the theme fade
+  still reach them. `APKPY_PREVIEW_AA=0` draws the old polygons.
+- **See-through over a picture.** A transparent button, label or row over an
+  image or the camera was a black square; it shows the picture now, and a
+  glass colour darkens it as on the phone.
+- **Soft shadows.** `box-shadow` was two near-black layers offset down and to
+  the right, a hard dark edge on light screens. It is a blurred shadow now,
+  and a card's content no longer pokes out of its rounded corners.
+- **The screen starts below the status strip,** as on the phone; content was
+  laid out from the top of the window, half a row of chips under the clock.
+  `height: 100%` is what is left below it.
+- **Rows as the phone lays them out:** a label in a flex row or column has no
+  padding of its own (8px each side and a doubled top margin before); a
+  label with `margin-left` is measured from the edge, as on the phone; a
+  growing box in a row fills its slot (a composer's pill left a hole before
+  the send button); a container that grows taller tells the one holding it
+  (the pill stayed 19px tall, its text height, and vanished); a chip's width
+  is rounded up ("Music" wrapped to "Musi / c").
+- **A field with a background has no underline,** as the phone's shape
+  drawable has none.
+- **A button has the size the stylesheet gives it.** `width`/`height` never
+  reached the code that draws a button, so a 76x76 ring came out as a pill
+  the width of its text, while the phone drew the circle.
+- **Glass colours.** `#AARRGGBB` lost its alpha: a `#33FFFFFF` button was an
+  opaque white disc hiding its white icon.
+- **A square transparent button took the Previewer down** (Tcl rejects
+  `#00000000`); it draws no body now.
+- **Round images keep round borders**, and badges are round as on the phone.
+- **`height: 100%`** fills the parent for `image`, `map_view` and
+  `camera_view`, as `match_parent` does on the phone. The map read it as
+  100 pixels.
+
+### Known limits
+
+- The Previewer sees through a transparent component to a picture under it,
+  not yet to another component; a label's text over a picture is centred on it.
+- A `display: flex` row with no `justify-content` centres its children, as
+  ApkPy always has, where CSS starts them. Write `justify-content: flex-start`;
+  changing the default would move existing apps.
+
+---
+
 ## [1.10.0] - 2026-09-19
 
 ### Added

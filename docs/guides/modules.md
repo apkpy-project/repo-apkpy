@@ -108,11 +108,60 @@ arithmetic in the generated Java, and a wrong yes would turn a sum into glued
 text without a word. Text and numbers only have to agree on the phone and on
 the desktop; they do not have to be guessed.
 
+## Functions that build UI
+
+A header, a card or a bar that appears on several screens is written once, as
+a function, and called once per screen:
+
+```python
+def header(title, subtitle, screen):
+    label(title, id="screen_title", screen=screen)
+    label(subtitle, id="screen_subtitle", screen=screen)
+
+
+def stat(name, value, screen):
+    box = card(id="stat", screen=screen)
+    label(name, id="stat_name", parent=box)
+    number = label(value, id="stat_value", parent=box)
+    return number
+
+
+header("Today", "One run a day keeps the streak alive.", today)
+distance = stat("Distance", "0.0 km", today)      # distance.set_value(...) later
+
+for week, km in [("This week", "18.4 km"), ("Last week", "22.1 km")]:
+    stat(week, km, history)
+```
+
+The Previewer runs this as Python. For the phone -- which lays out every screen
+before the app runs -- ApkPy puts each call's body where the call is before it
+translates anything, with the arguments in place of the parameters and the
+function's own names made unique to that call. The phone ends up with the same
+components on the same screens; a test runs the same app both ways and compares
+them screen by screen.
+
+- **Return a component to use it later.** `distance = stat(...)` binds
+  `distance` to the label the function returned.
+- **The same `id=` on every copy is fine.** It is what the CSS reads, so
+  `#stat` styles every card; each copy still gets its own view on the phone.
+- **`screen.id` and joined text are worked out while compiling**, so
+  `id="back_" + screen.id` and `f"on {screen.id}"` give each screen its own.
+- **A module-level `for` that builds UI is unrolled** -- over a list written
+  in the file, a list defined at the top of it, or `range(N)`, including
+  `for name, value in [(...), ...]:`.
+- **A function can live in a helper file**, and one UI function can call
+  another.
+
+Called from a button, a callback or a job, a UI function would build a screen
+that already exists; that stops the build with
+[`U2038`](../friendly-errors.md), as does a loop that builds UI from data that
+only arrives while the app runs -- that is what `list_view()` and
+`virtual_collection()` are for.
+
 ## What this does not do
 
-- **There are still no classes.** A helper holds functions and constants.
-- **A helper cannot build UI.** Component reuse across screens is a different
-  problem and is not solved here.
+- **There are still no classes.** A helper holds functions and constants --
+  and, now, functions that build UI.
 - **Only files beside your application.** No packages, no subfolders, no
   `from . import`. An import ApkPy does not recognise is left exactly as it
   was, so `import math` and everything the compiler already reads keep working.
@@ -128,4 +177,6 @@ the desktop; they do not have to be guessed.
   nothing that built stopped building.
 - The example above was rendered in the Previewer and built with Gradle —
   `BUILD SUCCESSFUL` — and the generated Java read by hand.
-- Not checked on a phone.
+- Installed on a Xiaomi 25069PTEBG running Android 16 and driven: the example opened,
+  showed `EUR 30.12` — the arithmetic crossing the file boundary, right on
+  the device — and survived a rotation with the values intact.

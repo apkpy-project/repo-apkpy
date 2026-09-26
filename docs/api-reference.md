@@ -127,7 +127,7 @@ data-model notes and Previewer/Android behavior.
 | <code>app_bar(...)</code> | Adds a fixed Material toolbar |
 | <code>sliver_app_bar(...)</code> | Adds a collapsible image toolbar |
 | <code>action(icon, ...)</code> | Creates an app-bar icon action |
-| <code>mini_player(open=None)</code> | Adds the persistent audio mini-player |
+| <code>mini_player(open=None, id=None)</code> | Adds the persistent audio mini-player |
 
 ## Overlays and feedback
 

@@ -1,6 +1,6 @@
 site_name: ApkPy
 site_url: https://repo-apkpy.pages.dev/
-site_description: Generate native Android Java, XML and Gradle projects from a supported declarative Python API.
+site_description: ApkPy is a Python library that turns Python UI code into native Android apps, written as Java, XML and Gradle.
 site_author: ApkPy
 
 docs_dir: docs
@@ -96,6 +96,7 @@ nav:
       - Maps and tracking: guides/maps-tracking.md
       - Knowledge app: guides/knowledge-app.md
       - Your own Java: guides/native.md
+      - Native recipes: guides/native-recipes.md
       - More than one file: guides/modules.md
   - Build interfaces:
       - Components and layouts: ui-components.md
@@ -137,6 +138,7 @@ nav:
       - Previewer versus Android: preview-android.md
       - FAQ: faq.md
       - Version index: versions.md
+      - Version 1.11.0: version-1.11.0.md
       - Version 1.10.0: version-1.10.0.md
       - Version 1.9.0: version-1.9.0.md
       - Version 1.8.0: version-1.8.0.md
@@ -157,6 +159,10 @@ nav:
 extra:
   # Single source for the version shown in the page structured data.
   # Bump this with each release so search engines do not advertise an old one.
-  apkpy_version: "1.5.0"
+  apkpy_version: "1.11.0"
+  # Bing Webmaster Tools, "HTML Meta Tag" method: paste only the content="..."
+  # value here. Leave empty when the site was verified by importing it from
+  # Google Search Console.
+  bing_site_verification: ""
 
 copyright: Copyright &copy; 2026 ApkPy

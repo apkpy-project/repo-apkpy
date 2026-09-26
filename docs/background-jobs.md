@@ -102,10 +102,80 @@ def upload_photo():
 `retry()` and `fail()` mark the attempt rather than jumping out, so the result
 is identical in both runtimes. Add `return` when you want to stop immediately.
 
+A job's `return` ends the work and nothing else: the value goes nowhere, in
+either runtime. What the job *did* travels through `storage`, the database or
+a `notify()` -- the outcome travels through `retry()` and `fail()`.
+
 !!! warning "attempt() counts one message, not the queue"
     `attempt` stays at `1` while everything succeeds first time, because it
     counts the tries of a single queued item. It is the same value Android
     exposes as `getRunAttemptCount()`, normalised to start at one.
+
+### What a job body can call
+
+On the phone the body is a `Worker`, and a Worker has no screen. What it can
+do, it does; what it cannot, **stops the build** with the line it is on --
+and the Previewer stops the job with the same code when the body reaches the
+call, instead of letting the desk run what the phone refuses.
+
+| Runs inside a job | Stops the build |
+| --- | --- |
+| the data layer: `insert`, `find`, `update`, `delete`, `count`, `db.transaction()` | `set_value()`, `get_value()` and every other component method -- **J7004** |
+| `files.download()`, `files.path()`, `files.exists()`, `files.delete()` | `observe()` on a model -- it belongs to a screen -- **J7004** |
+| `storage`, `db.execute()`, `db.query()` | `permissions.request()` -- **J7004** |
+| `https` (synchronous in the Worker) | `alert()`, `confirm()`, `snackbar()`, navigation -- **J7004** |
+| `notify()` and `notifications` | `audio`, `sensors`, pickers, `auth.login()`, `billing` -- **J7004** |
+| `permissions.has()`, `toast()`, `share()`, `clipboard.copy()` | `uploads`, `websocket`, `location` -- **J7005** |
+| your own functions, however deep | `camera`, `contacts`, `nfc`, `wallpaper` -- their own codes, build only for now |
+
+**J7004** means the call needs a screen: no translation will make it work in
+the background, so move it -- report with `job.progress()` and show it from
+`job.observe()`, or do the screen work before `enqueue()`. **J7005** means the
+call *could* run in the background but is only written for screens today; do
+it on a screen and hand the job what it needs through `enqueue({...})`.
+
+The rule follows your calls: a helper the job calls is held to it too, and the
+error points at the helper's line. The same rule applies to the body of
+`service.every()` and `service.once()`, which are Workers as well.
+
+### Saving what the job fetched
+
+The offline queue most apps want is a job that downloads or asks for
+something and keeps it. Inside a job the data layer and `files.download()`
+answer **before the next line** -- the Worker is already off the main thread,
+so it runs the operation where it is, and the Previewer does the same:
+
+```python
+page = db.model("page", fields={
+    "id": db.integer(primary_key=True, auto_increment=True),
+    "path": db.text(),
+})
+schema = db.schema("offline", version=1, models=[page])
+
+def downloaded(ok, path):
+    if ok:
+        page.insert({"path": path}, on_result=saved)   # runs inside the job
+
+def work():
+    files.download(PAGE, "page.html", on_result=downloaded)
+    # here the file is on disk and the row is written
+
+job = background_job("fetch_page", run=work, requires_network=True)
+saved_pages = page.observe(on_change=count, screen=home)
+```
+
+The screen's `observe()` hears about the write the same way it hears about a
+write made on a screen, and re-queries on its own side, so `count` may set a
+label. The callbacks of the job -- `downloaded`, `saved` -- are part of the
+body: what they may call is what the body may call.
+
+`playground/job_bodies_lab` is this example as a running app.
+
+!!! note "Before this, a job could compile and do nothing"
+    The Worker used to drop every call it could not write, without a word --
+    `if permissions.has("CAMERA"): ...` became an empty `try`, and a call to
+    one of your own functions vanished. A job that reported `success` might
+    have run none of its body.
 
 ## Observing progress
 
@@ -133,6 +203,26 @@ sync_job.observe(on_change=queue_changed, screen=home)
 Every value is a string, matching the generated `_jsonGet` accessor, so
 `"pending " + status["pending"]` behaves the same on the desktop and on the
 phone.
+
+What each state carries -- the same document on both sides, built by one rule
+(`apkpy_lib/job_rules.py`) that the generated `ApkpyJobs.status()` translates:
+
+| `state` | When | `progress` | `message` | `attempt` |
+| --- | --- | --- | --- | --- |
+| `running` | an item is running -- this wins over everything else | what it reported | what it reported | this attempt, from `1` |
+| `retry` | nothing running, an item waiting out its backoff | `0` | `Retrying in 30 s (attempt 1)` | the attempt that failed |
+| `enqueued` | nothing running, fresh items waiting | `0` | empty | `0` |
+| `success` | the last item finished | `100` | its last `progress()` message | its attempt |
+| `failed` | the last item called `fail()` | `0` | its last `progress()` message | its attempt |
+| `cancelled` | `cancel()` was the last thing | `0` | empty | `0` |
+| `idle` | nothing has ever finished | `0` | empty | `0` |
+
+The result of the last item outlives the app: a screen opened tomorrow still
+reads `success` and the message the job ended with. WorkManager clears a
+finished job's progress, so the generated Worker keeps its last word where
+`status()` reads it. The retry message is worked out from the job's own
+`retry=` and `retry_seconds=` -- WorkManager's formula, the same number on
+both sides.
 
 The screen does not poll. On Android the observer is attached to
 `getWorkInfosByTagLiveData(...)`, so it survives rotation and is re-delivered
@@ -187,8 +277,8 @@ Wi-Fi switched off.
 ## Deliberate limits
 
 - The `run` function supports the same background-safe subset as
-  `service.every`: `storage`, `db`, `https`, `notify`, and plain logic.
-  Component calls need a live Activity and are ignored.
+  `service.every` -- see [What a job body can call](#what-a-job-body-can-call).
+  Anything outside it stops the build rather than being left out.
 - `https` is **synchronous** inside the generated Worker and **asynchronous**
   in the Previewer. Decide the outcome in the body of the job; calling
   `job.retry()` from an `on_response` callback arrives too late on the

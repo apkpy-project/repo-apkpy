@@ -226,9 +226,12 @@ with NFC disabled. Without a physical tag, opening settings and exercising
 lifecycle only proves those paths—not a successful read or write.
 
 The [1.9.0 verification summary](../version-1.9.0.md#verification) separates
-automated tests, directly observed device behavior and the maintainer's
-13 September 2026 confirmation that NFC worked in their test. That report does not identify a tag or individual
-read/write scenarios; it is not treated as certification of all NFC operations.
+automated tests, directly observed device behavior and what the maintainer
+reported. On 20 September 2026 that report became specific: one NDEF tag read,
+and a write to a second tag, on a physical phone. That is one person, one
+handset and two tags. It says a read and a write happened; it does not certify
+NFC across tag types, chipsets and manufacturers, which is why the advice above
+still stands.
 
 ## Outside this version
 

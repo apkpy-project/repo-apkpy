@@ -83,6 +83,19 @@ The CSS shorthand is now read once, in the module both renderers share, with
 the real rules for one, two, three and four values. On Android each side goes
 out as its own attribute, and a single value still uses `layout_margin`.
 
+## On a phone
+
+The two-file example was installed on a Xiaomi 25069PTEBG running Android 16 and driven: it opened
+in 561 ms, showed `EUR 30.12` — the arithmetic that crosses the file boundary,
+correct on the device — its button callback fired, and it survived a rotation
+with the values intact and no exception in `logcat`.
+
+The six [native recipes](guides/native-recipes.md) ran on the same phone, and
+two of them only work because of what that run found: `DownloadManager` needs
+the `INTERNET` permission and was crashing the app, and `resolveActivity()`
+answers `null` from Android 11 without a `<queries>` entry, so three recipes
+were refusing on a phone that had a browser, a dialer and a calendar.
+
 ## Verified in this release
 
 - 1,151 feature tests (29 new for the modules and the numbers, 8 for the
@@ -96,7 +109,5 @@ out as its own attribute, and a single value still uses `layout_margin`.
 
 ## Not verified
 
-- **Nothing here was run on a phone.** The generated Java compiles and the
-  Previewer renders; neither proves a screen behaves on a device.
 - The coverage page's sixty capabilities are our list, not a standard. The
   signal used for each one is described on the page so it can be checked.

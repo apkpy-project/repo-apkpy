@@ -35,6 +35,13 @@ cd hello_apkpy
 
 The project contains <code>writehere.py</code>, the source file in which you create screens and app logic.
 
+It also contains <code>AGENTS.md</code>, and a <code>CLAUDE.md</code> that points at it. No AI model
+knows ApkPy from its training: asked to add a screen, an assistant writes Kivy, or Python ApkPy
+cannot translate. <code>AGENTS.md</code> is the file coding assistants (Codex, Cursor, Copilot,
+Claude Code and others) read before they work in a project, and it tells them what ApkPy
+translates, which rules stop the build and which API to reach for. Run <code>apkpy agents</code>
+to add it to a project you already have; a copy you have edited is never replaced.
+
 Replace it with:
 
 ~~~ python
