@@ -10,6 +10,253 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.12.0] - 2026-10-02
+
+### Added
+
+- **Charts: `chart(items, kind="bar" | "line" | "donut" | "ring")`.** Drawn
+  natively -- ApkpyChart's Canvas on the phone, Pillow in the Previewer -- from
+  the numbers in `apkpy_lib/chart_rules.py`: an axis that ends on a round
+  number, labels thinned when they would not fit, `1.2K` and `3M`, slices
+  clockwise from the top. ApkpyChart writes those functions again in Java, and
+  a test compiles them and asks both languages the same questions. Items are
+  dicts read by `x`/`y` or plain numbers (rows from `db.query()` work as they
+  come); `fill=True` shades a line, a donut lists its slices and takes
+  `center=`, a ring shows a `value` out of `max`. `set_items()`, `set_value()`
+  and `on_click(item)`. New CSS: `track-color`, `label-color`, `grid-color`,
+  `stroke-width`. An unknown `kind` stops the build with `U2041`.
+- **Tabs that swipe: `pager()` and `tab()`.** A profile's Posts / Reels /
+  Tagged, a chat app's Chats / Status / Calls -- ApkPy had `bottom_nav` for
+  screens and nothing for tabs inside one. `tabs = pager(id=..., screen=...)`
+  is the strip and the pages; each `tab("Posts", icon=..., parent=tabs)` is a
+  page, and what it holds goes inside it with `parent=`. A tap on a tab or a
+  swipe slides to its page (past a fifth of the width, or a flick), the
+  indicator follows the finger, and `tabs.select(2)` does it from code.
+  Without a height of its own the pager is as tall as the page on screen. On
+  the phone the strip is Material's TabLayout over ApkpyPager, a class added
+  only when a screen has a pager; the Previewer draws the same strip from the
+  same colour rule (`theme.pager_colors`). A `tab()` outside a `pager()` stops
+  the build with `U2040`.
+- **A grid that scrolls with its screen: `height: auto` on a
+  `virtual_collection`.** A profile is a header and a grid of photos under
+  it, scrolling as one page. A collection scrolled inside its screen, at a
+  fixed 480dp on the phone and 520px in the Previewer, so the grid was a
+  window in the page. With `height: auto` it is as tall as its items:
+  `wrap_content` without nested scrolling on the phone, every row drawn in
+  the Previewer. Every item is laid out, so it is for tens of items, not
+  thousands. `virtual_collection(photos, row=tile, layout="grid", columns=3)`
+  with `<id>_row { padding: 1px; }` is a photo grid.
+- **Rows that swipe and move.** `virtual_collection(..., swipe_right=swipe(
+  "archive", "Archive", on_swipe=archive, undo="Archived"), swipe_left=swipe(
+  "delete", "Delete", on_swipe=delete), on_reorder=moved)`. A swipe past 40%
+  of the row takes it away and calls `on_swipe(item)`; with `undo=` a snackbar
+  offers to bring it back and `on_swipe` only runs once it has gone unpressed;
+  `keep=True` slides the row back (mark as read). A long press lifts a row and
+  a drop calls `on_reorder(item, index)`, the index a number on both sides.
+  On the phone it is `ItemTouchHelper` (ApkpyGestures, only in apps that use
+  it), in the Previewer the mouse, both from `gesture_rules.py`. Every gesture
+  is also an accessibility action on the row -- TalkBack offers Archive,
+  Delete, Move up and Move down -- and a right-click opens the same list in the
+  Previewer. A grid, or something that is not a `swipe()`, stops the build with
+  `U2042`. With a gesture on, a tap on a row is taken when the button comes up
+  in the Previewer, as Android takes it, so a swipe does not open the row.
+  The replica has a mail inbox and a task list built on them.
+- **`back()`: leave this screen for the one that opened it.** A back arrow
+  was written `on_click_navigate(previous)`, which on the phone starts a new
+  copy of the previous screen on top: the system's Back gesture then walked
+  through the copies (settings, profile, settings again). `back()` is
+  `finish()` -- the screen under it comes back as it was, with what other
+  screens `set_value()`d on it -- and in the Previewer it pops the history
+  Alt+Left already used. `command=back` works as it is. An app's own
+  `def back():` still wins, and a background job refuses it (`J7004`). The
+  photo replica's arrows, closes and Done use it.
+- **`on_change` on a switch, a checkbox and a slider.** It was read for text
+  fields only: a settings switch moved and nothing heard it, on the phone or
+  in the Previewer, and no error said so. It gets what `get_value()` gives --
+  `"true"`/`"false"`, or the slider's number as text -- whenever the value
+  changes with the screen showing. The value a screen opens with (a saved
+  preference put back with `set_value()`, a restored state) is not a change:
+  the phone's listener waits for the window (`isShown()`), and the Previewer
+  starts listening once the screen is built.
+- **A picture that opens and zooms: `image(src, zoom=True)` and
+  `view_image(src)`.** A photo on a screen was as large as the screen drew
+  it, and that was that. With `zoom=True` a tap opens it over the whole
+  window on black: two fingers zoom up to four times about the point between
+  them, a double tap zooms in on the spot and back, a drag moves a zoomed
+  picture and stops at its edges, and Back, the cross or a drag down closes
+  it. The picture grows out of its thumbnail and goes back into it, and the
+  whole picture shows, not the part a `cover` thumbnail kept.
+  `view_image(src)` opens any picture from a function -- the row that was
+  tapped, a photo just taken -- from a packaged file, a file on the phone or
+  an address. `zoom=True` with `command=`, on an avatar or in a `row=`
+  template stops the build with `U2046`. On the phone it is ApkpyZoom, which
+  follows `apkpy_lib/zoom_rules.py` like the Previewer (the mouse wheel is
+  the two fingers there); a test compiles its rules and compares the
+  answers. `examples/photo_viewer/` is the app, seen on a phone.
+- **A bottom sheet with components in it: `bottom_sheet(..., screen=home)`
+  and `parent=<the sheet>`.** A sheet was a title, a line of text and a list
+  of items; the filters of a shop, a share panel or a short form could not be
+  one. Give it the screen it opens over and it holds whatever a container
+  holds -- labels, chips, segmented buttons, fields with help and errors,
+  rows, buttons -- in a column 24 from the sides with 12 between components,
+  which CSS on the sheet's `id` changes along with its colour. `open()` and
+  `close()` work from any function; `get_value()` and `set_value()` reach the
+  components whether it is open or not, and what was typed is there the next
+  time. `on_close=` (on a plain sheet too) is called whichever way it closed.
+  On the phone it is still Material's BottomSheetDialog -- the drag, the
+  scrim over the whole window, Back and the keyboard are the platform's --
+  around a layout of its own (`res/layout/sheet_<screen>_<name>.xml`) that
+  the Activity inflates once and answers `findViewById` from, so nothing
+  that sets a component up or reads it knows it lives in a dialog. A
+  component given to a sheet with no `screen=`, or `items=` on a sheet of
+  components, stops the build with `U2045`. `examples/35_filter_sheet.py`
+  is the sheet of filters, seen on a phone.
+- **Previewer: bottom sheets drag.** A sheet -- plain or with components --
+  now has round top corners and a handle, is as wide as the app, and can be
+  dragged down by its handle or its title: let go past half way, or flung
+  down, and it closes; otherwise it goes back. The scrim fades as it leaves.
+  The numbers are `apkpy_lib/sheet_rules.py`, and where a drag ends is what
+  Material's BottomSheetBehavior decides on the phone.
+- **Fields with help and errors: `help=`, `error=`, `required=`,
+  `set_error()` and `validate()`.** A sign-up form could not say what was
+  wrong with a field: there was nowhere under it to say so. A text field now
+  takes `help="We only use it to sign you in"` (supporting text under it),
+  `required=True` or `required="Enter your email"`, and `error=` for a form
+  that opens with one. `validate(name, email)` checks every field given,
+  shows the message of each empty required one -- all at once -- puts the
+  cursor in the first and returns whether they passed; `field.set_error(text)`
+  shows a message of your own and `set_error("")` clears it. The error takes
+  the place of the help in the theme's `error` colour, the field's outline or
+  underline turns the same colour, and typing clears it. The line is a
+  polite live region and the field carries the error for a screen reader;
+  `hide()` takes the words with the field; `t("key")` works in all three
+  texts. Text fields only (`text`, `password`,
+  `search`, `number`, `textarea`); anything else stops the build with
+  `U2044`. A field that uses none of it generates exactly what it did. On
+  the phone it is ApkpyField, which follows `apkpy_lib/field_rules.py` like
+  the Previewer; a test compiles its rules and compares the answers.
+  `examples/34_sign_up_form.py` is the form, seen on a phone.
+- **Chips and segmented buttons: `chips()` and `segmented()`.** Options that
+  stay selected -- an inbox's All / Unread / Starred, a music app's genres,
+  Day / Week / Month over a chart. The replicas faked them with rows of
+  buttons that forgot which one was on. Chips select one at a time (a tap on
+  the selected one clears it) or, with `multiple=True`, any number, and wrap
+  onto more lines; a segmented button is two to five segments in one pill,
+  one always selected. `on_change(value)` after each tap gets the word, or
+  with `multiple=True` the list -- where `"Kotlin" in selected` asks the list
+  on the phone too, not the JSON text. `get_value()`, `set_value()` (which
+  does not call it), `icons=`, `check=False` for filters with no check
+  mark (Spotify's, WhatsApp's), and `required=True` for a filter bar that
+  always keeps one selected -- a tap on the selected chip does nothing and
+  the first starts selected. Each option is 48dp to the finger, a screen
+  reader reads it as a checkbox or a radio button with its state, the
+  selection survives a rotation, and the build checks the contrast of both
+  states (`U2035`). On the phone it is ApkpyChoice, which draws from
+  `apkpy_lib/choice_rules.py` like the Previewer; a test compiles its rules
+  and asks both languages the same questions. CSS: `color`,
+  `background-color`, `border-color`, `active-color`, `indicator-color`,
+  `border-radius`, `font-size`. Options not written out, a segmented button
+  with one or six options, or a `selected=` that is not an option stop the
+  build with `U2043`. The replicas' Chats, Music and Mail screens use them.
+
+### Fixed
+
+- **A modal, sheet or menu may be written below the function that opens
+  it.** `filters.open()` in a function above `filters = bottom_sheet(...)`
+  stopped the build (`U2033`, "top to bottom"). The names are now learnt from
+  the top of the file before any function is read -- which a sheet with
+  components needs, because its buttons name functions that close it.
+- **On the phone, a container painted the page's colour.** A `container`
+  with no `background-color` of its own took the `body` one, so inside a card
+  or a sheet it drew a band of the page across the surface it sat on; the
+  Previewer left it transparent. It is transparent on both now. On a plain
+  screen nothing looks different: the page was behind it anyway.
+- **Previewer: a password field showed its hint as asterisks.**
+  `inputs("Password", type="password")` read `********` on the desktop and
+  `Password` on the phone: the mask was applied to the hint too. It now goes
+  on with the first character typed and comes off when the field is emptied.
+- **On Android 15 and later, a plain screen lost its padding.** A screen
+  with no scroll, no bottom bar and no mini player put its padding (the
+  CSS `padding`, or the Theme's `spacing`) on the same view that fits the
+  system bars -- and on an edge-to-edge window (targetSdk 35) Android
+  replaces that view's padding with the bars' sizes. Chips, charts and
+  anything else without a margin of its own touched the edge of the glass,
+  while the Previewer and older phones showed the margin. The padding sits
+  one level in now, as it already did on every other kind of screen. Seen on
+  a Xiaomi with Android 15: the chips moved from 0 to 12dp, the music
+  player of the replicas from 0 to its 18dp. Apps with a bottom bar (the
+  four showcase apps) are unchanged.
+- **On the phone, `for item in ITEMS:` inside a function did not compile**
+  when `ITEMS` was a list written at the top of the file: the Java named it
+  as a variable that does not exist (`cannot find symbol`). The loop walks
+  the list now, as `x in ITEMS` already did. It surfaced with the first
+  filter a chip called.
+- **The accessibility report (`U2035`) never looked inside a row built from
+  components.** A feed's heart with no `describe=`, or a grey caption on
+  white, in a `virtual_collection(row=...)` went unreported: the row's
+  components live in its template, beside the screen's children, and the
+  audit only walked the children.
+- **In the Previewer, a caption over a picture sat in the middle.** A label
+  placed by the layout engine -- `position: absolute` with `left` and `right`,
+  a growing child, a stretched column -- hugged its text in the centre of its
+  box; the phone's TextView fills the box with its text at the start. It
+  fills it now, and `text-align` still moves the text.
+- **In the Previewer, a grid of component rows spaced its cells 10px
+  apart** -- 5px each side that the phone's GridLayoutManager never adds. The
+  row's own padding spaces them now, as on the phone.
+- **In the Previewer, `flex-grow` on a button in a row did nothing:** two
+  buttons meant to share a row were the width of their text. The phone
+  stretched them; the Previewer does too now.
+- **In the Previewer, an empty container with a `height` was 1px tall** -- a
+  spacer, a colour bar, a tile. It has its height now, padding included, as
+  `layout_height` gives it on the phone.
+- **On the phone, a button with a small `height` cut the bottom off its
+  words.** MaterialButton keeps 4dp of padding above and below the text, and
+  a 34dp "Edit profile" button had no room left for its descenders. A height
+  from the stylesheet now drops that padding and centres the words in the
+  box, as the Previewer draws them; a button that sizes itself keeps it.
+- **In the Previewer, a screen's `gap` did nothing.** The phone has always put
+  it between the screen's own components -- `gap: 20px` on a screen, or the
+  12px a `Theme` gives the body -- and the Previewer only spaced a
+  container's children, so a profile's photo grid began 32px higher on the
+  desktop than on the phone. It is between them now, as a margin that goes
+  when the component is hidden, and a label drops the 2px above and below
+  that stood in for the phone's 6dp when there is no gap.
+- **In the Previewer, a screen with no padding was drawn with none at the
+  sides and 12px on top**, and kept that 12px under `padding: 0px`. The phone
+  gives it 5px above and below and 10px at the sides, and starts at the edge
+  under `padding: 0px`; the Previewer does the same now.
+- **In the Previewer, `grid()` covers were 150px squares** in the middle of
+  each card. On the phone they are the card's width and 110dp tall, cropped
+  in the middle, and now here too.
+- **On the phone, a column with `align-items: center` centred its children
+  on the widest one, against the left edge.** ApkpyLayout took the widest
+  child as the column's width, so an avatar over "Edit picture or avatar"
+  sat on the left of a full-width column. A column that does not wrap is as
+  wide as its box, as `layout_engine.py` (the Previewer) has always said;
+  `stretch` stretches to that width, and a child with a `width` of its own is
+  not stretched, as in CSS.
+- **On the phone, text that wrapped inside a flex container was centred.** A
+  label in an ApkpyLayout was written with `gravity="center"`, which moves
+  nothing while it hugs its words and centres every line once they wrap. It
+  keeps them at the start now, as CSS and the Previewer do; `text-align`
+  still moves them.
+- **On the phone, a cropped photo in a flex container drew outside its
+  box.** ApkpyLayout lets children draw outside (for shadows), and
+  `object-fit: cover` scaled a portrait picture past a square: a 44dp
+  thumbnail ran the height of its row. An image cropped with `cover` crops
+  its own drawing now (`cropToPadding`), which leaves the shadow alone.
+- **A checkbox's `get_value()` was the bool `True` in the Previewer** and the
+  text `"true"` on the phone, so `agree.get_value() == "true"` only worked on
+  the phone. It is `"true"`/`"false"` on both, as a switch already was.
+- **In the Previewer, a switch had 16px more at each side** than the
+  stylesheet's margins, which put its label out of line with the rest of a
+  settings list. It has the phone's spacing now.
+- The accessibility report (`U2035`) listed a button twice when one row
+  function drew two lists.
+
+---
+
 ## [1.11.0] - 2026-09-26
 
 ### Added
@@ -626,7 +873,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [1.9.0] - 2026-09-19
 
-Read the [complete 1.9.0 notes](docs/version-1.9.0.md).
+Read the [complete 1.9.0 notes](https://repo-apkpy.pages.dev/version-1.9.0/).
 
 ### Added
 
@@ -638,7 +885,7 @@ Read the [complete 1.9.0 notes](docs/version-1.9.0.md).
   API; editor return is not save confirmation.
 - Fictional, theme-aware Contacts Previewer with picker, editor and permission
   simulation. No desktop address book is read or written.
-- [Contacts guide](docs/guides/contacts.md) and complete
+- [Contacts guide](https://repo-apkpy.pages.dev/guides/contacts/) and complete
   [People Desk app](examples/30_contacts.py), plus reference, permission,
   troubleshooting, compatibility and 1.9.0 documentation.
 
@@ -652,7 +899,7 @@ Read the [complete 1.9.0 notes](docs/version-1.9.0.md).
   computed at run time, a `java` block with no `return`, a `java_async`
   block that never calls `done`, a call with the wrong arguments, or a
   block called from a background job.
-- [Your own Java guide](docs/guides/native.md) and
+- [Your own Java guide](https://repo-apkpy.pages.dev/guides/native/) and
   [example](examples/31_native_java.py).
 
 - `nfc.status`, `start`, `stop`, `write(text=... / url=...)`, `cancel_write`
@@ -662,17 +909,17 @@ Read the [complete 1.9.0 notes](docs/version-1.9.0.md).
   cancellation and tag-loss simulation. No desktop radio is implied.
 - Optional manifest permission/feature, lifecycle cleanup and stale-callback
   rejection. Apps that do not use NFC receive no NFC runtime.
-- [NFC guide](docs/guides/nfc.md), API reference and
+- [NFC guide](https://repo-apkpy.pages.dev/guides/nfc/), API reference and
   `examples/29_nfc_tags.py`, including the formatable-tag read-back limitation.
 - NFC documentation across README/package-description draft, home page, guide
   hub, API overview, compatibility, Previewer comparison, troubleshooting,
-  example index and [1.9.0 notes](docs/version-1.9.0.md).
+  example index and [1.9.0 notes](https://repo-apkpy.pages.dev/version-1.9.0/).
 
 This work is not published. Package version and release metadata are unchanged.
 
 ## [1.8.0] - 2026-09-12
 
-Read the [complete 1.8.0 notes](docs/version-1.8.0.md).
+Read the [complete 1.8.0 notes](https://repo-apkpy.pages.dev/version-1.8.0/).
 
 **Upgrading:** several fixes below turn silence into build errors. Code that
 relied on `%` formatting, arithmetic on text, unpacking, item or attribute
@@ -737,7 +984,7 @@ quietly doing nothing will now stop the build, naming a form that compiles.
 ## [1.7.0] - 2026-09-08
 
 Native device updates, portable text processing and actionable notifications.
-Read the [complete 1.7.0 notes](docs/version-1.7.0.md).
+Read the [complete 1.7.0 notes](https://repo-apkpy.pages.dev/version-1.7.0/).
 
 ### Added
 
@@ -756,7 +1003,7 @@ Read the [complete 1.7.0 notes](docs/version-1.7.0.md).
   helper or Activity notification hooks.
 - Persistent Previewer cards in the device window; high-importance heads-up
   banners expire without deleting their cards. No notification Toplevel.
-- A complete [notification guide](docs/guides/notifications.md), four checked
+- A complete [notification guide](https://repo-apkpy.pages.dev/guides/notifications/), four checked
   Python examples, real Previewer screenshots, callback signatures, a demo
   control checklist and an app-only Order Desk download.
 
@@ -821,7 +1068,7 @@ cannot be replaced, so they arrive here.
 ## [1.6.0] - 2026-09
 
 Almost everything here began the same way: something did not work, and nothing
-said so. Full notes in [Version 1.6.0](docs/version-1.6.0.md).
+said so. Full notes in [Version 1.6.0](https://repo-apkpy.pages.dev/version-1.6.0/).
 
 ### Added -- the app now says what it could not do
 
@@ -1409,7 +1656,7 @@ in a compiled layout, and a switch that changes them while the app runs.
   in all three without ApkPy declaring `windowSoftInputMode`. The attribute
   was not added: it would change the manifest of every app to no observable
   effect. What Android does, and the two things it does not promise, are in
-  [Previewer versus Android](docs/preview-android.md).
+  [Previewer versus Android](https://repo-apkpy.pages.dev/preview-android/).
 
 ### Known limits
 
@@ -1848,7 +2095,7 @@ in a compiled layout, and a switch that changes them while the app runs.
   quality selection, guaranteed gapless playback, crossfade, DRM and resumable
   downloads with progress do not yet exist. Stream bitrate and quality are
   determined by the supplied source; ApkPy does not transcode audio.
-- **New 1.2.0 release guide**: `RELEASE_1.2.0.md` begins with a complete
+- **New 1.2.0 release guide**: `releases/1.2.0.md` begins with a complete
   native-player example and an implementation-oriented capability matrix.
 - **Native documents without a WebView**: added `rich_text()` for exact inline
   spans, `markdown()` for headings, emphasis, links, code, quotes, lists,
@@ -1875,7 +2122,7 @@ in a compiled layout, and a switch that changes them while the app runs.
 - **8/9 — Content states**: `skeleton`, `empty_state` and `error_state` share a screen region and switch through `show()`/`hide()` without rebuilding the component tree. Skeleton variants include music card, list, card and text. Animation helpers are generated only for Activities that use them.
 - **9/9 — Smart images and avatars**: `image()` and `avatar()` now support local placeholders, network fallbacks, bounded caching, fade-in, aspect ratio, blur, tint and runtime source changes. Avatars add a circular crop and online/away/busy/offline badge. Network work runs away from the UI thread and stale responses are ignored.
 - **Four English showcase applications**: Lumen (finance), Onda (wellbeing), Northline (travel) and Afterglow (music) demonstrate distinct visual systems rather than template recolours. Together they generate sixteen Android Activities.
-- **Complete 1.1.0 release guide**: `RELEASE_1.1.0.md` documents all nine plan items with executable Python/CSS examples, explains native output and shows how the design system works with SQLite, REST, encryption and background audio.
+- **Complete 1.1.0 release guide**: `releases/1.1.0.md` documents all nine plan items with executable Python/CSS examples, explains native output and shows how the design system works with SQLite, REST, encryption and background audio.
 
 ### Fixed
 - Kept Material button height, padding, corner radius, border, colour, pressed state and narrow-screen wrapping consistent between Previewer and Android.

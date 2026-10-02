@@ -1,8 +1,8 @@
 """Lumen — a restrained personal finance dashboard built with ApkPy."""
 
 from apkpy_lib import (
-    Screen, Theme, action, app_bar, bottom_nav, button, container, device,
-    label, list_view, run, toast,
+    Screen, Theme, action, app_bar, bottom_nav, button, chart, container,
+    device, label, list_view, run, toast,
 )
 
 
@@ -11,11 +11,11 @@ device("Pixel 9")
 theme = Theme(
     mode="light",
     primary="#16324F",
-    secondary="#E85D3F",
+    secondary="#BF4428",      # 4.5:1 for small text on the background
     background="#F3F0E9",
     surface="#FFFFFF",
     text="#17212B",
-    text_secondary="#65717D",
+    text_secondary="#5E6A76",
     border="#DED9CF",
     radius=18,
     spacing=14,
@@ -67,8 +67,63 @@ list_view(
 
 label("Spending is 12% below your July plan.", id="lumen_note", screen=home)
 
+# ── Insights: four native charts ───────────────────────────────────────────
+MONTHS = [
+    {"label": "Feb", "value": 1920, "text": "$1,920"},
+    {"label": "Mar", "value": 1610, "text": "$1,610"},
+    {"label": "Apr", "value": 1745, "text": "$1,745"},
+    {"label": "May", "value": 1530, "text": "$1,530"},
+    {"label": "Jun", "value": 1488, "text": "$1,488"},
+    {"label": "Jul", "value": 1284, "text": "$1,284 so far", "color": "#E85D3F"},
+]
+CATEGORIES = [
+    {"label": "Groceries", "value": 412, "color": "#16324F"},
+    {"label": "Travel", "value": 286, "color": "#E85D3F"},
+    {"label": "Home", "value": 236, "color": "#3E8E6A"},
+    {"label": "Dining", "value": 198, "color": "#D9A441"},
+    {"label": "Other", "value": 152, "color": "#A9B4BF"},
+]
+JULY = [
+    {"label": "1", "value": 42},
+    {"label": "3", "value": 180},
+    {"label": "5", "value": 260},
+    {"label": "7", "value": 410},
+    {"label": "9", "value": 520},
+    {"label": "11", "value": 760},
+    {"label": "13", "value": 905},
+    {"label": "15", "value": 1110},
+    {"label": "16", "value": 1284},
+]
+
+
+def show_month(item):
+    month_note.set_value(item["label"] + ": " + item["text"])
+
+
+label("Insights", id="lumen_insights_title", screen=insights)
+label("July so far, next to the months before it.", id="lumen_insights_copy", screen=insights)
+
+plan = container(id="insight_plan", screen=insights)
+label("JULY PLAN", id="plan_kicker", parent=plan)
+label("$1,284 of $2,800", id="plan_value", parent=plan)
+chart(kind="ring", value=1284, max=2800, id="plan_ring", parent=plan)
+label("$1,516 left for the last 15 days of the month.", id="plan_left", parent=plan)
+
+months = container(id="insight_months", screen=insights)
+label("Monthly spending", id="months_title", parent=months)
+month_note = label("Your lightest month this year. Tap a bar.", id="months_note", parent=months)
+chart(MONTHS, kind="bar", id="months_chart", parent=months, on_click=show_month)
+
+split = container(id="insight_split", screen=insights)
+label("Where it went", id="split_title", parent=split)
+chart(CATEGORIES, kind="donut", center="$1,284", id="split_chart", parent=split)
+
+pace = container(id="insight_pace", screen=insights)
+label("July, day by day", id="pace_title", parent=pace)
+label("On pace for about $2,460, 12% under plan.", id="pace_note", parent=pace)
+chart(JULY, kind="line", fill=True, id="pace_chart", parent=pace)
+
 for page, title, copy in [
-    (insights, "Insights", "A calm overview of your monthly habits."),
     (cards, "Cards", "Manage limits, freezes and travel settings."),
     (profile, "Profile", "Your account, security and preferences."),
 ]:
@@ -137,6 +192,26 @@ lumen_insights_title, lumen_cards_title, lumen_profile_title {
 }
 lumen_insights_copy, lumen_cards_copy, lumen_profile_copy {
     color: var(--text-secondary); font-size: 14px; margin-top: 8px;
+}
+lumen_insights_copy { margin-bottom: 6px; }
+insight_plan, insight_months, insight_split, insight_pace {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+    width: 100%; background-color: #FFFFFF; border-color: var(--border);
+    border-width: 1px; border-radius: 20px; padding: 18px;
+}
+plan_kicker {
+    color: var(--secondary); font-size: 11px; font-weight: bold; letter-spacing: 1.4px;
+}
+plan_value { color: var(--text); font-size: 24px; font-weight: bold; }
+plan_ring {
+    align-self: stretch; height: 170px; margin-top: 8px; margin-bottom: 6px;
+    color: #16324F; track-color: #ECE7DD; title-color: #16324F; stroke-width: 14px;
+}
+plan_left, months_note, pace_note { color: var(--text-secondary); font-size: 13px; }
+months_title, split_title, pace_title { color: var(--text); font-size: 17px; font-weight: bold; }
+months_chart, pace_chart, split_chart {
+    align-self: stretch; margin-top: 10px;
+    color: #16324F; label-color: #65717D; grid-color: #ECE7DD; title-color: #17212B;
 }
 """
 

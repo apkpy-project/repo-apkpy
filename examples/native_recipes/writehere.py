@@ -1,8 +1,8 @@
 """Every native recipe in one app, so they can be compiled and run together.
 
 Each block declares a piece of Android that ApkPy has no API for. Read the
-rules in docs/guides/native.md and the recipes in
-docs/guides/native-recipes.md.
+rules in https://repo-apkpy.pages.dev/guides/native/ and the recipes in
+https://repo-apkpy.pages.dev/guides/native-recipes/.
 
 Run it: python writehere.py for the simulated answers, apkpy run to build.
 Each row shows what its block returned on the phone, which is the only way to

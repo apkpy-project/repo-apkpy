@@ -53,16 +53,19 @@ apkpy build
 | [`30_contacts.py`](30_contacts.py) | People Desk — pick phone/email, search and get with read permission, native create/edit forms, settings and fictional desktop contacts |
 | [`32_offline_queue.py`](32_offline_queue.py) | A background job that downloads a page, saves it in the database from the download's callback, and a screen that counts it through an observer |
 | [`33_reusable_screens.py`](33_reusable_screens.py) | Three screens built by two functions -- a header and a card written once, a returned component updated by a button, cards unrolled from lists |
+| [`34_sign_up_form.py`](34_sign_up_form.py) | A form that says what is wrong with it: help text under fields, required fields checked together with `validate()`, and rules of its own shown with `set_error()` |
+| [`35_filter_sheet.py`](35_filter_sheet.py) | A bottom sheet with components in it -- a segmented button, chips, a field and two buttons -- that filters the list behind it and drags down to close |
+| [`photo_viewer/`](photo_viewer/) | Pictures that open over the whole screen and zoom: `image(zoom=True)` and `view_image()`. Run `make_assets.py` first: it draws the pictures |
 | [`replicas/`](replicas/) | Four apps you know, rebuilt: a chat list and a conversation, a music home and a player with its own tracks, a photo feed whose posts are rows built from components, stories, and a ride sheet over a map. Run `make_assets.py` first |
 
 **NFC version requirement:** example 29 needs ApkPy 1.9.0 or later. Use your own spare,
 rewritable tag for writes; its previous contents will be replaced. No physical
-tag is needed for the Previewer simulator. See the [NFC guide](../docs/guides/nfc.md).
+tag is needed for the Previewer simulator. See the [NFC guide](https://repo-apkpy.pages.dev/guides/nfc/).
 
 **Contacts version requirement:** example 30 also needs ApkPy 1.9.0 or later.
 Use fictional data for testing. Picking one detail needs no broad
 permission; Search/Get ask for read access. Create/Edit open the native editor
-and do not guarantee a save. See the [Contacts guide](../docs/guides/contacts.md).
+and do not guarantee a save. See the [Contacts guide](https://repo-apkpy.pages.dev/guides/contacts/).
 
 ## Practical note
 

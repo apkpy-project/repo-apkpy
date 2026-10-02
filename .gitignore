@@ -5,3 +5,8 @@ site/
 __pycache__/
 *.py[cod]
 .mkdocs-local.*.log
+
+# The engine is closed source. This folder is a separate local repository and
+# never goes into this public one (it was a submodule pointing at a repository
+# that does not exist, so GitHub showed a folder that would not open).
+/apkpy/
