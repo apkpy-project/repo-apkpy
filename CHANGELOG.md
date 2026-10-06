@@ -10,6 +10,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.12.1] - 2026-10-06
+
+One fix. Nothing else changed from 1.12.0: every example and showcase app
+is built into the same files, byte for byte.
+
+### Fixed
+
+- **A comparison between two values compared the first with nothing.**
+  `if a == b:` was built as `a.equals("")`. In an `if` or an `elif` -- in a
+  function or at the top of the file -- the right side of a comparison
+  reached the phone only when it was written out, `"abc"` or `3`. A name, a
+  call, a sum, a number below zero or a name defined at the top of the file
+  became empty text, without a word.
+  `if password.get_value() == again.get_value():` asked whether the first
+  field was empty. The Previewer runs Python and answered correctly, so the
+  two disagreed only on a phone. It has been so since at least 1.8.0.
+  Both sides now reach the Java. A `while`, `and` / `or`, `not` and
+  `a if test else b` already read both.
+- **Two numbers that were not written out were compared as text.**
+  `while i < n:` with `n = 12` stopped at 2, because `"2"` sorts after
+  `"12"`. When ApkPy knows either side is a number -- a number written in
+  the source, `int(...)`, `float(...)`, a name assigned from one of those, a
+  sum of them, a `range()` index -- the comparison is one of numbers.
+  Between two values it does not know to be numbers it stays one of text,
+  as Python compares two strings: what somebody typed in a field is text
+  until `int(...)` makes it a number.
+
+### Upgrading
+
+- `python -m pip install --upgrade apkpy==1.12.1`, and build the app again.
+  An app that only compared against values written in the source
+  (`if name == "Ana":`, `if count > 3:`) is built exactly as before.
+- An `if` between two values can now be true where it never was. Read what
+  its branch does before you ship: it may be running for the first time.
+- A number compared with a value that may not be one -- a field left empty
+  -- reads that value as a number, as `if qty.get_value() > 5:` always did,
+  and an empty field stops the app there. Test for `""` first.
+
+Built by the installed package and used on a Xiaomi running Android 16: an
+app that makes one sentence out of seven comparisons gave the sentence
+Python gives, and two fields holding the same word were found equal.
+
+---
+
 ## [1.12.0] - 2026-10-02
 
 ### Added
