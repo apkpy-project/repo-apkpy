@@ -7,6 +7,7 @@ the same notes, formatted, are on the site under
 
 | Version | Notes |
 | --- | --- |
+| 1.12.1 | [A comparison between two values](1.12.1.md) |
 | 1.12.0 | [What a finger does](1.12.0.md) |
 | 1.11.0 | [Apps you know, rebuilt in Python](1.11.0.md) |
 | 1.10.0 | [Several files, and numbers that stay numbers](1.10.0.md) |
