@@ -10,6 +10,461 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.13.0] - 2026-10-16
+
+**ApkPy is open source.** From this release the whole of it -- the translator
+from Python to Android, the Previewer, the `apkpy` command and the tests --
+is in this repository under the Apache License 2.0. An exception at the end
+of the `LICENSE` leaves the apps you build free of the licence's conditions:
+what ApkPy writes into them, and an example you started from, are yours to
+ship under your own terms. Pull
+requests are welcome ([CONTRIBUTING.md](CONTRIBUTING.md)). Releases up to
+1.12.1 stay under the licence they were published with. See
+[what the licence says](https://repo-apkpy.pages.dev/project-continuity/).
+
+### Added
+
+- **Android reached from Python: `@native` over a function, and
+  `native.use()`.** Reaching an Android API ApkPy has no function for meant
+  writing that part in Java, in a string (`native.java()`). Kivy, BeeWare and
+  Flet do it in a few lines of Python through Pyjnius or Chaquopy, because
+  there is an interpreter on the phone to look a class up by name. ApkPy has
+  none -- but it has the build. `Vibrator = native.use("android.os.Vibrator")`
+  names a class at the top of the file, and a function under
+  `@native(preview=...)` has a body that is Java written in Python:
+  `context.getSystemService(Vibrator).vibrate(ms)`. When the app is built,
+  every class, field and method the body names is looked up in `android.jar`
+  -- the file the app is compiled against -- each line is given its Java type,
+  and the function is written out as the Java somebody would have typed,
+  into the same kind of block `native.java()` makes.
+  What a runtime bridge cannot do follows from that. A method that does not
+  exist, an argument of the wrong kind or a misspelt class stops the build,
+  with the line and what was probably meant. And a class or method that
+  arrived in a newer Android than the oldest phone the app runs on (7.0,
+  API 24) stops it too, unless the line is under a test of
+  `Build.VERSION.SDK_INT` -- the crash that otherwise only shows on an old
+  phone. All `U2047`.
+  Inside a body: its arguments (`str`, `int`, `float`, `bool`, `"long"`),
+  `context`, `activity`, the named classes, and a small Python around them --
+  `if`, `for`, `while`, `try`/`except`/`finally`, f-strings, the operators,
+  `str()`/`int()`/`len()` and friends. A class is made by calling it, a list
+  goes where an array is expected, `/` is Python's division, and
+  `native.cast(Vibrator, value)` says what an `Object` is. A function answers
+  text or a number. Not yet: listeners (an interface implemented in Python)
+  and the classes of a library added with `native.gradle()`; for those,
+  `native.java()` is still there.
+  In the Previewer the body never runs and `preview=` answers, handed its
+  arguments as what the function declared -- by `apkpy_lib/native_rules.py`,
+  the rules the generated Java follows too; a test compiles those and asks
+  both the same texts. Another translates twenty real functions (vibration,
+  battery, clipboard, calendar, sensors, a file, window brightness) and has
+  `javac` compile the result against `android.jar`.
+  `examples/36_android_from_python.py` is the app.
+
+- **The rest of the phone: twelve things an app could not do without
+  writing Java.** Each is one call, and each has something to see and answer
+  in the Previewer.
+
+  | | |
+  | --- | --- |
+  | A touch you can feel | `haptics.tap()`, `tick()`, `heavy()`, `success()`, `error()`, `vibrate(ms)` |
+  | Reading aloud | `speech.say(text, language=, rate=, pitch=, on_result=)`, `stop()`, `is_speaking()` |
+  | Dictation | `speech.listen(prompt=, language=, on_result=)`, `can_listen()` |
+  | A web page | `browser.open(url)` over the app, `browser.show(url=, html=, title=)` inside it |
+  | A file for the person | `files.save_as(name, text, on_result=)`, `files.save_copy(path)` |
+  | A download by the system | `downloads.start(url, name=, title=, on_result=)` |
+  | The calendar | `calendar.add_event(title, start, end=, location=, notes=, all_day=)` |
+  | The dialler and messages | `phone.dial(number)`, `phone.sms(number, text)` |
+  | The microphone | `recorder.start(on_result=)`, `stop()`, `is_recording()`, `seconds()` |
+  | Print, or a PDF | `printing.html(html, name=)`, `printing.text(text, name=)` |
+  | A link that opens the app | `incoming.links("notes")`, `incoming.link()` |
+  | Something shared into it | `incoming.shares("text")`, `incoming.text()`, `incoming.file()` |
+
+  Three shapes of answer, and the same ones everywhere. A call that hands
+  over to another app -- the dialler, the calendar, the browser -- answers at
+  once with a word: `"ok"`, or why not (`"no_app"`, `"invalid"`). A call that
+  needs the person or takes time answers later, in `on_result(ok, value)`:
+  the words that were heard, the name the file was saved under, or the word
+  for why not (`"cancelled"`, `"permission_denied"`, `"no_space"`). A
+  question answers yes or no: `if recorder.is_recording():`. Every word a
+  call can answer is written once, in a table both the build and the
+  Previewer read, so the desk cannot answer a word the phone has never heard
+  of.
+
+  What it costs the app is what it uses. Handing over asks for no permission
+  at all: the dialler, the messages app and the calendar open with
+  everything filled in and the person presses the last button, which is why
+  an app does not need the permissions Google Play keeps for diallers and
+  SMS apps. `haptics.tap()` is Android's own touch effect and asks for
+  nothing; only `vibrate(ms)` declares `VIBRATE`. The two follow different
+  switches of the phone -- touch feedback, and the app's own vibration -- and
+  each answers `off` when its switch is off, instead of the "performed"
+  Android reports for a request it then ignores.
+  `files.save_as()` goes
+  through the system's picker, so no storage permission exists for it.
+  `recorder` asks for the microphone the first time, in Android's dialog,
+  and is the only call here that asks the person for anything. A browser tab
+  is opened without adding a library to the app. An app that uses none of
+  this is built exactly as it was.
+
+  `incoming.links()` and `incoming.shares()` are declarations: written once
+  at the top of the file, they add the filters to the manifest, and the app
+  is opened at its first screen with `incoming.link()`, `incoming.text()` or
+  `incoming.file()` answering what arrived until `incoming.clear()`.
+  `preview=` on either says what the Previewer pretends came in.
+
+  In the Previewer nothing is a message box. A call that hands over draws
+  the other app arriving: a sheet rises over the app with what it was given
+  -- the number, the event with its time and place, the message in its
+  bubble -- and "Back to the app" is the person coming back. Dictation is the
+  same sheet with a field to type what would have been said; the microphone
+  is asked for with Android's own three answers; a voice is a caption for as
+  long as it would speak; a download appears in the notification shade with
+  its progress; a recording really records, and Android's green microphone
+  lights in the status strip while it does. `browser.open()` and
+  `downloads.start()` are done for real.
+
+  HTML an app writes for `browser.show(html=)` or `printing.html()` does not
+  have to be a whole page: a fragment is drawn in the app's own colours with
+  readable margins, or printed as ink on paper with a margin, by the same
+  rules on the phone and in the Previewer. A `<style>` of the app's own wins,
+  and a whole `<html>` page is left exactly as written.
+
+  A mistake stops the build with the line (`U2048`): a call that does not
+  exist, an argument it does not take, an `on_result` that is not a function
+  of `(ok, value)`, a scheme that already belongs to the phone (`tel`), an
+  `https` link with no site, `incoming.link()` in an app that declares no
+  link. Inside a background job these calls are refused the way every call
+  that needs a screen is (`J7004`), with the same words on both sides. A
+  name the app made its own is left alone: `phone = inputs("Phone")` is
+  still the app's field.
+
+  Not covered, and said so in the reference: reading the calendar, placing a
+  call or sending a message without the person pressing anything, a WebView
+  among other components (the page is over the whole screen), and `https`
+  links that open the app without Android asking -- those need a file on the
+  site that names the app.
+  `examples/37_the_rest_of_the_phone.py` is the app.
+
+- **Outside the app: a home-screen widget, a quick settings tile, ads,
+  updates through Play and health data.** These were the five of the sixty
+  capabilities on the coverage page still marked "no", and the page said why:
+  none of them is a call, each is something the app *has* -- a component
+  Android reads out of the installed package, or a library with an account
+  behind it. So four of the five begin with one line at the top of the file,
+  read when the app is built:
+
+  ```python
+  home_widget.define("Steps today", "0", caption="steps", icon="directions_walk")
+  quick_tile.define("Walk", icon="directions_walk")
+  ads.setup("test")
+  health.policy("https://example.com/privacy")
+  ```
+
+  | | |
+  | --- | --- |
+  | A widget on the home screen | `home_widget.set(text, caption=, title=)`, `count()`, `pin()` |
+  | A tile in quick settings | `quick_tile.set(active, subtitle=)`, `is_active()`, `opened()`, `clear()`, `offer(on_result=)` |
+  | AdMob | `ads.banner(unit, position=)`, `hide_banner()`, `prepare(interstitial=, rewarded=)`, `interstitial(unit, on_result=)`, `rewarded(unit, on_result=)`, `consent(on_result=)`, `needs_privacy_options()`, `privacy_options(on_result=)` |
+  | Updates from Google Play | `updates.check(on_result=)`, `start("flexible" or "immediate", on_result=)`, `install()` |
+  | Health Connect | `health.available()`, `ask(kinds, on_result=)`, `allowed(kind)`, `read(kind, start=, end=, on_result=)` |
+
+  **The widget** is a title, a large text, a caption and an icon, in the
+  app's `Theme` colours for both the phone's light and dark modes. It has two
+  drawings and takes the one that fits the room the person gives it: a row
+  when it is one cell high, a card when it is dragged taller. It shows what
+  it was last told with the app closed and after a restart, and a tap opens
+  the app. **The tile** is lit or not, with a line under its name; a tap
+  opens the app at its first screen, which asks `quick_tile.opened()` -- the
+  same shape as a link that opened the app -- and from Android 13
+  `offer()` has Android ask the person to add it.
+
+  **Ads**: `"test"` is Google's sample ad, on the phone as well, so an app
+  can be finished before there is an AdMob account. A banner belongs to the
+  screen that asked for it; its room is taken at once, at the height the ad
+  will have, so the screen does not jump under a finger when the ad arrives,
+  and it waits while the keyboard is up. A full-screen ad fetched ahead with
+  `prepare()` opens at once; one that was not is shown only if it arrives
+  within a few seconds and is otherwise kept for the next call
+  (`not_ready`). Before the first ad of any kind, Google's consent form is
+  shown where the law requires it, and no ad is requested until it is
+  answered -- without the app doing anything, and once however many ads a
+  screen asks for at the same moment. An ad that does not come says nothing
+  on the screen; why is in the log (`adb logcat -s ApkPy`), including the
+  case every developer meets on their own phone: a private DNS or a VPN that
+  filters ads.
+
+  **Updates**: flexible downloads behind the app and `install()` restarts
+  into it; immediate takes the screen until it is done. A copy of the app
+  that did not come from Play answers `not_from_play`, which is all a build
+  installed over a cable will ever say.
+
+  **Health**: one number for a stretch of time -- steps, distance, calories,
+  heart rate, sleep, weight, floors, exercise, hydration -- added up by
+  Health Connect, so a walk counted twice is counted once. The build puts in
+  the manifest only the permissions of the kinds the app names, and the
+  screen Health Connect requires for the privacy policy.
+
+  In the Previewer each has something to see. A change to the widget or the
+  tile shows it for a moment at the top of the window, drawn as the system
+  draws it; a banner is a strip that makes the screen shorter; a full-screen
+  ad covers the window until it is closed, and a rewarded one counts down
+  first; an update is Play's sheet, or Play's whole screen; health answers a
+  plausible reading -- the same day always the same number, no two days
+  quite alike -- so a week's chart looks like a week.
+
+  Only what is used is built in: Google's ad library and Play's update
+  library are added to an app that calls them and to no other. A call of a
+  family whose line is missing stops the build and says which line to write
+  (`U2048`), as do an ad unit that is not one, a kind of health record that
+  does not exist, and one that is not written out in the source.
+
+  Narrower than the words, and said so in the guide: one widget, with one
+  design, changed from a screen and not from a background job; a tile that
+  opens the app rather than running code on its own; health data that is
+  read and not written, on Android 14 and newer; updates only for a copy
+  installed from Play.
+  `examples/38_outside_the_app.py` is the app.
+- **Text kept in the app's own files: `files.read()`, `files.write()` and
+  `files.append()`.** `files` could download a file, say whether it was
+  there and delete it, but an app could not write a line of its own into
+  one. `files.write("notes.txt", text)` keeps the text in the app's own
+  folder, in place of what was there; `files.append("log.txt", line)` adds
+  to the end, making the file if there is none; `files.read("notes.txt")`
+  answers the text, or `""` when there is no such file. A name may have
+  folders in it (`"drafts/monday.txt"`), which are made as needed, and the
+  whole path that `files.path()` and `files.download()` answer means the
+  same file as the bare name.
+
+  `write()` and `append()` answer a word: `"ok"`, `"invalid"` for a name
+  that is not a file's -- empty, leaving the folder (`"../x"`), or holding a
+  character a file name cannot have -- or `"failed"`. The same names are
+  taken and refused in the Previewer and on the phone, so an app that works
+  on the desk works built. Text is UTF-8 and is kept exactly as given: no
+  line ending is changed on the way in or out. A file is replaced whole or
+  not at all, so an app closed in the middle of a save is left with the
+  file it had. There is no permission to ask for, and an app that only
+  keeps text is built with nothing else of the file picker.
+
+  Not yet: a list of the files, and these three inside a background job
+  (the build says so, `J7004`).
+  `examples/39_text_files.py` is a journal that is still there the next
+  time it opens.
+
+- **Timers: `timer.after()`, `timer.every()`, `timer.cancel()` and
+  `timer.running()`.** A function of the app run later, or again and again,
+  with the app open. Until now `time.sleep` stopped the build and
+  `service.every` is background work, fifteen minutes apart at the least;
+  between the two there was nothing -- no clock, no countdown, no search
+  that waits for the typing to stop. `timer.every(1, tick)` runs `tick`
+  every second; `timer.after(2, hide_banner)` runs it once. The build's
+  advice for `time.sleep` now names it.
+
+  A timer is known by the function it calls, so there is nothing to keep:
+  `timer.cancel(tick)` stops it and `if timer.running(tick):` asks. One
+  function has one timer on a screen, and starting it again starts it over
+  -- `timer.after(0.4, search)` in a field's `on_change` searches once,
+  when the typing stops. The function is one written with `def` at the top
+  of the file that takes nothing; a lambda, `tick()` with its brackets, the
+  two arguments the wrong way round, or a timer started by a line at the
+  top of the file stop the build (`U2048`), each with the line to write
+  instead, and the Previewer refuses them in the same words.
+
+  A timer runs only while its screen is on show. In the background, with
+  the phone locked or under another screen of the app nothing runs; time
+  keeps going by, and when the screen is back what fell due runs once, at
+  once -- an `every()` goes on from there, a full period later, rather
+  than firing five times in a burst. Closing the screen ends its timers; turning the
+  phone or changing the theme does not, though Android builds the screen
+  again. `after()` and `every()` answer `"ok"`, or `"invalid"` for a time
+  that is not a number of seconds; seconds may be a fraction or the text
+  of a field, and `every()` never runs more than twenty times a second.
+
+  The Previewer keeps the same rules for the screen in its window. One
+  difference: it keeps a screen left with Back, so a timer started there
+  waits and carries on when the screen opens again, where the phone ends
+  it. Not for work with the app closed -- that is still `service.every`
+  and `background_job`, and inside a job a timer stops the build
+  (`J7004`). `examples/40_timers.py` is a clock, a countdown that pauses,
+  a search that waits and a message that goes away.
+
+- **The connection: `network.online()`, `network.kind()`,
+  `network.metered()` and `network.on_change()`.** Until now an app found
+  out it was offline when an `https` call failed. `if network.online():`
+  says whether the phone reaches the internet right now, `network.kind()`
+  what the connection is -- `"wifi"`, `"mobile"`, `"ethernet"`, `"other"`
+  or `"none"` -- and `network.metered()` whether the person pays for what
+  goes over it, which is the question to ask before a big download.
+  `network.on_change(changed)` calls `changed()` whenever one of the three
+  answers changes: the "No connection" banner, sending what waited when the
+  connection is back. Nobody is asked for a permission.
+
+  Online is a connection the phone has seen reach the internet. A Wi-Fi
+  that wants a login page first, or a router with no line behind it, is
+  `"wifi"` and not online. A phone on Wi-Fi behind a VPN is on Wi-Fi, and
+  a VPN left with nothing beneath it -- aeroplane mode, with a VPN app
+  running -- is no connection, though Android goes on calling it one.
+
+  The function is one written with `def` at the top of the file that takes
+  nothing, as for a timer, and is refused in the same ways (`U2048`). It is
+  told of a change, not of how things are as it is asked for -- call it
+  once yourself when the screen opens. It belongs to the screen that asked
+  and is told only while that screen is on show: what came and went
+  meanwhile is not told, what is still changed when the screen is back is
+  told once. Going from Wi-Fi to mobile data is one change, not a loss and
+  a return.
+
+  At the desk the connection is the Previewer's to take away, since a
+  computer is never in a lift: a click on the connection in the status bar
+  goes from Wi-Fi to mobile data to none and round again. With none, the
+  status bar shows an aeroplane, `https` fails with the words Android uses,
+  and a `background_job` that needs the network waits.
+  `examples/41_network.py` is a banner that comes when the connection goes,
+  messages that wait for it, and a download that waits for Wi-Fi.
+
+- **The display: `display.keep_on()`, `display.brightness()`,
+  `display.immersive()` and `display.orientation()`, with
+  `Screen(orientation=)` and `run(orientation=)`.** A recipe that keeps the
+  phone awake, a ticket at full brightness, a player with nothing around it
+  and a screen that stays upright each took a `native.java()` block.
+  `display.keep_on()` keeps the screen from dimming and locking while the
+  screen is on show -- a flag of its window, not a wake lock.
+  `display.brightness(1)` sets this screen's brightness, from 0 to 1, and
+  `"auto"` gives it back to the phone, whose own setting is never touched.
+  `display.immersive()` hides the status and navigation bars; a swipe from
+  the edge still brings them back for a moment. `display.orientation()` is
+  `"portrait"`, `"landscape"` (either side) or `"auto"`. Each answers `"ok"`,
+  or `"invalid"` and changes nothing. Nobody is asked for a permission.
+
+  What a screen asks is its own: a screen opened over it has none of it,
+  closing it ends it, and turning the phone or changing the theme -- Android
+  building the screen again -- keeps it. `Screen(id=..., orientation=)` and
+  `run(start_screen=..., orientation=)` write the way up into the manifest,
+  so a screen opens the right way with nothing turning on the way in; a
+  screen's own wins over `run()`'s, and `display.orientation()` over both. A
+  level or a way up written in the code is checked when the app is built,
+  and so is a call from the top of the file (`U2048`: *For 90%, write
+  0.9.*). On a display 600dp wide or more Android 16 ignores what an app
+  says about the way up, and so does the Previewer with `device("Tablet")`.
+
+  In the Previewer a cup and a sun in the status bar say that a screen keeps
+  the phone on or sets its brightness, `immersive()` takes the status bar
+  away, a screen on its side turns the window, and Ctrl+Left / Ctrl+Right
+  turn the phone, as in the Android emulator.
+  `examples/42_display.py` is a recipe that keeps the phone awake, a ticket
+  at full brightness, which way up, and a player that lies down without its
+  bars.
+
+- **The app lock: `app_lock.after()`, `app_lock.now()`, `app_lock.off()`
+  and `app_lock.locked()`.** A bank, a health record or a diary locks itself
+  after a while away and opens with the phone's own fingerprint, face or
+  screen lock -- what an audit asks of an app that keeps anything private.
+  `app_lock.after(5)` locks the app once it has been away, or untouched while
+  on show, for five minutes; `0` locks it every time it comes back, and a part
+  of a minute is a number of minutes too. `app_lock.now()` locks it at once,
+  `app_lock.off()` takes the rule away and `if app_lock.locked():` asks.
+
+  The rule is kept on the phone, apart from `storage`, and a provider starts
+  the lock with the app's process, before any screen: an app closed from the
+  recent apps and opened again after the minutes comes back locked, and so
+  does one that was locked when it was closed. Turning the phone, changing
+  the theme and going from screen to screen are not being away.
+
+  Locked, every screen is covered -- the app's name, a padlock and an Unlock
+  button, in the app's own colours -- and the phone's own prompt asks for a
+  fingerprint, a face or the screen lock (`BiometricPrompt`; on Android 7 to
+  9, the phone's screen-lock check). Nothing typed reaches the app. Back
+  leaves the app instead of reaching the screen underneath, TalkBack does not
+  read what is covered, and from Android 13 the recent apps show no picture
+  of an app with a rule. A phone with no screen lock has nothing to ask for:
+  nothing is locked, `after()` and `now()` answer `"no_lock"`, and the rule
+  holds once the person sets one. Minutes written in the code are checked when
+  the app is built, and a call at the top of the file stops the build
+  (`U2048`). In the Previewer minimising the window is the app going to the
+  background, closing it is the app closed, and the prompt is the one
+  `biometrics.unlock()` draws. `examples/43_app_lock.py` is a journal that
+  locks a minute after you leave it.
+
+### Changed
+
+- **The build's errors for `timer` and `network` link to their own pages**
+  (`guides/timers/`, `guides/network/`) instead of the page about the rest
+  of the phone, as those for `display` link to `guides/display/`.
+
+- **Apps are built for Android 16 (API 36), which Google Play asks for.**
+  Since 31 August 2026 the store takes new apps and updates only at that
+  level, and 1.12 built for 35: an app made with it could no longer be sent
+  there. Nothing changes in an app's Python -- build again and upload. The
+  build needs the Android 16 platform of the SDK: `apkpy setup` installs it,
+  and an SDK that came with Android Studio downloads it on the first build.
+  The oldest Android an app runs on is still 7.0.
+
+  An app that targets Android 16 gets its new Back on a phone that has it:
+  an Activity is no longer handed `onBackPressed()`, and a window is no
+  longer sent the Back key. Four places counted on one or the other, and
+  were moved to the forms Android still calls: the `drawer`, the camera
+  screen, the page of `browser.show()` and the picture opened with
+  `zoom=True`. Built the old way for 36 and put on a phone with Android 16,
+  one of them broke: Back on the second page of `browser.show()` closed the
+  page instead of going one page back. The picture closed without going
+  home; the drawer and the camera still did what they should, through
+  other code than ApkPy's. All four were seen doing the right thing on that
+  phone with 1.13.0. On tablets and opened foldables Android 16 no longer
+  lets an app lock its orientation; ApkPy apps lock nothing. A test now
+  refuses any screen written the old way.
+
+### Fixed
+
+- **Installing ApkPy no longer writes over `click`.** The package carried its
+  own copies of `click` and `colorama` beside `apkpy_lib`, so `pip install
+  apkpy` replaced whatever `click` was already installed with ApkPy's copy --
+  8.4.1, which needs Python 3.10, when ApkPy says 3.8 -- and `pip uninstall
+  apkpy` took `click`'s files away with it. `click` was already a dependency
+  and now comes only that way. Every release up to 1.12.1 has this.
+- **In the Previewer, a label given more lines was drawn over what came
+  next.** In a container that places its children itself -- one with an
+  `align-self`, a `position` or a `flex-grow` among them -- `set_value()`
+  with two lines where there had been one left the container at the height
+  it had. It is measured again, as it is on the phone.
+- **The error for `open()` and for `with` named calls that did not exist.**
+  It said to use `files.read()` and `files.write()`. They exist now.
+- **`native.manifest(xml=...)` wrote the element beside `<application>`.**
+  The guide says it goes inside, and a `<service>`, a `<receiver>` or an
+  `<activity>` written beside it is read by Android as nothing: the build
+  passed and the component did not exist. It is written inside now; an
+  element that does belong beside it (`<queries>`) stays there.
+- **A permission asked for under its whole name could stop the build.**
+  `native.manifest(permission="android.permission.INTERNET")` in an app that
+  also made an `https` call declared the permission twice -- two lines in the
+  manifest and two constants of the same name in every Activity, which
+  `javac` refuses. One permission is asked for once.
+- **`on_change=lambda ...` on a text field, a switch, a checkbox or a slider
+  did nothing on a phone.** A named function got its listener; a lambda was
+  dropped while the app was built, without a word. The Previewer runs the
+  lambda as Python and did what was written, so it was only ever found on a
+  phone -- and the lambda is the form the documentation of `inputs()` shows.
+  It is now written as a function, as `chips()` and `segmented()` already
+  did with theirs: `inputs("Name", on_change=lambda value:
+  greeting.set_value("Hello, " + value))`. A lambda that does not take the
+  value (`lambda: ...`) stops the build with `U2033`; at the desk it was
+  called, failed, and showed nothing.
+- **In the Previewer, `button.set_value()` did not change what the button
+  said.** The phone has always set the caption -- a button is text -- and
+  the Previewer drew it once and kept it: "Start" went on saying "Start",
+  and `get_value()` answered `""`. The caption changes now, a button as
+  wide as its text takes its new width, and `get_value()` answers the
+  caption, as on the phone.
+- **In the Previewer, `hide()` did not hide a container with rounded
+  corners, and `show()` then broke it.** The box stayed where it was; shown
+  again, its content came out of its shape, half as wide and in the middle.
+  A container with square corners lost its content, kept its place, and
+  came back as wide as its text. The phone has always taken the whole box
+  away and put it back. The Previewer does now: it goes with its margin and
+  the gap before it, what follows moves up, and it returns to the same
+  place and size.
+
+---
+
 ## [1.12.1] - 2026-10-06
 
 One fix. Nothing else changed from 1.12.0: every example and showcase app

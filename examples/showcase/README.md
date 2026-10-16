@@ -1,8 +1,7 @@
 # ApkPy showcase applications
 
 These are the complete Python declarations behind the public Lumen, Onda,
-Northline and Afterglow case studies. They contain app code and styles only;
-the private ApkPy compiler source is not part of this directory.
+Northline and Afterglow case studies. They contain app code and styles only.
 
 | App | Entry file | Screens |
 | --- | --- | ---: |

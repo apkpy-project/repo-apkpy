@@ -11,8 +11,7 @@ Kivy:
 - scroll the result list.
 
 The benchmark includes the application source and packaging configuration for
-every candidate. It does **not** contain the private source of the ApkPy
-compiler.
+every candidate.
 
 ## Corrected on 2026-09-11
 

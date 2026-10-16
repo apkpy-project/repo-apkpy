@@ -4,7 +4,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/apkpy)](https://pypi.org/project/apkpy/)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue)](https://python.org)
-[![License](https://img.shields.io/badge/license-Proprietary-red)](#license)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](#license)
 [![Platform](https://img.shields.io/badge/platform-Android-green)](https://developer.android.com)
 
 **[Website and documentation](https://repo-apkpy.pages.dev/)** ·
@@ -100,15 +100,16 @@ mode too: `appearance.set("system")` makes the app follow the phone.
   targets and low-contrast text are reported before the app ships.
 - **Your own Java** when you need something ApkPy does not wrap.
 
-## What it does not do
+## Compiled, not embedded
 
-It does not run Python on the device, so `pip` packages such as `requests`,
-`numpy` or `pandas` cannot come along. ApkPy translates a
-[documented subset of Python](https://repo-apkpy.pages.dev/compatibility/) and
-gives you its own APIs (`https`, `db`, `files`, `background_job`) for the same
-jobs. It builds for Android only. See
-[where each framework wins](https://repo-apkpy.pages.dev/apkpy-vs-kivy-flet-beeware/)
-for an honest comparison.
+ApkPy compiles your Python to Java when you build, and no interpreter ships in
+the APK. That is why a small app is about 1.5 MB and starts with nothing to
+boot, and it is also why ApkPy covers the Python you write apps with
+([the list](https://repo-apkpy.pages.dev/compatibility/)) rather than the whole language: `pip` packages such as
+`requests`, `numpy` or `pandas` do not come along. ApkPy has its own APIs for
+the same jobs (`https`, `db`, `files`, `background_job`), and anything outside
+the list stops the build at its line, with a form that compiles. It builds for
+Android only; see [how it compares with Kivy, Flet and BeeWare](https://repo-apkpy.pages.dev/apkpy-vs-kivy-flet-beeware/).
 
 ## Benchmark
 
@@ -124,12 +125,14 @@ Signed and shrunk with R8, the ApkPy app comes to 1,518 KB.
 
 ## This repository
 
-The ApkPy engine is closed source and installed from PyPI. This repository
-holds everything around it:
+ApkPy is open source, and its code is here: `pip install apkpy` installs
+what [`apkpy_lib/`](apkpy_lib/) holds.
 
 | Folder | What is in it |
 | --- | --- |
-| [`examples/`](examples/) | Complete apps: 35 numbered examples, the showcase apps, rebuilt screens of apps you know, tutorials |
+| [`apkpy_lib/`](apkpy_lib/) | The engine: the translator from Python to Android, the Previewer and the `apkpy` command |
+| [`tests/`](tests/) | The tests a change has to keep passing |
+| [`examples/`](examples/) | Complete apps: 43 numbered examples, the showcase apps, rebuilt screens of apps you know, tutorials |
 | [`releases/`](releases/) | The long release notes, one file per version |
 | [`benchmarks/`](benchmarks/) | The benchmark apps, packaging files and raw measurements |
 | [`CHANGELOG.md`](CHANGELOG.md) | Every change, version by version |
@@ -141,20 +144,20 @@ this repository.
 
 ## License
 
-ApkPy is **proprietary software**. The source code is not open for
-redistribution or modification. See [`LICENSE`](LICENSE) for full details.
+ApkPy is open source under the [Apache License 2.0](LICENSE): use it, read
+it, change it and redistribute it, for personal and commercial work.
 
-The core compiler is not open source today, and there is no current plan to
-publish it while ApkPy remains under active development and maintenance.
-Open-sourcing may be considered later. If the maintainer ever decides to
-permanently abandon ApkPy, the core source **will be released as open source**
-so the project can be inspected, maintained and continued by others. Until
-then, the current proprietary [`LICENSE`](LICENSE) remains in force; this
-future commitment does not grant redistribution or modification rights today.
-Read the complete
-[project continuity policy](https://repo-apkpy.pages.dev/project-continuity/).
+**The apps you build are yours.** ApkPy writes some of its own code into
+every app it builds, and you may have started from one of its examples. An
+exception at the end of the [`LICENSE`](LICENSE) lets you ship both as part
+of your app under your own terms, with nothing of ApkPy's licence to carry
+along.
 
-© 2025–2026 ApkPy. All rights reserved.
+The licence covers the code, not the name: a changed version that is
+published needs a name of its own. Read
+[what the licence says](https://repo-apkpy.pages.dev/project-continuity/).
+
+Copyright 2025–2026 The ApkPy Authors.
 
 ## Community
 
@@ -164,6 +167,6 @@ Read the complete
 - **Need a first project?** Follow the
   [end-to-end tutorial](https://repo-apkpy.pages.dev/tutorial-end-to-end/) or
   copy a [showcase app](examples/showcase/).
-- **Want to share an example?** Read [CONTRIBUTING.md](CONTRIBUTING.md).
+- **Want to fix or add something?** Read [CONTRIBUTING.md](CONTRIBUTING.md).
 
 GitHub Issues is the current public support channel.

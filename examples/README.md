@@ -55,6 +55,14 @@ apkpy build
 | [`33_reusable_screens.py`](33_reusable_screens.py) | Three screens built by two functions -- a header and a card written once, a returned component updated by a button, cards unrolled from lists |
 | [`34_sign_up_form.py`](34_sign_up_form.py) | A form that says what is wrong with it: help text under fields, required fields checked together with `validate()`, and rules of its own shown with `set_error()` |
 | [`35_filter_sheet.py`](35_filter_sheet.py) | A bottom sheet with components in it -- a segmented button, chips, a field and two buttons -- that filters the list behind it and drags down to close |
+| [`36_android_from_python.py`](36_android_from_python.py) | Android reached from Python: six `@native` functions -- vibrate, battery, the phone's name, its sensors, keep the screen on, open a page -- whose bodies are translated to Java and checked against `android.jar` when the app is built |
+| [`37_the_rest_of_the_phone.py`](37_the_rest_of_the_phone.py) | Sixteen rows, one call each, past the app: a touch you can feel, a voice, dictation, a page over the app and one inside it, the calendar, the dialler, a message, a file saved where the person chooses, a download, print, the recorder -- and a link or a share that opens the app |
+| [`38_outside_the_app.py`](38_outside_the_app.py) | What an app has outside its own screens, a row for every call: a widget on the home screen, a tile in quick settings, AdMob ads (banner, between two screens, for a reward, consent), a newer version from Google Play, and steps, heart rate and sleep from Health Connect |
+| [`39_text_files.py`](39_text_files.py) | A journal kept in the app's own files: `files.write()` keeps the page, `files.append()` adds a line to a history of every save, `files.read()` brings both back the next time the app opens |
+| [`40_timers.py`](40_timers.py) | A function run later, or again and again: a clock that ticks with `timer.every()`, a countdown that `timer.cancel()` pauses and `timer.running()` asks about, a search that waits for the typing to stop and a message that goes away, both `timer.after()` |
+| [`41_network.py`](41_network.py) | Online or not, and over what: a banner that comes when the connection goes, messages that wait and are sent when `network.on_change()` says it is back, a download that waits until `network.metered()` is false. In the Previewer, click the connection in the status bar to take it away |
+| [`42_display.py`](42_display.py) | The screen kept on, brighter, without its bars and which way up: a recipe switch for `display.keep_on()`, a ticket at `display.brightness(1)`, `display.orientation()` from a segmented control, and a player screen with `Screen(orientation="landscape")` that hides the bars when it opens. In the Previewer, Ctrl+Left and Ctrl+Right turn the phone |
+| [`43_app_lock.py`](43_app_lock.py) | The app lock: a journal that locks a minute after you leave it with `app_lock.after(1)`, a "Lock now" button that is `app_lock.now`, and a banner for a phone with no screen lock (`"no_lock"`). Locked, the phone's own prompt opens it. In the Previewer, minimise the window to send the app to the background |
 | [`photo_viewer/`](photo_viewer/) | Pictures that open over the whole screen and zoom: `image(zoom=True)` and `view_image()`. Run `make_assets.py` first: it draws the pictures |
 | [`replicas/`](replicas/) | Four apps you know, rebuilt: a chat list and a conversation, a music home and a player with its own tracks, a photo feed whose posts are rows built from components, stories, and a ride sheet over a map. Run `make_assets.py` first |
 
@@ -75,4 +83,6 @@ SQLite database, WebSocket channel or push callback. ApkPy manages the native
 interface and efficient collection updates; the application still owns its
 backend cursor and conflict rules.
 
-ApkPy is proprietary software. See [LICENSE](../LICENSE) for the license terms.
+The examples are yours to start from: an exception at the end of the
+[licence](../LICENSE) lets you copy them into an app of your own with nothing
+of ApkPy's licence to carry along.

@@ -1,32 +1,48 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
+
+Security fixes go into the latest release. On an older one, the fix is to
+upgrade (`python -m pip install --upgrade apkpy`) and build the app again.
 
 | Version | Supported |
 | :---: | :---: |
-| 1.0.x | ✅ Yes |
-| 0.9.x | ✅ Yes |
-| < 0.9 | ❌ No |
+| 1.13.x | ✅ Yes |
+| < 1.13 | ❌ No |
 
-## Built-in Security Features (v1.0.0)
+## Reporting a vulnerability
 
-ApkPy ships a security layer out of the box — no external dependencies, no new permissions:
+**Please do not open a public issue.** Report it privately: on this
+repository's **Security** tab, choose **Report a vulnerability**.
 
-- **Password hashing**: `crypto.hash_password()` / `crypto.verify_password()` — salted PBKDF2-HMAC (SHA-256/512, 200,000 iterations by default), constant-time verification. Never store plain-text passwords.
-- **Two-way encryption**: `crypto.encrypt()` / `crypto.decrypt()` — AES-256-GCM on Android with a hardware-backed, non-extractable Android Keystore key.
-- **Automatic storage encryption**: every `storage.set()` value is encrypted before it reaches the disk; `storage.get()` decrypts transparently.
-- **SQL injection protection**: `db.execute(sql, [params])` / `db.query(sql, [params])` bind values with `?` placeholders via the SQLite engine — user input is never concatenated into SQL.
-
-See the README sections *SQLite Database* and *Crypto / Password Hashing* for usage and the honest threat model (what these features do and do not protect against).
-
-## Reporting a Vulnerability
-
-If you discover a security vulnerability in ApkPy, **please do not open a public GitHub issue**. Instead, please report it by opening a private security advisory on GitHub or contacting the maintainers.
-
-We will acknowledge your report within 48 hours and aim to release a patch within 7 days for confirmed vulnerabilities.
+We will acknowledge your report within 48 hours and aim to release a patch
+within 7 days for confirmed vulnerabilities.
 
 Please include:
+
 - A description of the vulnerability
 - Steps to reproduce it
 - Potential impact
 - Any suggested fix (if you have one)
+
+## What is in scope
+
+ApkPy is a build tool, and what it writes ends up inside other people's apps.
+Both are in scope:
+
+- **ApkPy itself:** the `apkpy` command, the build and the Previewer.
+- **What ApkPy writes into an app:** the Java, the manifest and the Gradle
+  files of a built project — a permission an app did not ask for, a secret
+  written where another app can read it, an encryption or a password hash
+  weaker than the documentation says.
+
+A flaw in a library the built apps depend on (AndroidX, Material Components,
+OkHttp, Google's) belongs to that library; tell us too, so the version ApkPy
+asks for can be raised.
+
+## What ApkPy does for the apps it builds
+
+Encrypted storage, password hashing, encryption with a key held by the
+Android Keystore, parameterised SQL and certificate pinning are described,
+with what each does and does not protect against, in
+[Data, network and security](https://repo-apkpy.pages.dev/data-security/).

@@ -1,0 +1,63 @@
+# The suites, on GitHub's machines. Free on a public repository.
+#
+# It starts by hand only (Actions > tests > Run workflow): the suites have
+# been run on one machine so far, Windows with Python 3.13, and a workflow
+# that has never run is not something to hang a red mark on every push with.
+# Once a run is green, `push` and `pull_request` go under `on:`.
+#
+# What a run needs that a bare machine does not have:
+#   - a display for the Previewer's tests (Tk): xvfb on Linux; Windows has one
+#   - a JDK for the tests that compile and run ApkPy's Java against a small
+#     stand-in Android (they are skipped without one)
+#   - PortAudio for sounddevice on Linux
+# The tests that need android.jar look for an Android SDK and are skipped
+# without one; GitHub's Ubuntu and Windows images come with one.
+name: tests
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  suites:
+    name: ${{ matrix.os }}, Python ${{ matrix.python }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # What the suites are run on before every release.
+          - {os: windows-latest, python: "3.13", seen: true}
+          # Not seen passing yet: they run and show, and do not fail the run.
+          # 3.8 is the oldest Python setup.py says ApkPy runs on.
+          - {os: windows-latest, python: "3.8", seen: false}
+          - {os: ubuntu-latest, python: "3.13", seen: false}
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ !matrix.seen }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: System libraries (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb python3-tk libportaudio2
+      - name: Install ApkPy from this checkout
+        run: python -m pip install -e .
+      - name: Feature tests (Linux)
+        if: runner.os == 'Linux'
+        working-directory: tests/features
+        run: xvfb-run -a python -W ignore -m unittest discover -s .
+      - name: Feature tests (Windows)
+        if: runner.os == 'Windows'
+        working-directory: tests/features
+        env:
+          PYTHONIOENCODING: utf-8
+        run: python -W ignore -m unittest discover -s .
+      - name: Core tests
+        run: python -m unittest discover -s tests -q

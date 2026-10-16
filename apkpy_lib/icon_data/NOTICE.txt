@@ -1,0 +1,8 @@
+material_icons.json.gz holds the path data of Material Icons (the filled and
+outlined families) by Google, licensed under the Apache License, Version 2.0:
+https://www.apache.org/licenses/LICENSE-2.0
+
+Source: https://github.com/google/material-design-icons -- read from the copy
+Android Studio ships (plugins/android/lib/android.jar) by
+tools/build_icon_data.py. Icons that need android:fillType="evenOdd" were left
+out. The data was reformatted, not redrawn.

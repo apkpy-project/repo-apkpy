@@ -7,6 +7,7 @@ the same notes, formatted, are on the site under
 
 | Version | Notes |
 | --- | --- |
+| 1.13.0 | [Open source, and the rest of the phone](1.13.0.md) |
 | 1.12.1 | [A comparison between two values](1.12.1.md) |
 | 1.12.0 | [What a finger does](1.12.0.md) |
 | 1.11.0 | [Apps you know, rebuilt in Python](1.11.0.md) |

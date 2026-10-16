@@ -1,0 +1,7 @@
+include PYPI.md LICENSE NOTICE AUTHORS
+recursive-include apkpy_lib/templates *
+recursive-include apkpy_lib/core *
+recursive-include apkpy_lib/assets *
+recursive-include apkpy_lib/icon_data *
+global-exclude __pycache__
+global-exclude *.py[cod]
