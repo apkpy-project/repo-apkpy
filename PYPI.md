@@ -12,6 +12,18 @@ You write the whole app in Python with a CSS-style design system, see it on your
 
 ---
 
+## ApkPy 1.13.1 — every Python from 3.8
+
+Fixes, and nothing new. On Python 3.8 to 3.11 the `apkpy` command of 1.13.0
+did not start: two of its lines used an f-string only Python 3.12 and later
+can read. That is fixed, along with what the first run on those versions
+found. On Python 3.8 an index such as `parts[0]` reached the phone as
+nothing, and before Python 3.11 `apkpy.toml` was skipped unless `tomli` was
+installed; `pip` now installs it there. With Python 3.12 and later, nothing
+about an app changes. Upgrade with
+`python -m pip install --upgrade apkpy==1.13.1`. See the
+[1.13.1 notes](https://repo-apkpy.pages.dev/version-1.13.1/).
+
 ## ApkPy 1.13.0 — open source, and the rest of the phone
 
 **ApkPy is open source from this release**, under the Apache License 2.0. An
@@ -48,7 +60,7 @@ def opened():
         speech.say("Back online")
 ```
 
-Build again and upload: `python -m pip install --upgrade apkpy==1.13.0`, and
+Build again and upload: `python -m pip install --upgrade apkpy==1.13.1`, and
 `apkpy setup` installs the Android 16 platform the build needs. See the
 [1.13.0 notes](https://repo-apkpy.pages.dev/version-1.13.0/).
 

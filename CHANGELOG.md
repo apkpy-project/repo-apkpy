@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+---
+
+## [1.13.1] - 2026-10-17
+
+Fixes, and nothing new. ApkPy runs on every Python `setup.py` names, 3.8 and
+later. With Python 3.13, every example app is built into the same files as
+with 1.13.0.
+
 ### Fixed
 
 - **`apkpy` did not start on Python 3.8 to 3.11.** Two f-strings, one in the
@@ -26,8 +34,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **On Python 3.8 to 3.10, `apkpy.toml` was skipped** unless `tomli` happened
   to be installed: a warning, and the app was built under the default name
   and application id. `tomli` is now installed with ApkPy on those versions.
+- **In the Previewer on Linux, a rounded container could stay blank** after
+  a container above it was hidden and shown again: the canvas it is drawn in
+  unmapped the frame inside it and did not map it back. GitHub's Ubuntu
+  machines found it.
 - **On a Linux desktop with no language set** ("C" or "POSIX"), the
   Previewer took that for a language. It now treats it as none.
+
+### Tests
+
+- The suites run on GitHub (Actions > tests, started by hand) on Windows
+  with Python 3.8, 3.11 and 3.13 and on Ubuntu with Python 3.13. Tests that
+  need a Gradle cache or the `crypto` extra skip without them instead of
+  failing.
 
 ---
 
