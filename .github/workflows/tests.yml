@@ -1,9 +1,9 @@
 # The suites, on GitHub's machines. Free on a public repository.
 #
-# It starts by hand only (Actions > tests > Run workflow): the suites have
-# been run on one machine so far, Windows with Python 3.13, and a workflow
-# that has never run is not something to hang a red mark on every push with.
-# Once a run is green, `push` and `pull_request` go under `on:`.
+# They run on every push to main and on every pull request, and by hand
+# (Actions > tests > Run workflow). A push that changes only Markdown -- the
+# release notes, the changelog, a README -- runs nothing: no test reads them.
+# A newer push to the same branch cancels the run it makes out of date.
 #
 # What a run needs that a bare machine does not have:
 #   - a display for the Previewer's tests (Tk): xvfb on Linux; Windows has one
@@ -15,10 +15,19 @@
 name: tests
 
 on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md"]
+  pull_request:
+    paths-ignore: ["**.md"]
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   suites:
@@ -27,15 +36,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # What the suites are run on before every release.
-          - {os: windows-latest, python: "3.13", seen: true}
-          # Not seen passing yet: they run and show, and do not fail the run.
           # 3.8 is the oldest Python setup.py says ApkPy runs on; 3.11 is
           # the last before f-strings could hold backslashes and their own
           # quotes (3.12): code written that way does not import there.
-          - {os: windows-latest, python: "3.8", seen: false}
-          - {os: windows-latest, python: "3.11", seen: false}
-          - {os: ubuntu-latest, python: "3.13", seen: false}
+          # All four passed on 2026-10-17. A machine added later starts with
+          # seen: false -- it runs and shows, and does not fail the run --
+          # until it has passed once.
+          - {os: windows-latest, python: "3.13", seen: true}
+          - {os: windows-latest, python: "3.8", seen: true}
+          - {os: windows-latest, python: "3.11", seen: true}
+          - {os: ubuntu-latest, python: "3.13", seen: true}
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ !matrix.seen }}
     steps:
