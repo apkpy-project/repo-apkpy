@@ -184,6 +184,10 @@ def describe(node):
     name = dotted_name(node)
     if name:
         return name + '(...)' if isinstance(node, ast.Call) else name
+    if isinstance(node, ast.Constant):
+        return repr(node.value)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+        return ('-' if isinstance(node.op, ast.USub) else '+') + describe(node.operand)
     return type(node).__name__
 
 

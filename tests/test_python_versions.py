@@ -176,6 +176,68 @@ class TheMessagesQuoteTheCodeOnPython38(unittest.TestCase):
         self.assertNotIn("AttributeError", error)
         self.assertIn("virtual_collection(swipe_left=...) takes swipe(", error)
 
+    def test_a_number_below_zero_is_quoted_as_written(self):
+        import ast
+        from apkpy_lib.core import unsupported
+        with patch.object(ast, "unparse", None, create=True):
+            self.assertEqual(unsupported.describe(ast.parse("-1").body[0].value), "-1")
+            self.assertEqual(unsupported.describe(ast.parse("'x'").body[0].value), "'x'")
+            self.assertEqual(unsupported.describe(ast.parse("list").body[0].value), "list")
+
+
+class TheTreeHasOneShape(unittest.TestCase):
+    """Python 3.8 wraps an index: ``parts[0]`` holds ``Index(Constant(0))``.
+
+    Read as it came, the phone looked up the item at index "" -- nothing --
+    while the Previewer showed the right one. ``ast_compat`` unwraps it as
+    the source is read. 3.9 and later cannot make those nodes any more, so
+    here they are made by hand, with the names 3.8 gives them.
+    """
+
+    @staticmethod
+    def _node(name, **fields):
+        import ast
+        kind = type(name, (ast.AST,), {"_fields": tuple(fields)})
+        return kind(**fields)
+
+    def test_an_index_is_unwrapped(self):
+        import ast
+        from apkpy_lib.core import ast_compat
+        tree = ast.Expression(body=ast.Subscript(
+            value=ast.Name(id="parts", ctx=ast.Load()),
+            slice=self._node("Index", value=ast.Constant(value=0)), ctx=ast.Load()))
+        tree = ast_compat._To39().visit(tree)
+        self.assertIsInstance(tree.body.slice, ast.Constant)
+        self.assertEqual(tree.body.slice.value, 0)
+
+    def test_several_dimensions_become_a_tuple(self):
+        import ast
+        from apkpy_lib.core import ast_compat
+        tree = ast.Expression(body=ast.Subscript(
+            value=ast.Name(id="grid", ctx=ast.Load()),
+            slice=self._node("ExtSlice", dims=[
+                ast.Slice(lower=None, upper=None, step=None),
+                self._node("Index", value=ast.Constant(value=1))]),
+            ctx=ast.Load()))
+        tree = ast_compat._To39().visit(tree)
+        self.assertIsInstance(tree.body.slice, ast.Tuple)
+        self.assertIsInstance(tree.body.slice.elts[0], ast.Slice)
+        self.assertEqual(tree.body.slice.elts[1].value, 1)
+
+    def test_the_phone_reads_the_index(self):
+        from apkpy_lib.core.compiler import translate_python_to_android
+        source = "\n".join((
+            'from apkpy_lib import *',
+            'home = Screen(id="home")',
+            'out = label("", id="out", screen=home)',
+            'def go():',
+            '    parts = "a,b".split(",")',
+            '    out.set_value(parts[1])',
+            'button("Go", id="go", screen=home, command=go)',
+            'run(start_screen=home)', ''))
+        java = translate_python_to_android(source)["java/Screen_homeActivity.java"]
+        self.assertIn("_apkpyListGet(String.valueOf(parts), String.valueOf(1))", java)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -29,6 +29,7 @@ import ast
 import os
 
 from ...diagnostics import ApkpyError
+from .. import ast_compat
 
 DOCS = "https://repo-apkpy.pages.dev/guides/modules/"
 
@@ -244,7 +245,7 @@ def _merge_into(tree, base_dir, taken, files, owner):
                 path=owner,
             )
         try:
-            helper_tree = ast.parse(helper_source, filename=path)
+            helper_tree = ast_compat.parse(helper_source, filename=path)
         except SyntaxError as exc:
             _fail(
                 "%s has a syntax error on line %s." % (file_name, exc.lineno),

@@ -885,6 +885,9 @@ class OnTheDeskInThePreviewer(unittest.TestCase):
                              (root.winfo_rootx(), root.winfo_rooty(),
                               root.winfo_width(), root.winfo_height()))
             self.assertEqual(p.ns["HEARD"], [])
+            # The pointer goes there first, as a mouse does: the Tk of
+            # Python 3.8 delivers a click on a canvas item only then.
+            cover.canvas.event_generate("<Motion>", x=cover.width - 38, y=56)
             cover.canvas.event_generate("<Button-1>", x=cover.width - 38, y=56)
             p.settle(0.3)
             self.assertIsNone(kit_surfaces.current_cover())
@@ -949,6 +952,9 @@ class OnTheDeskInThePreviewer(unittest.TestCase):
             cover = kit_surfaces.current_cover()
             self.assertEqual(cover.kind, "update")
             box = cover.canvas.bbox("leave")
+            # The pointer first, as above.
+            cover.canvas.event_generate("<Motion>", x=(box[0] + box[2]) // 2,
+                                        y=(box[1] + box[3]) // 2)
             cover.canvas.event_generate("<Button-1>", x=(box[0] + box[2]) // 2,
                                         y=(box[1] + box[3]) // 2)
             p.settle(0.3)
@@ -957,6 +963,8 @@ class OnTheDeskInThePreviewer(unittest.TestCase):
             p.settle(0.5)
             cover = kit_surfaces.current_cover()
             box = cover.canvas.bbox("go")
+            cover.canvas.event_generate("<Motion>", x=(box[0] + box[2]) // 2,
+                                        y=(box[1] + box[3]) // 2)
             cover.canvas.event_generate("<Button-1>", x=(box[0] + box[2]) // 2,
                                         y=(box[1] + box[3]) // 2)
             p.settle(3.2)

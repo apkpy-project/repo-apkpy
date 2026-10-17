@@ -8089,7 +8089,20 @@ class AppPreview:
                 except Exception:
                     pass
 
+            def _show_content(event=None, c=panel, win=panel_window):
+                # On X11 a canvas that is unmapped unmaps the windows it holds
+                # -- the packer does it to the panel for an instant when a
+                # sibling is hidden or shown -- and maps them again only when
+                # it next draws them. Under Xvfb that draw did not come, and a
+                # card after a banner stayed blank. Setting the window's own
+                # coordinates again asks for exactly that draw.
+                try:
+                    c.after_idle(lambda: c.coords(win, *c.coords(win)))
+                except Exception:
+                    pass
+
             panel.bind('<Configure>', _draw_panel)
+            panel.bind('<Map>', _show_content, add='+')
             inner_frame.bind('<Configure>', _fit_panel, add='+')
             # ComponentDef.show()/hide() finds this callback while walking up
             # the Tk widget tree, including changes that emit no Configure.

@@ -40,6 +40,7 @@ import keyword
 from ...diagnostics import ApkpyError
 from ... import native_rules
 from .. import java_api
+from .. import unsupported
 from ..java_api import (Arr, Cls, NULL, OBJECT, Prim, STRING, TVar, Wild, BOXES,
                         UNBOXES, erase, source, substitute)
 
@@ -358,8 +359,7 @@ class _Translator:
         kind = native_rules.kind_of(name) if name else None
         if kind is None:
             _fail(node, "@native %s(): %s cannot be %s" % (
-                self.function.name, what, ast.unparse(annotation)
-                if hasattr(ast, "unparse") else "that"),
+                self.function.name, what, unsupported.describe(annotation)),
                 cause=("What crosses into a block and back is text or a number: "
                        "a Java object cannot leave the block that made it."),
                 suggestions=['One of: str, int, float, bool, "long".'])

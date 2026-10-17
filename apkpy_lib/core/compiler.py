@@ -95,7 +95,7 @@ from ..theme import (
 from ..diagnostics import (
     ApkpyError, Diagnostic, format_exception, report_diagnostic,
 )
-from . import unsupported
+from . import ast_compat, unsupported
 from . import i18n as i18n_feature
 from .features import crash as crash_feature
 from .features import scan as scan_feature
@@ -3713,7 +3713,7 @@ def translate_python_to_java(python_code, source_name="writehere.py"):
             styles, keyframes = parse_css(style_match.group(1))
             clean_code = python_code.replace(style_match.group(0), "")
 
-        tree = ast.parse(clean_code)
+        tree = ast_compat.parse(clean_code)
         styles = apply_theme(styles, theme_from_ast(tree))
         transpiler = JavaTranspiler(styles=styles)
         transpiler.visit(tree)
@@ -21230,7 +21230,7 @@ def _prepare_android_analysis(python_code, source_name="writehere.py",
         clean_code = python_code.replace(
             style_match.group(0), "\n" * style_match.group(0).count("\n"), 1)
 
-    tree = ast.parse(clean_code, filename=source_name)
+    tree = ast_compat.parse(clean_code, filename=source_name)
     # Helper modules sitting next to the application are spliced in here, so
     # every pass below still receives one module.
     tree = modules_feature.merge(tree, asset_base_dir)

@@ -192,8 +192,9 @@ def _functions(tree):
 
 def _text(node):
     """Source-ish text of a small expression, for an error."""
+    from ...unsupported import describe   # ast.unparse() is 3.9+; this is not
     try:
-        return ast.unparse(node)
+        return describe(node)
     except Exception:
         return "..."
 

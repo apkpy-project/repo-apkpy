@@ -16,6 +16,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   braces. `setup.py` says 3.8 and later, and the suites had only been run on
   3.13. It has been so since at least 1.5.0. The files ApkPy writes are the
   same, byte for byte. A new test reads every file the way Python 3.11 does.
+- **On Python 3.8, an index reached the phone as nothing.** Python 3.8 hands
+  `parts[0]` over in a different shape, and the item read on the phone was
+  the one at index "" -- empty -- while the Previewer showed the right one.
+  The same went for `row["name"]` in a row and for the names of pictures in
+  a list. The code is now read in one shape on every version.
 - **On Python 3.8, nine error messages failed with an error of their own**
   (`ast.unparse` came in 3.9) instead of naming the code they were about.
 - **On Python 3.8 to 3.10, `apkpy.toml` was skipped** unless `tomli` happened

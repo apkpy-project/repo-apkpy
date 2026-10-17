@@ -92,8 +92,8 @@ class AContainerHiddenAndShown(unittest.TestCase):
                 shown.settle(0.35)
                 shown.ns["banner"].show()
                 shown.settle(0.35)
-                self.assertEqual(_box(shown, "banner"), banner)
-                self.assertEqual(_box(shown, "card"), card)
+                self.assertEqual(_box(shown, "banner"), banner, _unmapped(shown, "banner"))
+                self.assertEqual(_box(shown, "card"), card, _unmapped(shown, "card"))
             # And it is still where its parent laid it out: among the
             # children it was made between, not after them.
             self.assertLess(_box(shown, "banner")[2], _box(shown, "card")[2])
@@ -135,7 +135,7 @@ class AContainerHiddenAndShown(unittest.TestCase):
             self.assertFalse(_box(shown, "card")[0])
             shown.ns["card"].show()
             shown.settle(0.35)
-            self.assertEqual(_box(shown, "card"), card)
+            self.assertEqual(_box(shown, "card"), card, _unmapped(shown, "card"))
 
 
 if __name__ == "__main__":
