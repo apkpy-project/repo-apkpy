@@ -41,6 +41,18 @@ def _box(shown, name):
             widget.winfo_width(), widget.winfo_height())
 
 
+def _unmapped(shown, name):
+    """Which frames, from the component up, are not mapped: the message a
+    failed "drawn" check carries, since a machine without a screen (the CI's
+    Xvfb) is where it has failed and nobody can look at it there."""
+    widget, chain = shown.ns[name].widget, []
+    while widget is not None:
+        if not widget.winfo_ismapped():
+            chain.append("%s [%s]" % (widget, widget.winfo_manager() or "no manager"))
+        widget = widget.master
+    return "%s not mapped: %s" % (name, ", ".join(chain) or "nothing")
+
+
 class AContainerHiddenAndShown(unittest.TestCase):
 
     def _each(self, more=""):
@@ -49,7 +61,14 @@ class AContainerHiddenAndShown(unittest.TestCase):
                 with self.subTest(shape=shape, gap=gap or "no gap"):
                     with Previewed(APP % {"scroll": "True", "more": more},
                                    CSS % {"gap": gap, "radius": radius}) as shown:
-                        yield shown
+                        try:
+                            yield shown
+                        except GeneratorExit:
+                            # The test failed and let go of the loop. Close
+                            # the window and stop; left to subTest, the exit
+                            # was reported as an error of its own and the loop
+                            # opened the next case.
+                            return
 
     def test_it_goes_and_what_follows_takes_its_place(self):
         for shown in self._each():
@@ -104,7 +123,7 @@ class AContainerHiddenAndShown(unittest.TestCase):
             shown.ns["online"].set(True)
             shown.settle(0.35)
             self.assertFalse(_box(shown, "banner")[0])
-            self.assertEqual(_box(shown, "card"), hidden)
+            self.assertEqual(_box(shown, "card"), hidden, _unmapped(shown, "card"))
 
     def test_the_last_of_its_siblings_comes_back_last(self):
         # On a screen that does not scroll, too.

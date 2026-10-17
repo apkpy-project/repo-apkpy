@@ -7,6 +7,12 @@ import unittest
 
 from apkpy_lib.core.compiler import translate_python_to_android
 
+try:  # the Previewer's AES comes from the optional extra: pip install apkpy[crypto]
+    import cryptography  # noqa: F401
+    HAS_AES = True
+except ImportError:
+    HAS_AES = False
+
 RFC_SEED = base64.b32encode(b"12345678901234567890").decode()
 
 # RFC 6238, appendix B: the published SHA-1 vectors, eight digits.
@@ -34,6 +40,7 @@ def _app(body):
             'run(start_screen=home)\n' % body)
 
 
+@unittest.skipUnless(HAS_AES, "cryptography is not installed (pip install apkpy[crypto])")
 class ThePortableFormatTests(unittest.TestCase):
     """A password box has to open anywhere, or it is not portable."""
 

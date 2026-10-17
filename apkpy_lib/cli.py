@@ -71,13 +71,19 @@ def generate_gradle_files(base_path, package_name, project_name, needs_workmanag
     buildtypes_block = ""
     if signing:
         ks_path = signing["keystore"].replace("\\", "/")
+        # Taken out before the f-strings below, here and further down: a
+        # quote of the f-string's own kind inside its braces is Python 3.12
+        # and later only, and ApkPy runs from 3.8.
+        store_password = signing["store_password"]
+        key_alias = signing["key_alias"]
+        key_password = signing["key_password"]
         signing_block = f"""
     signingConfigs {{
         release {{
             storeFile file('{ks_path}')
-            storePassword '{signing["store_password"]}'
-            keyAlias '{signing["key_alias"]}'
-            keyPassword '{signing["key_password"]}'
+            storePassword '{store_password}'
+            keyAlias '{key_alias}'
+            keyPassword '{key_password}'
         }}
     }}
 """
@@ -157,20 +163,59 @@ include ':app'
     with open(settings_path, "w", encoding="utf-8") as f:
         f.write(settings_gradle_content)
 
+    kotlin_root = "    id 'org.jetbrains.kotlin.android' version '2.0.21' apply false" if needs_firebase else ""
+    services_root = "    id 'com.google.gms.google-services' version '4.5.0' apply false" if google_services else ""
     root_build_gradle_content = f"""plugins {{
     id 'com.android.application' version '8.6.1' apply false
-{"    id 'org.jetbrains.kotlin.android' version '2.0.21' apply false" if needs_firebase else ""}
-{"    id 'com.google.gms.google-services' version '4.5.0' apply false" if google_services else ""}
+{kotlin_root}
+{services_root}
 }}
 """
     root_build_path = os.path.join(base_path, "build.gradle")
     with open(root_build_path, "w", encoding="utf-8") as f:
         f.write(root_build_gradle_content)
 
+    kotlin_app = "    id 'org.jetbrains.kotlin.android'" if needs_firebase else ""
+    services_app = "    id 'com.google.gms.google-services'" if google_services else ""
+    # Each library a feature needs, added only to an app that uses it.
+    optional_dependencies = "".join(lines for wanted, lines in (
+        (needs_workmanager, """
+    implementation 'androidx.work:work-runtime:2.9.0'"""),
+        (needs_recyclerview, """
+    implementation 'androidx.recyclerview:recyclerview:1.3.2'"""),
+        (needs_drawer, """
+    implementation 'androidx.drawerlayout:drawerlayout:1.2.0'"""),
+        (needs_websocket, """
+    implementation 'com.squareup.okhttp3:okhttp:5.3.2'"""),
+        (needs_swiperefresh, """
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.2.0'"""),
+        (needs_media3, """
+    implementation 'androidx.media3:media3-exoplayer:1.3.1'
+    implementation 'androidx.media3:media3-exoplayer-hls:1.3.1'
+    implementation 'androidx.media3:media3-exoplayer-dash:1.3.1'
+    implementation 'androidx.media3:media3-ui:1.3.1'"""),
+        (needs_firebase, """
+    implementation platform('com.google.firebase:firebase-bom:34.16.0')
+    implementation 'com.google.firebase:firebase-messaging'"""),
+        (needs_location, """
+    implementation 'com.google.android.gms:play-services-location:21.3.0'"""),
+        (needs_biometric, """
+    implementation 'androidx.biometric:biometric:1.1.0'"""),
+        (needs_billing, """
+    implementation 'com.android.billingclient:billing:7.1.1'"""),
+        (needs_scan, """
+    implementation 'com.google.android.gms:play-services-code-scanner:16.1.0'"""),
+        (needs_camera, """
+    implementation 'androidx.camera:camera-camera2:1.4.2'
+    implementation 'androidx.camera:camera-lifecycle:1.4.2'
+    implementation 'androidx.camera:camera-view:1.4.2'
+    implementation 'androidx.camera:camera-video:1.4.2'
+    implementation 'androidx.exifinterface:exifinterface:1.3.7'"""),
+    ) if wanted)
     app_build_gradle_content = f"""plugins {{
     id 'com.android.application'
-{"    id 'org.jetbrains.kotlin.android'" if needs_firebase else ""}
-{"    id 'com.google.gms.google-services'" if google_services else ""}
+{kotlin_app}
+{services_app}
 }}
 
 android {{
@@ -194,27 +239,7 @@ android {{
 dependencies {{
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
-    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'{"" if not needs_workmanager else """
-    implementation 'androidx.work:work-runtime:2.9.0'"""}{"" if not needs_recyclerview else """
-    implementation 'androidx.recyclerview:recyclerview:1.3.2'"""}{"" if not needs_drawer else """
-    implementation 'androidx.drawerlayout:drawerlayout:1.2.0'"""}{"" if not needs_websocket else """
-    implementation 'com.squareup.okhttp3:okhttp:5.3.2'"""}{"" if not needs_swiperefresh else """
-    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.2.0'"""}{"" if not needs_media3 else """
-    implementation 'androidx.media3:media3-exoplayer:1.3.1'
-    implementation 'androidx.media3:media3-exoplayer-hls:1.3.1'
-    implementation 'androidx.media3:media3-exoplayer-dash:1.3.1'
-    implementation 'androidx.media3:media3-ui:1.3.1'"""}{"" if not needs_firebase else """
-    implementation platform('com.google.firebase:firebase-bom:34.16.0')
-    implementation 'com.google.firebase:firebase-messaging'"""}{"" if not needs_location else """
-    implementation 'com.google.android.gms:play-services-location:21.3.0'"""}{"" if not needs_biometric else """
-    implementation 'androidx.biometric:biometric:1.1.0'"""}{"" if not needs_billing else """
-    implementation 'com.android.billingclient:billing:7.1.1'"""}{"" if not needs_scan else """
-    implementation 'com.google.android.gms:play-services-code-scanner:16.1.0'"""}{"" if not needs_camera else """
-    implementation 'androidx.camera:camera-camera2:1.4.2'
-    implementation 'androidx.camera:camera-lifecycle:1.4.2'
-    implementation 'androidx.camera:camera-view:1.4.2'
-    implementation 'androidx.camera:camera-video:1.4.2'
-    implementation 'androidx.exifinterface:exifinterface:1.3.7'"""}{extra_dependencies_block}
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'{optional_dependencies}{extra_dependencies_block}
 }}
 """
     app_build_path = os.path.join(app_dir, "build.gradle")

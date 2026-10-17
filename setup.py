@@ -36,6 +36,10 @@ setup(
         'sounddevice>=0.4.6',
         'imageio-ffmpeg>=0.6.0; python_version >= "3.9"',
         'imageio-ffmpeg==0.5.1; python_version < "3.9"',
+        # apkpy.toml is read with tomllib, which is Python 3.11 and later.
+        # Before it, without this, the file was skipped with a warning and
+        # the app was built under the default name and application id.
+        'tomli>=2.0.1; python_version < "3.11"',
     ],
     entry_points={
         'console_scripts': [

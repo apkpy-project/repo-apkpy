@@ -30,8 +30,11 @@ jobs:
           # What the suites are run on before every release.
           - {os: windows-latest, python: "3.13", seen: true}
           # Not seen passing yet: they run and show, and do not fail the run.
-          # 3.8 is the oldest Python setup.py says ApkPy runs on.
+          # 3.8 is the oldest Python setup.py says ApkPy runs on; 3.11 is
+          # the last before f-strings could hold backslashes and their own
+          # quotes (3.12): code written that way does not import there.
           - {os: windows-latest, python: "3.8", seen: false}
+          - {os: windows-latest, python: "3.11", seen: false}
           - {os: ubuntu-latest, python: "3.13", seen: false}
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ !matrix.seen }}
@@ -47,8 +50,9 @@ jobs:
       - name: System libraries (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y xvfb python3-tk libportaudio2
+      # With the crypto extra: the Previewer's AES, which the suites check.
       - name: Install ApkPy from this checkout
-        run: python -m pip install -e .
+        run: python -m pip install -e ".[crypto]"
       - name: Feature tests (Linux)
         if: runner.os == 'Linux'
         working-directory: tests/features

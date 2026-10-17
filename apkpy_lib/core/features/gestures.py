@@ -14,6 +14,7 @@ uses it, like ApkpyPager and ApkpyChart.
 import ast
 
 from ... import gesture_rules as rules
+from .. import unsupported
 
 CODE = rules.CODE
 DOCS = "https://repo-apkpy.pages.dev/ui-components/#rows-that-swipe-and-move"
@@ -88,7 +89,7 @@ def _parse_swipe(transpiler, node, side, collection_id, line):
     if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
             and node.func.id == 'swipe'):
         refuse('virtual_collection(%s=...) takes swipe(icon, text, on_swipe=...).' % side,
-               'swipe_%s=%s' % (side.split('_')[1], ast.unparse(node)[:80]), line)
+               'swipe_%s=%s' % (side.split('_')[1], unsupported.describe(node)[:80]), line)
     keywords = {k.arg: k.value for k in node.keywords if k.arg}
     args = list(node.args)
     icon = _constant(args[0] if args else keywords.get('icon'))
@@ -101,16 +102,16 @@ def _parse_swipe(transpiler, node, side, collection_id, line):
         if value is ast:
             refuse('swipe(%s=...) has to be written out in the source: the phone '
                    'draws the strip before any of your code runs.' % name,
-                   ast.unparse(node)[:100], line,
+                   unsupported.describe(node)[:100], line,
                    ['swipe("archive", "Archive", on_swipe=archive)'])
     if not str(icon or '').strip():
-        refuse('swipe() needs an icon.', ast.unparse(node)[:100], line)
+        refuse('swipe() needs an icon.', unsupported.describe(node)[:100], line)
     on_swipe_node = args[2] if len(args) > 2 else keywords.get('on_swipe')
     callback = _callback(transpiler, on_swipe_node,
                          '%s_%s' % (collection_id or 'list', side), 1)
     if callback is False:
         refuse('swipe(on_swipe=...) takes a function or a lambda that receives the item.',
-               ast.unparse(on_swipe_node)[:100], line)
+               unsupported.describe(on_swipe_node)[:100], line)
     return {
         'icon': str(icon).strip(), 'text': str(text or '').strip(),
         'color': str(color) if color else None, 'keep': bool(keep),
@@ -135,7 +136,7 @@ def parse(transpiler, call, comp):
     reorder = _constant(keywords.get('reorder'), False)
     if reorder is ast:
         refuse('virtual_collection(reorder=...) is True or False, written out.',
-               ast.unparse(keywords['reorder'])[:80], line)
+               unsupported.describe(keywords['reorder'])[:80], line)
     on_reorder = None
     if keywords.get('on_reorder') is not None:
         on_reorder = _callback(transpiler, keywords['on_reorder'],
@@ -143,7 +144,7 @@ def parse(transpiler, call, comp):
         if on_reorder is False:
             refuse('virtual_collection(on_reorder=...) takes a function or a '
                    'lambda that receives the item and its new position.',
-                   ast.unparse(keywords['on_reorder'])[:100], line)
+                   unsupported.describe(keywords['on_reorder'])[:100], line)
         # The position is a number on both sides: an int in the Previewer,
         # a number inside the Java method.
         transpiler.reorder_callbacks = getattr(transpiler, 'reorder_callbacks', set())

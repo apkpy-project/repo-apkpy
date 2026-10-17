@@ -511,6 +511,8 @@ class TheTwoLanguagesAgree(unittest.TestCase):
             lines.append('System.out.println("unit|%d|" + ApkpyKitRules.adUnit(%s, %s));'
                          % (index, literal(text), literal(kind)))
 
+        if not TOOLING:
+            self.skipTest("no JDK on this machine")
         javac, java_bin, _jar = TOOLING
         work = tempfile.mkdtemp(prefix="apkpy-kit-outside-")
         with io.open(os.path.join(work, "ApkpyKitRules.java"), "w", encoding="utf-8") as handle:

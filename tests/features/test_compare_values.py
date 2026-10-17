@@ -223,6 +223,8 @@ class TheJavaAnswersWhatPythonAnswers(unittest.TestCase):
             self.assertIsNotNone(found, line)
             names = "".join('String %s = "%s"; ' % pair for pair in sorted(values.items()))
             blocks.append('{ %sSystem.out.println("%d|" + (%s)); }' % (names, index, found.group(1)))
+        if not TOOLING:
+            self.skipTest("no JDK on this machine")
         javac, java_bin, _jar = TOOLING
         work = tempfile.mkdtemp(prefix="apkpy-compare-")
         with io.open(os.path.join(work, "Harness.java"), "w", encoding="utf-8") as handle:

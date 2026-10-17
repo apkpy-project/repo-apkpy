@@ -365,7 +365,7 @@ WANTED = {
 }
 
 
-@unittest.skipUnless(TOOLING[0], "no JDK on this machine")
+@unittest.skipUnless(TOOLING and TOOLING[0], "no JDK on this machine")
 class ThePhonesClockwork(unittest.TestCase):
 
     @classmethod

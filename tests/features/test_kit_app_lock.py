@@ -122,7 +122,7 @@ class TheRules(unittest.TestCase):
         for key in ("heading", "line", "button"):
             self.assertIn('"%s"' % rules.APP_LOCK_WORDS[key], source)
 
-    @unittest.skipUnless(TOOLING[0], "no JDK on this machine")
+    @unittest.skipUnless(TOOLING and TOOLING[0], "no JDK on this machine")
     def test_the_two_languages_agree(self):
         lines = []
         for index, (text, _wanted) in enumerate(MINUTES):

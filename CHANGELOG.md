@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`apkpy` did not start on Python 3.8 to 3.11.** Two f-strings, one in the
+  Gradle writer and one in the Data Core migrations, used syntax Python
+  accepts from 3.12 on: a backslash, and the enclosing quote, inside the
+  braces. `setup.py` says 3.8 and later, and the suites had only been run on
+  3.13. It has been so since at least 1.5.0. The files ApkPy writes are the
+  same, byte for byte. A new test reads every file the way Python 3.11 does.
+- **On Python 3.8, nine error messages failed with an error of their own**
+  (`ast.unparse` came in 3.9) instead of naming the code they were about.
+- **On Python 3.8 to 3.10, `apkpy.toml` was skipped** unless `tomli` happened
+  to be installed: a warning, and the app was built under the default name
+  and application id. `tomli` is now installed with ApkPy on those versions.
+- **On a Linux desktop with no language set** ("C" or "POSIX"), the
+  Previewer took that for a language. It now treats it as none.
+
 ---
 
 ## [1.13.0] - 2026-10-16

@@ -101,7 +101,9 @@ class RegexCompilerTests(unittest.TestCase):
 
     def test_rejected_constructs_are_not_silently_approximated(self):
         for pattern in (r"(a)\1", r"(?>a)", r"a++", r"(?<=a)b", r"(a)?(?(1)b|c)"):
-            with self.assertRaises(ValueError, msg=pattern):
+            # Before Python 3.11, re itself cannot read (?>a) and a++ and says
+            # so with re.error, which the build reports the same way.
+            with self.assertRaises((ValueError, re.error), msg=pattern):
                 regex.compile_pattern(pattern)
 
     def test_match_is_not_a_fullmatch(self):

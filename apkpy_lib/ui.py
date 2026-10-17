@@ -829,7 +829,10 @@ def _system_language():
         tag = ''
     if not tag:
         tag = os.environ.get('LANG', '') or os.environ.get('LANGUAGE', '')
-    return str(tag).split('.')[0].split(':')[0].replace('_', '-')
+    tag = str(tag).split('.')[0].split(':')[0].replace('_', '-')
+    # "C" and "POSIX" are what a bare Linux box (a CI runner, a container)
+    # answers: no language was chosen, so none is reported.
+    return '' if tag in ('C', 'POSIX') else tag
 
 
 class _Translated(str):
@@ -1012,7 +1015,10 @@ class AppAPI:
         directory = _os.path.dirname(storage._path)
         path = _os.path.join(directory, "apkpy.toml")
         try:
-            import tomllib
+            try:
+                import tomllib
+            except ImportError:      # before Python 3.11: the backport
+                import tomli as tomllib
             with open(path, "rb") as handle:
                 return tomllib.load(handle).get("app", {}) or {}
         except Exception:

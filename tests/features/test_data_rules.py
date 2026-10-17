@@ -325,7 +325,9 @@ class TheGeneratedJavaCarriesTheSameRules(unittest.TestCase):
 
 
 def _tooling():
-    """javac, java and the org.json jar -- or None, and the JVM test skips.
+    """javac, java and the org.json jar -- or None with no JDK, and the JVM
+    tests skip. The jar is None where Gradle never fetched it (a fresh
+    machine, the CI): most tests compile plain Java and need only the JDK.
 
     The jar is found rather than written down: its path carries a Gradle
     cache hash that is different on every machine.
@@ -337,9 +339,7 @@ def _tooling():
     cache = os.path.join(os.path.expanduser("~"), ".gradle", "caches",
                          "modules-2", "files-2.1", "org.json", "json")
     jars = sorted(glob.glob(os.path.join(cache, "*", "*", "json-*.jar")))
-    if not jars:
-        return None
-    return javac, java, jars[-1]
+    return javac, java, (jars[-1] if jars else None)
 
 
 TOOLING = _tooling()
@@ -407,7 +407,7 @@ __HELPERS__
 '''
 
 
-@unittest.skipUnless(TOOLING, "no JDK on this machine, or no org.json jar in the Gradle cache")
+@unittest.skipUnless(TOOLING and TOOLING[2], "no JDK on this machine, or no org.json jar in the Gradle cache")
 class TheEmittedJavaAnswersTheSameWay(unittest.TestCase):
     """Not "does the Java mention the rule" -- "does it decide the same".
 

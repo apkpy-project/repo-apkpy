@@ -2127,7 +2127,7 @@ def _change_lambda(transpiler, node, hint):
             suggestions=['Write it as on_change=lambda value: ...',
                          'Or name a function: on_change=changed, with '
                          'def changed(value): above.'],
-            received=ast.unparse(node)[:90])
+            received=unsupported.describe(node)[:90])
     body = node.body
     if isinstance(body, ast.IfExp):
         # `a() if test else b()` is two statements under an if; a branch that

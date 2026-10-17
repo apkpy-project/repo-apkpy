@@ -75,6 +75,10 @@ class EachButtonKeepsItsOwnValue(unittest.TestCase):
         self.assertNotRegex(java, r"String\.valueOf\([ct]\)")
 
 
+# These read the rewritten module back as text, with ast.unparse(): Python
+# 3.9 and later. What the rewrite does to the app is checked on every
+# version by the classes around this one.
+@unittest.skipUnless(hasattr(ast, "unparse"), "ast.unparse() is Python 3.9 and later")
 class TheDefaultIsWrittenIntoTheBody(unittest.TestCase):
 
     def test_a_literal(self):

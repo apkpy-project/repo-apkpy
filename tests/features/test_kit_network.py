@@ -106,7 +106,7 @@ class TheRules(unittest.TestCase):
         for given, wanted in STATES:
             self.assertEqual(rules.network_state(*given), wanted)
 
-    @unittest.skipUnless(TOOLING[0], "no JDK on this machine")
+    @unittest.skipUnless(TOOLING and TOOLING[0], "no JDK on this machine")
     def test_the_two_languages_agree(self):
         lines = []
         for index, (given, _wanted) in enumerate(KINDS):

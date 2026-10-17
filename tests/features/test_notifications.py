@@ -1,5 +1,6 @@
 """Notification API contract, native generation and headless Preview model."""
 import ast
+import os
 import unittest
 import tempfile
 from pathlib import Path
@@ -154,7 +155,12 @@ worker = background_job("notice", run=task)
             self.assertNotIn('error.txt',files)
             assets=[k for k in files if k.startswith('app/src/main/assets/apkpy_notifications/')]
             self.assertEqual(len(assets),1)
-            self.assertEqual(files[assets[0]],('COPY_FILE',str(image)))
+            kind,copied=files[assets[0]]
+            self.assertEqual(kind,'COPY_FILE')
+            # The same file, however the path is spelled: a Windows temporary
+            # folder can be named short (RUNNER~1) on one side and long on the other.
+            self.assertEqual(os.path.normcase(os.path.realpath(copied)),
+                             os.path.normcase(os.path.realpath(str(image))))
 
     def test_permission_queue_survives_activity_recreation(self):
         files=build()

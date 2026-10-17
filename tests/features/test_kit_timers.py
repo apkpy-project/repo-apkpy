@@ -120,6 +120,8 @@ class TheRules(unittest.TestCase):
         for index, (given, _wanted) in enumerate(GRID):
             lines.append('System.out.println("g%d|" + ApkpyKitRules.timerNext(%dL, %dL, %dL));'
                          % ((index,) + given))
+        if not TOOLING:
+            self.skipTest("no JDK on this machine")
         javac, java_bin, _jar = TOOLING
         work = tempfile.mkdtemp(prefix="apkpy-timer-rules-")
         with io.open(os.path.join(work, "ApkpyKitRules.java"), "w", encoding="utf-8") as handle:

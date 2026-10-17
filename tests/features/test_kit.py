@@ -37,7 +37,7 @@ from test_data_rules import TOOLING
 from test_real_screens import Previewed
 
 JAR, _LEVELS = java_api.find_android_jar()
-needs_sdk = unittest.skipUnless(JAR and TOOLING[0], "no Android SDK or JDK on this machine")
+needs_sdk = unittest.skipUnless(JAR and TOOLING and TOOLING[0], "no Android SDK or JDK on this machine")
 
 HEAD = (
     'from apkpy_lib import *\n'
@@ -484,6 +484,8 @@ class TheJava(unittest.TestCase):
             lines.append('System.out.println("page|%d|" + plain(ApkpyKitRules.document(%s, "b{c:d}")));'
                          % (index, literal(text)))
 
+        if not TOOLING:
+            self.skipTest("no JDK on this machine")
         javac, java_bin, _jar = TOOLING
         work = tempfile.mkdtemp(prefix="apkpy-kit-rules-")
         rules_java = kit.java_source("ApkpyKitRules", "p").replace("package p;", "")

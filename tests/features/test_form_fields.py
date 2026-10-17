@@ -315,6 +315,8 @@ class JavaAnswersTheSameWay(unittest.TestCase):
                 + '\n        '.join(calls) + '\n    }\n}\n')
 
     def test_both_languages_agree(self):
+        if not TOOLING:
+            self.skipTest("no JDK on this machine")
         javac, java_bin, _jar = TOOLING
         work = tempfile.mkdtemp(prefix='apkpy-field-')
         source = os.path.join(work, 'FieldRulesHarness.java')

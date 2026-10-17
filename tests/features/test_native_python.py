@@ -589,6 +589,8 @@ class JavacAgreesTests(unittest.TestCase):
         java = ("public class NativeRulesHarness {\n" + helpers +
                 "\n    public static void main(String[] args) {\n        "
                 + "\n        ".join(calls) + "\n    }\n}\n")
+        if not TOOLING:
+            self.skipTest("no JDK on this machine")
         javac, java_bin, _jar = TOOLING
         work = tempfile.mkdtemp(prefix="apkpy-native-rules-")
         path = os.path.join(work, "NativeRulesHarness.java")

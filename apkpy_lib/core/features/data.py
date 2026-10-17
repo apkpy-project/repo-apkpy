@@ -1089,10 +1089,14 @@ def _migration_java(operation, schema):
         return [f'{indent}db.execSQL({_java_string(sql)});']
     if kind == "rename_index":
         return [f'{indent}renameIndex(db,{_j(operation["name"])},{_j(operation["new_name"])});']
+    # The SQL is built before the f-string: a backslash inside an f-string's
+    # braces is Python 3.12 and later only, and ApkPy runs from 3.8.
     if kind == "drop_index":
-        return [f'{indent}db.execSQL({_java_string("DROP INDEX \"" + operation["name"] + "\"")});']
+        sql = 'DROP INDEX "' + operation["name"] + '"'
+        return [f'{indent}db.execSQL({_java_string(sql)});']
     if kind == "rename_table":
-        return [f'{indent}db.execSQL({_java_string("ALTER TABLE \"" + model_name + "\" RENAME TO \"" + operation["new_name"] + "\"")});']
+        sql = 'ALTER TABLE "' + model_name + '" RENAME TO "' + operation["new_name"] + '"'
+        return [f'{indent}db.execSQL({_java_string(sql)});']
     if kind == "sql":
         params = operation.get("params") or []
         if params:

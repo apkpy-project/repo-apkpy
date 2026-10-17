@@ -105,6 +105,8 @@ class TheNames(unittest.TestCase):
 
         lines = ['System.out.println("%d|" + plain(ApkpyKitRules.fileName(%s)));'
                  % (index, literal(given)) for index, (given, _wanted) in enumerate(NAMES)]
+        if not TOOLING:
+            self.skipTest("no JDK on this machine")
         javac, java_bin, _jar = TOOLING
         work = tempfile.mkdtemp(prefix="apkpy-files-rules-")
         with io.open(os.path.join(work, "ApkpyKitRules.java"), "w", encoding="utf-8") as handle:

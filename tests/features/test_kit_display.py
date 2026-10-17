@@ -79,7 +79,7 @@ class TheRules(unittest.TestCase):
             self.assertIn(wanted, rules.ORIENTATIONS + ("",))
         self.assertEqual(rules.display_orientation(None), "")
 
-    @unittest.skipUnless(TOOLING[0], "no JDK on this machine")
+    @unittest.skipUnless(TOOLING and TOOLING[0], "no JDK on this machine")
     def test_the_two_languages_agree(self):
         def written(text):
             return '"%s"' % text.replace("İ", "\\u0130")

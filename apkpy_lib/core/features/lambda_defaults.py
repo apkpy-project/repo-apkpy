@@ -40,7 +40,8 @@ _SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
 
 def _fail(lam, param, default, reason):
     from ...diagnostics import ApkpyError
-    shown = ast.unparse(default)
+    from ..unsupported import describe
+    shown = describe(default)
     raise ApkpyError(
         "lambda %s=%s: the value of %s can change before the tap" % (param, shown, shown),
         code=CODE,
@@ -224,7 +225,8 @@ def _stable(default, scopes, counts, written):
                             "assigned again)" % default.id)
                 return ""
         return ""   # a builtin, or an import ApkPy resolves by name
-    return "%s is computed, not a name or a literal" % ast.unparse(default)
+    from ..unsupported import describe
+    return "%s is computed, not a name or a literal" % describe(default)
 
 
 def bind(tree):
