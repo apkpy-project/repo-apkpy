@@ -132,14 +132,11 @@ BUILTINS = {
     'enumerate': 'a for over range(len(items))',
     'map': 'a for loop',
     'filter': 'a for loop with an if',
-    'reversed': 'a for over range() counting down',
     'set': 'a list, checking with in before appending',
-    'tuple': 'a list',
     'open': 'files.read(name) / files.write(name, text)',
     'input': 'an input_field() and a button',
     'eval': 'not translatable, and not safe to add',
     'exec': 'not translatable, and not safe to add',
-    'isinstance': 'not translatable: every value is text on the phone',
     'type': 'not translatable: every value is text on the phone',
     # print looks supported and is not: it compiles to a call to a method that
     # was never written, so the build stops on cannot-find-symbol far away.
@@ -537,23 +534,16 @@ def raise_untranslated_condition(node):
                       received=describe(node))
 
 
-def raise_untranslated_format(node, spec):
-    """An f-string format the phone would have ignored.
-
-    The Previewer runs the real f-string, so {n:03d} read 007 on the desktop and
-    7 on the phone. Two screens disagreeing with no word said is the failure
-    this module exists to end.
-    """
+def raise_bad_format(node, spec, error):
+    """A format CPython refuses whatever the value: the Previewer would stop
+    with ValueError, so the build says so instead of the phone."""
     raise_unsupported(
         node,
-        cause=('The format %r is not translated. On the phone the value would '
-               'have appeared unformatted, while the Previewer formatted it.'
-               % (spec,)),
+        cause=('Python refuses the format %r for any value (%s), so the Previewer '
+               'would stop here with ValueError.' % (spec, error)),
         suggestions=[
-            'Use {value:.2f} for a fixed number of decimals -- that format is '
-            'translated.',
-            'For anything else, build the text before the f-string. Leading '
-            'zeros, for example: if n < 10: text = "00" + str(n)',
+            'Check the format against the mini-language: {value:>8.2f} is width 8, '
+            'two decimals; {n:05d} is five digits with zeros.',
         ],
         received=describe(node),
     )
@@ -626,6 +616,26 @@ def raise_untranslated_arithmetic(node):
     )
 
 
+def raise_mixed_sum(node):
+    """A + with text on one side and a number on the other.
+
+    CPython stops there with a TypeError. The phone used to glue the two, so
+    the app worked on the phone and failed in the Previewer, or the other way
+    round with len(name) + 1, which showed "31" for "abc".
+    """
+    raise_unsupported(
+        node,
+        cause=('One side of this + is text and the other is a number. CPython '
+               'stops here with a TypeError; the phone used to glue them.'),
+        suggestions=[
+            'To join them as text, turn the number into text: '
+            '"Total: " + str(n), or an f-string: f"Total: {n}".',
+            'To add them, turn the text into a number: int(value) + 1.',
+        ],
+        received=describe(node),
+    )
+
+
 def raise_untranslated_assignment(stmt):
     """An assignment ApkPy could not write.
 
@@ -671,10 +681,11 @@ def raise_untranslated_assignment(stmt):
         tips = ['Choose the value with a conditional expression, which is '
                 'translated: shown = query if query else "none".',
                 'Or with an if and an else, one assignment in each.']
-    elif isinstance(value, (ast.Tuple, ast.Set)):
-        cause = ('A tuple or a set is not translated as a value. The line '
-                 'would have been left out of the app.')
-        tips = ['Use a list instead: sizes = [1, 2].']
+    elif isinstance(value, ast.Set):
+        cause = ('A set is not translated as a value: there are no sets on '
+                 'the phone. The line would have been left out of the app.')
+        tips = ['Use a list instead: sizes = [1, 2]. To drop repeats, keep '
+                'an item only if it is not in the list yet.']
     else:
         cause = ('This value is not translated when it is assigned to a name. '
                  'The line would have been left out of the app, and the name '
@@ -687,32 +698,35 @@ def raise_untranslated_assignment(stmt):
 
 def raise_untranslated_loop(stmt):
     """A for loop ApkPy would have left out, or run over nothing."""
-    iterable = stmt.iter
-    if not isinstance(stmt.target, ast.Name):
-        cause = ('Unpacking in a for loop is not translated. The whole loop '
-                 'would have been left out of the app without a word.')
-        tips = ['Loop over the items and read each part by position: '
-                'for pair in pairs:, then name = pair[0].',
-                'For a position, loop over range(len(items)) and read '
-                'items[i].']
-    elif stmt.orelse:
-        cause = ('A for loop with an else block is not translated. The loop '
-                 'would have been left out of the app, else and all.')
-        tips = ['Keep a flag: found = "no" before the loop, found = "yes" '
-                'inside it, then test found after it.']
-    elif isinstance(iterable, ast.Dict):
-        cause = ('Looping over a dict is not translated. On the phone the loop '
-                 'would have run no times, while the Previewer ran it.')
-        tips = ['Keep the keys in a list and loop over that list.']
+    iterable = getattr(stmt, 'iter', None)
+    if stmt.orelse:
+        # Inside a function the else is rewritten as a flag before it gets
+        # here (features/loop_else.py); the top level of the file is read as
+        # the app's layout, and is not.
+        cause = ('A loop with an else block at the top level of the file is not '
+                 'translated. Inside a function it is: the else runs when the '
+                 'loop ends without a break, as in Python.')
+        tips = ['Move the loop into a function and call it.']
     elif isinstance(iterable, ast.Set):
         cause = ('Looping over a set is not translated. On the phone the loop '
                  'would have run no times, while the Previewer ran it.')
         tips = ['Use a list instead: for size in [1, 2]:']
+    elif isinstance(stmt.target, (ast.Tuple, ast.List)) and all(
+            isinstance(e, ast.Name) for e in stmt.target.elts):
+        # Inside a function this is rewritten before it gets here
+        # (features/unpacking.py); the top level of the file is read as the
+        # app's layout, and is not.
+        cause = ('Unpacking in a for loop at the top level of the file is not '
+                 'translated. Inside a function it is: for a, b in pairs:, '
+                 'for k, v in d.items():, enumerate() and zip().')
+        tips = ['Move the loop into a function and call it.',
+                'Or loop over the items and read each part by position: '
+                'for pair in pairs:, then name = pair[0].']
     else:
-        cause = ('Looping over the letters of a text is not translated. On the '
-                 'phone the loop would have run no times, while the Previewer '
-                 'ran it.')
-        tips = ['Loop over positions and slice: for i in range(len(text)):, '
-                'then letter = text[i:i + 1].']
+        cause = ('Unpacking in a for loop into something that is not a name is '
+                 'not translated: names, one level deep, are (for a, b in pairs:, '
+                 'for k, v in d.items():).')
+        tips = ['Loop over the items and read each part by position: '
+                'for pair in pairs:, then name = pair[0].']
     raise_unsupported(stmt, cause=cause, suggestions=tips,
                       received=_statement_source(stmt))

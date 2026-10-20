@@ -191,7 +191,7 @@ class WhatIsBuilt(unittest.TestCase):
         files = _built('timer.every(1, tick)', TICK)
         self.assertEqual(sorted(name for name in files if name.startswith("java/Apkpy")),
                          ["java/ApkpyKit.java", "java/ApkpyKitRules.java",
-                          "java/ApkpyTimers.java", "java/ApkpyWeight.java"])
+                          "java/ApkpyTimers.java", "java/ApkpyValues.java", "java/ApkpyWeight.java"])
         manifest = files["AndroidManifest.xml"]
         self.assertNotIn("uses-permission", manifest)
         self.assertNotIn("ApkpyKitActivity", manifest)

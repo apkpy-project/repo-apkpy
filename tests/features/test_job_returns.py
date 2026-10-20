@@ -150,8 +150,8 @@ class TheActivityCountsTryAsReturning(unittest.TestCase):
             '        return "ok"\n'
             '    except Exception as e:\n'
             '        return "bad"\n')
-        self.assertFalse(java.rstrip().endswith('return "";\n    }'), java)
-        self.assertNotIn('        return "";', java)
+        self.assertFalse(java.rstrip().endswith('return ApkpyValues.NONE;\n    }'), java)
+        self.assertNotIn('        return ApkpyValues.NONE;', java)
 
     def test_a_try_where_only_the_body_returns_still_closes(self):
         java = _callback(
@@ -159,7 +159,8 @@ class TheActivityCountsTryAsReturning(unittest.TestCase):
             '        return "ok"\n'
             '    except Exception as e:\n'
             '        storage.set("k", "0")\n')
-        self.assertIn('        return "";', java)
+        # Python returns None when it falls off the end.
+        self.assertIn('        return ApkpyValues.NONE;', java)
 
     def test_an_if_else_that_returns_was_already_right(self):
         java = _callback(
@@ -167,7 +168,7 @@ class TheActivityCountsTryAsReturning(unittest.TestCase):
             '        return "on"\n'
             '    else:\n'
             '        return "off"\n')
-        self.assertNotIn('        return "";', java)
+        self.assertNotIn('        return ApkpyValues.NONE;', java)
 
 
 if __name__ == '__main__':

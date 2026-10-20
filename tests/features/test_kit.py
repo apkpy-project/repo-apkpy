@@ -196,7 +196,7 @@ class WhatIsWritten(unittest.TestCase):
         files = _built("haptics.tap()")
         classes = sorted(name for name in files if name.startswith("java/Apkpy"))
         self.assertEqual(classes, ["java/ApkpyHaptics.java", "java/ApkpyKit.java",
-                                   "java/ApkpyKitRules.java", "java/ApkpyWeight.java"])
+                                   "java/ApkpyKitRules.java", "java/ApkpyValues.java", "java/ApkpyWeight.java"])
         java = files["java/Screen_homeActivity.java"]
         self.assertNotIn("haptics_vibrate", java)
         manifest = files["AndroidManifest.xml"]

@@ -42,6 +42,16 @@ from .features import modules as modules_feature
 from .features import ui_functions as ui_functions_feature
 from .features import row_adapter as row_adapter_feature
 from .features import lambda_defaults as lambda_defaults_feature
+from .features import call_defaults as call_defaults_feature
+from .features import unpacking as unpacking_feature
+from .features import loop_else as loop_else_feature
+from .features import tuples as tuples_feature
+from .features import comprehensions as comprehensions_feature
+from .features import nested_functions as nested_feature
+from .features import errors as errors_feature
+from .features import basics as basics_feature
+from .features import auth_oidc as auth_oidc_feature
+from .features import item_assignment as item_feature
 from .features import notifications as notifications_feature
 from .features import camera as camera_feature
 from .features import camera_view as camera_view_feature
@@ -143,6 +153,15 @@ _MUTATED_LISTS = [{}]
 # Module-level list literals by name, so `x in NAMES` asks a list rather than
 # searching the text of its JSON. Filled once the module has been visited.
 _MODULE_LISTS = [{}]
+# Module-level lists, tuples and dicts written out as literals, as the JSON
+# text of their Java field. Without the field, len(ITEMS), ITEMS[0] or
+# PRICES["tea"] inside a function named something no Java class declared, and
+# the build stopped in Gradle, on a file nobody wrote.
+_MODULE_STRUCT_TEXT = [{}]
+# What each module-level name holds, when the source says: 'list', 'dict' or
+# 'text'. Read by _static_kind, so that `for k in PRICES` walks keys and
+# `for ch in NAME` walks characters instead of nothing.
+_MODULE_KINDS = [{}]
 # Parameters of the function being written that hold a list as JSON text --
 # the selection of chips(multiple=True). `x in selected` asks the list.
 _CUR_LIST_ARGS = [set()]
@@ -158,6 +177,29 @@ _ELSEWHERE_EMPTY = [set()]
 _NUMERIC_CONSTS = [{}]
 # O mesmo, mas com o texto do literal, para sair como campo Java.
 _NUMERIC_CONST_TEXT = [{}]
+# Module-level names that a function rebinds after `global NAME`, as
+# name -> (starting value as text, is_float or None for anything not a number).
+# One value per process, like a module variable in Python: it lives in
+# ApkpyReactiveState, beside the module lists the app appends to. Before, the
+# function wrote `String COUNT = COUNT + 1;` and javac stopped the build.
+_GLOBALS = [{}]
+# Module-level names that only ever hold None, True or False (DEBUG = False):
+# name -> "NONE" / "TRUE" / "FALSE". Each is a field pointing at ApkpyValues.
+# Before, nothing declared them and the build died on cannot-find-symbol.
+_SINGLETON_CONSTS = [{}]
+# True while the body of a function that answers a value is written: a bare
+# `return` there is `return ApkpyValues.NONE;`, not the `return;` javac refuses.
+_RETURNS_VALUE = [False]
+# Names the module imports (storage, https, clipboard, ...) and the names it
+# gives a state(): their get()/keys()/copy() are the app's calls, not a dict's.
+_IMPORTED_NAMES = [set()]
+_STATE_NAMES = [set()]
+# Every name the module gives a value to somewhere (assignment, parameter,
+# for). requests.get(url) with requests never assigned is not a dict.
+_BOUND_NAMES = [set()]
+# Funcoes da app em que todos os return sao numeros: nome -> is_float. Sem
+# isto, twice(n) + 1 colava os dois textos ("101" para n = 5).
+_NUMERIC_RETURNS = [{}]
 
 
 # ── math ─────────────────────────────────────────────────────────────────────
@@ -469,6 +511,332 @@ def _mutated_list_read(name):
     seed = _MUTATED_LISTS[0].get(name, "[]")
     return 'ApkpyReactiveState.get("%s", "%s")' % (
         _mutated_list_key(name), _escape_java_literal(seed))
+
+
+def _global_key(name):
+    """The key of a `global` name in the shared store. A module list the app
+    also appends to keeps the key it already had, so both write one list."""
+    if name in _MUTATED_LISTS[0]:
+        return _mutated_list_key(name)
+    return "__apkpy_global_" + name
+
+
+class _SingletonSeed(str):
+    """The starting value of a global that is None, True or False.
+
+    Read back as ApkpyValues.NONE / TRUE / FALSE, not as the words: the words
+    "False" are not empty, and `if ON:` would be true on the first tap.
+    """
+
+
+def _singleton_name(value):
+    if value is None:
+        return "NONE"
+    return "TRUE" if value else "FALSE"
+
+
+def _imported_names(tree):
+    found = set()
+    for node in getattr(tree, 'body', []):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            for alias in node.names:
+                found.add((alias.asname or alias.name).split('.')[0])
+    return found
+
+
+def _bound_names(tree):
+    found = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+            found.add(node.id)
+        elif isinstance(node, ast.arg):
+            found.add(node.arg)
+    return found
+
+
+def _dict_receiver(node):
+    """True when node.get()/keys()/... is a dict's method, not the app's call."""
+    if isinstance(node, ast.Name):
+        return (node.id in _BOUND_NAMES[0] and node.id not in _IMPORTED_NAMES[0]
+                and node.id not in _STATE_NAMES[0])
+    return isinstance(node, (ast.Subscript, ast.Call, ast.Dict))
+
+
+_DICT_VALUE_METHODS = ('keys', 'values', 'items')
+
+
+def _dict_method_java(node, val_to_java):
+    """d.get(k, padrao), d.keys(), d.values(), d.items(), x.copy() -- or None."""
+    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+            and not node.keywords and _dict_receiver(node.func.value)):
+        return None
+    attr, args = node.func.attr, node.args
+    if attr == 'get' and 1 <= len(args) <= 2:
+        fallback = _text_value_java(args[1], val_to_java) if len(args) > 1 else "ApkpyValues.NONE"
+        return "_apkpyDictGetOr(String.valueOf(%s), String.valueOf(%s), %s)" % (
+            val_to_java(node.func.value), val_to_java(args[0]), fallback)
+    if attr in _DICT_VALUE_METHODS and not args:
+        helper = {'keys': '_apkpyKeyList', 'values': '_apkpyValues', 'items': '_apkpyPairs'}[attr]
+        return "%s(String.valueOf(%s))" % (helper, val_to_java(node.func.value))
+    if attr == 'copy' and not args:
+        # The text is the value: a copy is the same text, and the two can no
+        # longer reach each other.
+        return "String.valueOf(%s)" % val_to_java(node.func.value)
+    return None
+
+
+def _functions_used_as_values(tree):
+    """Functions of the module whose call is used as a value somewhere.
+
+    str(log(x)) uses the answer of a function that never says return: Python
+    gives None. The Java method was void and the call could not compile.
+    A call on its own line, or as the body of a lambda handed to a button,
+    does not count: nothing reads it.
+    """
+    defs = {node.name for node in getattr(tree, 'body', []) if isinstance(node, ast.FunctionDef)}
+    ignored = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Expr):
+            ignored.add(id(node.value))
+        elif isinstance(node, ast.Lambda):
+            ignored.add(id(node.body))
+    return {node.func.id for node in ast.walk(tree)
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+            and node.func.id in defs and id(node) not in ignored}
+
+
+def _module_singletons(tree):
+    """Module-level names whose every value is None, True or False."""
+    found, other = {}, set()
+    for node in getattr(tree, 'body', []):
+        if isinstance(node, ast.Assign):
+            targets, value = node.targets, node.value
+        elif isinstance(node, ast.AnnAssign) and node.value is not None:
+            targets, value = [node.target], node.value
+        else:
+            continue
+        for target in targets:
+            if not isinstance(target, ast.Name):
+                continue
+            if isinstance(value, ast.Constant) and (value.value is None
+                                                    or isinstance(value.value, bool)):
+                found[target.id] = _singleton_name(value.value)
+            else:
+                other.add(target.id)
+    return {name: kind for name, kind in found.items() if name not in other}
+
+
+def _singleton_fields():
+    return ['    private static final String %s = ApkpyValues.%s;' % (name, kind)
+            for name, kind in _SINGLETON_CONSTS[0].items()]
+
+
+def _global_read(name):
+    """Read a `global` name, starting from its module-level value."""
+    if name in _MUTATED_LISTS[0]:
+        return _mutated_list_read(name)
+    seed = _GLOBALS[0][name][0]
+    if isinstance(seed, _SingletonSeed):
+        return 'ApkpyReactiveState.get("%s", ApkpyValues.%s)' % (_global_key(name), seed)
+    return 'ApkpyReactiveState.get("%s", "%s")' % (
+        _global_key(name), _escape_java_literal(seed))
+
+
+def _queue_global_write(cmds, since, stmt):
+    """After NAME = ... in a function that said `global NAME`, store the value.
+
+    Only when the statement wrote the name as a local (a command with that
+    'var'): the Java local holds the new value, and the store gets it next.
+    """
+    if isinstance(stmt, ast.Assign) and len(stmt.targets) == 1 \
+            and isinstance(stmt.targets[0], ast.Name):
+        name = stmt.targets[0].id
+    elif isinstance(stmt, (ast.AugAssign, ast.AnnAssign)) \
+            and isinstance(stmt.target, ast.Name):
+        name = stmt.target.id
+    else:
+        return
+    if name not in _GLOBALS[0]:
+        return
+    if any(isinstance(c, dict) and c.get('var') == name and c.get('type') != 'for_loop'
+           for c in cmds[since:]):
+        cmds.append({'type': 'global_sync', 'name': name})
+
+
+def _global_sync_java(name):
+    return 'ApkpyReactiveState.set("%s", String.valueOf(%s));' % (_global_key(name), name)
+
+
+def _own_nodes(fn):
+    """The nodes of a function's own body, without the functions inside it."""
+    stack = list(fn.body)
+    while stack:
+        node = stack.pop()
+        yield node
+        for child in ast.iter_child_nodes(node):
+            if not isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef,
+                                      ast.Lambda, ast.ClassDef)):
+                stack.append(child)
+
+
+def _function_bindings(fn):
+    """(name, new value or None, statement) for each name *fn* binds.
+
+    The value is None where the name is bound some other way than = and +=:
+    a for loop, unpacking, with ... as, a parameter.
+    """
+    args = fn.args
+    for arg in (list(getattr(args, 'posonlyargs', [])) + list(args.args)
+                + list(args.kwonlyargs) + [a for a in (args.vararg, args.kwarg) if a]):
+        yield arg.arg, None, fn
+    for node in _own_nodes(fn):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and len(node.targets) == 1:
+                    yield target.id, node.value, node
+                    continue
+                for sub in ast.walk(target):
+                    if isinstance(sub, ast.Name) and isinstance(sub.ctx, ast.Store):
+                        yield sub.id, None, node
+        elif isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
+            yield node.target.id, ast.BinOp(
+                left=ast.Name(id=node.target.id, ctx=ast.Load()),
+                op=node.op, right=node.value), node
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) \
+                and node.value is not None:
+            yield node.target.id, node.value, node
+        else:
+            targets = []
+            if isinstance(node, (ast.For, ast.AsyncFor, ast.comprehension)):
+                targets.append(node.target)
+            elif isinstance(node, (ast.With, ast.AsyncWith)):
+                targets.extend(item.optional_vars for item in node.items
+                               if item.optional_vars is not None)
+            elif isinstance(node, getattr(ast, 'NamedExpr', ())):
+                targets.append(node.target)
+            elif isinstance(node, ast.ExceptHandler) and node.name:
+                yield node.name, None, node
+            for target in targets:
+                for sub in ast.walk(target):
+                    if isinstance(sub, ast.Name):
+                        yield sub.id, None, node
+
+
+def _prescan_globals(tree, numeric_names, returns=None, numeric_params=None):
+    """The module names a function rebinds after `global NAME`.
+
+    Returns {name: (starting value as text, is_float or None)}. The kind is a
+    number only when the start and every new value are numbers; one value
+    that is not and the name is text, like any other name.
+    """
+    module_values = {}
+    for node in getattr(tree, 'body', []):
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 \
+                and isinstance(node.targets[0], ast.Name):
+            module_values[node.targets[0].id] = node
+    functions = [node for node in ast.walk(tree)
+                 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))]
+    declared = {}
+    for fn in functions:
+        names = set()
+        for node in _own_nodes(fn):
+            if isinstance(node, ast.Global):
+                names.update(node.names)
+        declared[fn] = names
+    bindings = {fn: list(_function_bindings(fn)) for fn in functions}
+
+    rebound = {name for fn in functions for name, _, stmt in bindings[fn]
+               if name in declared[fn] and stmt is not fn}
+    if not rebound:
+        return {}
+
+    found, values = {}, {}
+    for name in sorted(rebound):
+        for fn in functions:
+            for bound, value, stmt in bindings[fn]:
+                if bound != name:
+                    continue
+                if name not in declared[fn]:
+                    unsupported.raise_unsupported(
+                        stmt,
+                        cause=('%s is a module variable that another function '
+                               'changes with global %s. Here the same name is '
+                               'a new local one, which ApkPy cannot keep apart '
+                               'from the module variable.' % (name, name)),
+                        suggestions=['Add global %s at the top of %s(), or give '
+                                     'the local a different name.' % (name, fn.name)],
+                        received='%s in %s()' % (name, fn.name),
+                    )
+                if value is None:
+                    unsupported.raise_unsupported(
+                        stmt,
+                        cause=('After global %s, ApkPy translates %s = value and '
+                               '%s += value. This statement gives it a new value '
+                               'another way.' % (name, name, name)),
+                        suggestions=['Assign it on a line of its own: %s = ...' % name],
+                    )
+                values.setdefault(name, []).append((fn, value))
+        start = module_values.get(name)
+        if start is None:
+            seed, kind = "", None
+        else:
+            try:
+                literal = ast.literal_eval(start.value)
+            except (ValueError, TypeError, SyntaxError):
+                literal = start
+            if literal is None or isinstance(literal, bool):
+                seed, kind = _SingletonSeed(_singleton_name(literal)), None
+                literal = True    # written out: not refused below
+            elif isinstance(literal, int):
+                seed, kind = str(literal), False
+            elif isinstance(literal, float):
+                seed, kind = repr(literal), True
+            elif isinstance(literal, str):
+                seed, kind = literal, None
+            elif isinstance(literal, (list, tuple, dict)):
+                try:
+                    seed = json.dumps(literal, ensure_ascii=False, allow_nan=False,
+                                      separators=(',', ':'))
+                except (TypeError, ValueError):
+                    seed = None
+                kind = None
+                if seed is None:
+                    literal = start
+            if literal is start or literal is None:
+                unsupported.raise_unsupported(
+                    start,
+                    cause=('%s changes inside a function (global %s), so its '
+                           'starting value has to be written out: a number, '
+                           'text, True or False, or a list or dict of those.'
+                           % (name, name)),
+                    suggestions=['Start it with a value: %s = 0, or %s = "".'
+                                 % (name, name)],
+                )
+        found[name] = (seed, kind)
+
+    # A new value can read another global (TOTAL = TOTAL + COUNT): settle.
+    for _ in range(4):
+        changed = False
+        known = dict(numeric_names or {})
+        known.update({n: k for n, (_, k) in found.items() if k is not None})
+        for name, pairs in values.items():
+            seed, kind = found[name]
+            if kind is None:
+                continue
+            for fn, value in pairs:
+                scope = dict(known)
+                scope.update((numeric_params or {}).get(fn.name) or {})
+                new = _numeric_arg_kind(value, scope, returns)
+                if new is None:
+                    kind = None
+                    break
+                kind = bool(kind or new)
+            if kind != found[name][1]:
+                found[name] = (seed, kind)
+                changed = True
+        if not changed:
+            break
+    return found
 
 def _parse_radius(style_dict):
     """The largest corner, for code that draws one radius (see _parse_radii)."""
@@ -1171,11 +1539,153 @@ def _parse_margins_to_xml(style_dict):
 _BOOL_VAR_NAMES = ('granted', 'is_granted', 'is_checked', 'success')
 
 
-def _gen_if_var_condition(var_name, extra_bool_names=()):
-    """Devolve a condição Java (com parênteses) para `if <var>:` em Python."""
-    if var_name in _BOOL_VAR_NAMES or var_name in extra_bool_names:
-        return f"({var_name})"
-    return f"({var_name} != null && !{var_name}.isEmpty())"
+def _text_value_java(node, val_to_java):
+    """A value as the text the phone keeps it as.
+
+    None, True and False are ApkpyValues.NONE / TRUE / FALSE: they read like
+    Python's str() of them, and they are not the same object as the words a
+    person typed, so `is None` and `if flag:` can tell them apart.
+    """
+    if isinstance(node, ast.Constant):
+        if node.value is None:
+            return "ApkpyValues.NONE"
+        if isinstance(node.value, bool):
+            return "ApkpyValues.TRUE" if node.value else "ApkpyValues.FALSE"
+    return "String.valueOf(%s)" % val_to_java(node)
+
+
+def _truthy_java(node, val_to_java):
+    """Python's `if x:` for a value, as a Java condition.
+
+    A number the source proves is false at zero. A list or dict is false when
+    empty. Anything else is false when it is None, False or empty text -- the
+    one thing every value on the phone can be asked. The text "0" or "[]" a
+    person typed stays true, as in CPython.
+    """
+    numeric = getattr(val_to_java, 'numeric', None)
+    known = numeric(node) if numeric is not None else None
+    if known is not None:
+        return "((%s) != 0)" % known[0]
+    if _kind_from(val_to_java, node) in ('list', 'dict'):
+        return "(_apkpyLen(String.valueOf(%s)) > 0)" % val_to_java(node)
+    return "_apkpyTruthy(%s)" % val_to_java(node)
+
+
+# isinstance(x, T): answered when the app is built where the source says what
+# x is, and by ApkpyValues.isInstance when it does not -- the type the rest of
+# the app reads the value as.
+_ISINSTANCE_NAMES = ('bool', 'int', 'float', 'str', 'list', 'dict', 'tuple')
+
+
+def _is_isinstance(node):
+    return (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+            and node.func.id == 'isinstance')
+
+
+def _isinstance_types(node):
+    """The types isinstance(x, ...) asks about, by Python's names."""
+    if len(node.args) != 2 or node.keywords or any(isinstance(a, ast.Starred) for a in node.args):
+        unsupported.raise_unsupported(
+            node, cause='isinstance() takes a value and a type, or a tuple of types.',
+            suggestions=['isinstance(value, (int, float))'])
+    spec = node.args[1]
+    items = spec.elts if isinstance(spec, ast.Tuple) else [spec]
+    names = []
+    for item in items:
+        if isinstance(item, ast.Name) and item.id in _ISINSTANCE_NAMES:
+            names.append(item.id)
+        elif (isinstance(item, ast.Call) and isinstance(item.func, ast.Name)
+              and item.func.id == 'type' and len(item.args) == 1 and not item.keywords
+              and isinstance(item.args[0], ast.Constant) and item.args[0].value is None):
+            names.append('NoneType')
+        else:
+            unsupported.raise_unsupported(
+                item,
+                cause=('isinstance() is translated for str, int, float, bool, list, '
+                       'dict, tuple and type(None). %s is none of them.'
+                       % unsupported.describe(item)),
+                suggestions=['Ask about one of those types, or test the value itself: '
+                             'if value is None:'])
+    return names
+
+
+def _static_pytype(node, val_to_java, bool_names=()):
+    """The Python type of *node* when the source says it, else None."""
+    if isinstance(node, ast.Constant):
+        value = node.value
+        if value is None:
+            return 'NoneType'
+        for name, kind in (('bool', bool), ('int', int), ('float', float), ('str', str)):
+            if isinstance(value, kind):
+                return name
+        return None
+    if tuples_feature.is_tuple(node):
+        return 'tuple'
+    if isinstance(node, ast.Compare) or _is_isinstance(node) \
+            or (isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not)) \
+            or (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                and node.func.id == 'bool'):
+        return 'bool'
+    if isinstance(node, ast.Name) and (node.id in _BOOL_VAR_NAMES or node.id in bool_names):
+        return 'bool'
+    numeric = getattr(val_to_java, 'numeric', None)
+    known = numeric(node) if numeric is not None else None
+    if known is not None:
+        return 'float' if known[1] else 'int'
+    return {'list': 'list', 'dict': 'dict', 'text': 'str'}.get(_kind_from(val_to_java, node))
+
+
+def _isinstance_java(node, val_to_java, bool_names=()):
+    """isinstance(x, T) as a Java boolean."""
+    names = _isinstance_types(node)
+    value = node.args[0]
+    known = _static_pytype(value, val_to_java, bool_names)
+    if known is not None:
+        # bool is a kind of int in Python: isinstance(True, int) is True.
+        hit = known in names or (known == 'bool' and 'int' in names)
+        if _reads_the_same_twice(value):
+            return 'true' if hit else 'false'
+        # A call is still made, as Python makes it, for what else it does.
+        seen = "ApkpyValues.evaluated(%s)" % val_to_java(value)
+        return seen if hit else "!" + seen
+    return 'ApkpyValues.isInstance(String.valueOf(%s), "%s")' % (
+        val_to_java(value), ",".join(names))
+
+
+_SINGLETONS = (type(None), bool)
+
+
+def _identity_java(left, right, negate, val_to_java, bool_names=()):
+    """`x is None`, `x is True`, `x == False`: compared by identity."""
+    value = right.value
+    if isinstance(left, ast.Name) and (left.id in _BOOL_VAR_NAMES or left.id in bool_names) \
+            and isinstance(value, bool):
+        # A boolean the generator types as a Java boolean (success, granted).
+        test = left.id if value else "!" + left.id
+        return ("!(%s)" % test) if negate else "(%s)" % test
+    ref = val_to_java(left)
+    if value is None:
+        test = "_apkpyIsNone(%s)" % ref
+    else:
+        test = "(%s == %s)" % (ref, "ApkpyValues.TRUE" if value else "ApkpyValues.FALSE")
+    return ("!" + test) if negate else test
+
+
+def _parenthesized(cond):
+    """cond with one pair of parentheses around it, for `if (...)`.
+
+    `(success)` stays as it is; `_apkpyTruthy(x)` gains them.
+    """
+    if cond.startswith("(") and cond.endswith(")"):
+        depth = 0
+        for i, ch in enumerate(cond):
+            depth += ch == "("
+            depth -= ch == ")"
+            if depth == 0 and i < len(cond) - 1:
+                break
+        else:
+            return cond
+    return "(%s)" % cond
 
 
 # Operadores de comparação suportados em `if`. `in` é tratado à parte (if_in).
@@ -1188,7 +1698,10 @@ _CMP_OPS = {
 def _written_comparand(node):
     """Whether the right side of a comparison is a value written in the
     source -- text, a number, True or False -- which is all if_compare reads."""
-    return isinstance(node, ast.Constant) and isinstance(node.value, (str, int, float))
+    # True and False are compared as the app's own values (_identity_java),
+    # not as the words "true"/"false".
+    return isinstance(node, ast.Constant) and isinstance(node.value, (str, int, float)) \
+        and not isinstance(node.value, bool)
 
 
 def _if_compare_cond(c, val_to_java):
@@ -1273,7 +1786,626 @@ def _membership_java(needle, haystack, val_to_java):
         return "_apkpyListHas(%s, %s)" % (val_to_java(haystack), want)
     if isinstance(haystack, ast.Name) and haystack.id in _CUR_LIST_ARGS[0]:
         return "_apkpyListHas(String.valueOf(%s), %s)" % (haystack.id, want)
+    # A dict or a list the source names: "x" in PRICES searched the JSON text,
+    # and found values and pieces of keys as well.
+    kind = _kind_from(val_to_java, haystack)
+    if kind == 'dict':
+        return "_apkpyHasKey(String.valueOf(%s), %s)" % (val_to_java(haystack), want)
+    if kind == 'list':
+        return "_apkpyListHas(String.valueOf(%s), %s)" % (val_to_java(haystack), want)
     return "String.valueOf(%s).contains(%s)" % (val_to_java(haystack), want)
+
+
+# String methods whose answer is text, whatever they are called on.
+_TEXT_METHODS = frozenset({
+    'upper', 'lower', 'strip', 'lstrip', 'rstrip', 'replace', 'title',
+    'capitalize', 'join', 'zfill', 'ljust', 'rjust', 'center', 'swapcase',
+    'casefold',
+})
+
+
+def _static_kind(node, local_kinds=None):
+    """'list', 'dict' or 'text' when the source says what *node* holds; else None.
+
+    On the phone every value is text, and a list or a dict is the JSON text of
+    one. Python knows which is which from the object; the generated Java can
+    only know it from the source, and that is where this reads it -- never
+    from the running value. Where it answers None the caller keeps the
+    behaviour that does not depend on knowing.
+
+    *local_kinds* maps the names assigned in the function being written; a name
+    reassigned to something else is recorded as 'other', so a module-level
+    name of the same spelling is not consulted by mistake.
+    """
+    if isinstance(node, (ast.List, ast.Tuple, ast.ListComp)):
+        return 'list'
+    if isinstance(node, (ast.Dict, ast.DictComp)):
+        return 'dict'
+    if isinstance(node, ast.JoinedStr):
+        return 'text'
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mod) \
+            and isinstance(node.left, ast.Constant) and isinstance(node.left.value, str):
+        return 'text'
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'format':
+        return 'text'
+    if isinstance(node, ast.Constant):
+        return 'text' if isinstance(node.value, str) else None
+    if _is_split_call(node):
+        return 'list'
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+            and isinstance(node.func.value, ast.Name) and node.func.value.id == 'auth' \
+            and node.func.attr == 'claims':
+        return 'dict'
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        if node.func.id in ('str', 'chr'):
+            return 'text'
+        if node.func.id in ('list', 'sorted', 'reversed', unpacking_feature.UNPACK):
+            return 'list'
+        if node.func.id in (item_feature.SETITEM, item_feature.DELITEM) and node.args:
+            return _static_kind(node.args[0], local_kinds)
+        if node.func.id == item_feature.LISTOP and len(node.args) >= 2:
+            op = node.args[0].value
+            if op == 'popvalue':
+                return None                  # the item: anything
+            if op == 'update':
+                return 'dict'
+            if op in ('pop', 'clear'):
+                return _static_kind(node.args[1], local_kinds)    # a dict too
+            return 'list'
+        if node.func.id == 'dict':
+            return 'dict'
+        return None
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+            and node.func.attr in _DICT_VALUE_METHODS and not node.args \
+            and _dict_receiver(node.func.value):
+        return 'list'
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+            and node.func.attr == 'copy' and not node.args \
+            and _dict_receiver(node.func.value):
+        return _static_kind(node.func.value, local_kinds)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+            and node.func.attr in _TEXT_METHODS \
+            and not (isinstance(node.func.value, ast.Name)
+                     and node.func.value.id in ('re', 'os', 'path')):
+        return 'text'
+    if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Mult)):
+        left = _static_kind(node.left, local_kinds)
+        right = _static_kind(node.right, local_kinds)
+        if 'text' in (left, right):
+            return 'text'
+        if left == 'list' or right == 'list':
+            return 'list'
+        return None
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+            and node.func.attr == 'splitlines':
+        return 'list'
+    if isinstance(node, ast.Name):
+        if local_kinds is not None and node.id in local_kinds:
+            kind = local_kinds[node.id]
+            return kind if kind in ('list', 'dict', 'text') else None
+        return _MODULE_KINDS[0].get(node.id)
+    if isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Slice):
+        kind = _static_kind(node.value, local_kinds)
+        return kind if kind in ('list', 'text') else None
+    return None
+
+
+def _module_kinds(transpiler, tree):
+    """What the module-level names hold, as far as the source says.
+
+    A name bound at module level to two different kinds is left out: guessing
+    between them is the mistake worth refusing.
+    """
+    seen = {}
+
+    def note(name, kind):
+        if name in seen and seen[name] != kind:
+            seen[name] = None
+        else:
+            seen[name] = kind
+
+    for node in tree.body:
+        if not (isinstance(node, ast.Assign) and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)):
+            continue
+        name = node.targets[0].id
+        kind = _static_kind(node.value)
+        note(name, kind)
+    for name in getattr(transpiler, 'mutated_lists', ()) or ():
+        note(name, 'list')
+    return {name: kind for name, kind in seen.items() if kind}
+
+
+def _module_struct_text(tree, skip=()):
+    """Module-level lists, tuples and dicts written out, as their JSON text.
+
+    Only literals: a value with a name or a call inside is built when the app
+    runs, and has no text to put in a field. A tuple is a JSON array, as it is
+    everywhere else on the phone. The last binding of a name wins, as in
+    Python.
+    """
+    found = {}
+    for node in tree.body:
+        if not (isinstance(node, ast.Assign) and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name)):
+            continue
+        name = node.targets[0].id
+        if name in skip:
+            continue
+        if not isinstance(node.value, (ast.List, ast.Tuple, ast.Dict)):
+            found.pop(name, None)
+            continue
+        try:
+            value = ast.literal_eval(node.value)
+            text = json.dumps(value, ensure_ascii=False, allow_nan=False,
+                              separators=(',', ':'))
+        except (ValueError, TypeError, SyntaxError):
+            found.pop(name, None)
+            continue
+        found[name] = text
+    return found
+
+
+def _kind_from(val_to_java, node):
+    """_static_kind through the generator that knows the local names."""
+    kind_of = getattr(val_to_java, 'kind_of', None)
+    return kind_of(node) if kind_of is not None else _static_kind(node)
+
+
+def _slice_java(node, val_to_java):
+    """``value[a:b]``: a slice of text, or of a list, with Python's edges.
+
+    A list is JSON text on the phone, and slicing it as text cut the JSON
+    itself: ``items[1:]`` gave ``"a","b"]``. The source says which it is where
+    it can; otherwise _apkpySliceAny looks at the JSON shape.
+    """
+    slice_node = node.slice
+    lo = val_to_java(slice_node.lower) if slice_node.lower is not None else '""'
+    hi = val_to_java(slice_node.upper) if slice_node.upper is not None else '""'
+    kind = _kind_from(val_to_java, node.value)
+    if kind == 'dict':
+        unsupported.raise_unsupported(
+            node, cause='A dict has no order to slice, and Python stops with TypeError here.')
+    if slice_node.step is not None:
+        # text[::-1], items[::2]: Python's slice.indices, then every k-th.
+        return "_apkpySliceStep(String.valueOf(%s), %s, %s, %s, %d)" % (
+            val_to_java(node.value), _bound_java(slice_node.lower, val_to_java),
+            _bound_java(slice_node.upper, val_to_java), _bound_java(slice_node.step, val_to_java),
+            {'text': 3, 'list': 1}.get(kind, 0))
+    helper = {'text': '_apkpySlice', 'list': '_apkpyListSlice'}.get(kind, '_apkpySliceAny')
+    return "%s(String.valueOf(%s), String.valueOf(%s), String.valueOf(%s))" % (
+        helper, val_to_java(node.value), lo, hi)
+
+
+def _index_java(node, val_to_java):
+    """``value[i]`` where i is not a key written out as text.
+
+    A list's item, a dict's value or a character, by what the source says the
+    value is. ``text[0]`` was read as a list and gave an empty value, and
+    ``PRICES[item]`` -- a dict with the key in a name -- did the same.
+    """
+    base = val_to_java(node.value)
+    index = val_to_java(node.slice)
+    kind = _kind_from(val_to_java, node.value)
+    helper = {'text': '_apkpyCharAt', 'list': '_apkpyListGet',
+              'dict': '_apkpyDictGet'}.get(kind, '_apkpyItemAt')
+    return f"{helper}(String.valueOf({base}), String.valueOf({index}))"
+
+
+def _json_value_java(node, val_to_java):
+    """A value going into a list or a dict, keeping its JSON type.
+
+    A number stays a number and a list stays a list, so the JSON that leaves
+    the app (a request body, a file) reads as Python's json.dumps would write it.
+    """
+    if isinstance(node, (ast.Dict, ast.List, ast.Tuple, ast.Constant)) or (
+            isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd))
+            and isinstance(node.operand, ast.Constant)):
+        return _json_node_to_java(node, val_to_java)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)             and node.func.id in (item_feature.SETITEM, item_feature.DELITEM):
+        # d["a"]["b"] = v: the inner dict goes back in as a dict.
+        return "_apkpyJsonVal(String.valueOf(%s))" % val_to_java(node)
+    numeric = getattr(val_to_java, 'numeric', None)
+    known = numeric(node) if numeric is not None else None
+    if known is not None:
+        return ("Double.valueOf(%s)" if known[1] else "Long.valueOf(%s)") % known[0]
+    if _kind_from(val_to_java, node) in ('list', 'dict'):
+        return "_apkpyJsonVal(String.valueOf(%s))" % val_to_java(node)
+    return "_apkpyJsonOut(String.valueOf(%s))" % val_to_java(node)
+
+
+def _container_code(val_to_java, node):
+    """1 for a list, 2 for a dict, 0 when the source does not say."""
+    return {'list': 1, 'dict': 2}.get(_kind_from(val_to_java, node), 0)
+
+
+def _setitem_java(node, val_to_java):
+    container, key, value = node.args[:3]
+    aug = len(node.args) > 3 and bool(node.args[3].value)
+    return "_apkpySetItem(String.valueOf(%s), String.valueOf(%s), %s, %d, %s)" % (
+        val_to_java(container), val_to_java(key), _json_value_java(value, val_to_java),
+        _container_code(val_to_java, container), 'true' if aug else 'false')
+
+
+def _delitem_java(node, val_to_java):
+    container, key = node.args[:2]
+    return "_apkpyDelItem(String.valueOf(%s), String.valueOf(%s), %d)" % (
+        val_to_java(container), val_to_java(key), _container_code(val_to_java, container))
+
+
+_TEXT_PREDICATES = ('isdigit', 'isalpha', 'isalnum', 'isdecimal', 'isnumeric',
+                    'isspace', 'isupper', 'islower', 'isascii')
+
+
+def _bound_java(node, val_to_java):
+    """A slice bound or an optional argument: "" when left out or None."""
+    if node is None or (isinstance(node, ast.Constant) and node.value is None):
+        return '""'
+    return "String.valueOf(%s)" % val_to_java(node)
+
+
+def _text_method_java(node, val_to_java):
+    """The text methods of phase 1, group 8 -- or None for the others.
+
+    Each counts in code points, as Python does: an emoji is one character.
+    """
+    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)) \
+            or node.keywords:
+        return None
+    attr, args = node.func.attr, node.args
+    base = "String.valueOf(%s)" % val_to_java(node.func.value)
+    if attr in ('strip', 'lstrip', 'rstrip') and len(args) <= 1:
+        chars = 'null' if not args or (isinstance(args[0], ast.Constant) and args[0].value is None) \
+            else "String.valueOf(%s)" % val_to_java(args[0])
+        return "_apkpyStrip(%s, %s, %d)" % (base, chars, ('strip', 'lstrip', 'rstrip').index(attr))
+    if attr in ('find', 'rfind') and len(args) == 1:
+        return "_apkpyFind(%s, String.valueOf(%s), %s)" % (
+            base, val_to_java(args[0]), 'true' if attr == 'rfind' else 'false')
+    if attr == 'zfill' and len(args) == 1:
+        return "_apkpyZfill(%s, Long.parseLong(String.valueOf(%s).trim()))" % (base, val_to_java(args[0]))
+    if attr in ('ljust', 'rjust', 'center') and 1 <= len(args) <= 2:
+        fill = "String.valueOf(%s)" % val_to_java(args[1]) if len(args) > 1 else '" "'
+        return "_apkpyPad(%s, Long.parseLong(String.valueOf(%s).trim()), %s, %d)" % (
+            base, val_to_java(args[0]), fill, ('ljust', 'rjust', 'center').index(attr))
+    if attr in ('capitalize', 'swapcase') and not args:
+        return "_apkpy%s(%s)" % (attr.capitalize(), base)
+    if attr == 'splitlines' and len(args) <= 1:
+        keep = _java_truth(args[0], val_to_java) if args else 'false'
+        return "_apkpySplitLines(%s, %s)" % (base, keep)
+    if attr in _TEXT_PREDICATES and not args:
+        return '_apkpyBool(_apkpyStrIs(%s, "%s"))' % (base, attr[2:])
+    if attr == 'replace' and len(args) == 3:
+        return "_apkpyReplaceN(%s, String.valueOf(%s), String.valueOf(%s), Long.parseLong(String.valueOf(%s).trim()))" % (
+            base, val_to_java(args[0]), val_to_java(args[1]), val_to_java(args[2]))
+    return None
+
+
+def _repeat_java(node, val_to_java, numeric):
+    """"-" * 10 and [0] * 3: the text, or the list, n times -- or None."""
+    if not isinstance(node.op, ast.Mult):
+        return None
+    for seq, times in ((node.left, node.right), (node.right, node.left)):
+        kind = _kind_from(val_to_java, seq)
+        count = numeric(times)
+        if kind in ('text', 'list') and count is not None and not count[1]:
+            return "_apkpyRepeat(String.valueOf(%s), %s, %s)" % (
+                val_to_java(seq), count[0], 'true' if kind == 'list' else 'false')
+    return None
+
+
+def _listop_java(node, val_to_java):
+    """A method that changes a list, as the changed list (features/item_assignment.py).
+
+    ``popvalue`` is the item pop() answers; ``pop`` is the list without it.
+    """
+    op = node.args[0].value
+    container = "String.valueOf(%s)" % val_to_java(node.args[1])
+    args = node.args[2:]
+    if op == 'append':
+        return "_apkpyListAppend(%s, %s)" % (container, _json_value_java(args[0], val_to_java))
+    if op == 'insert':
+        return "_apkpyInsert(%s, String.valueOf(%s), %s)" % (
+            container, val_to_java(args[0]), _json_value_java(args[1], val_to_java))
+    if op == 'remove':
+        return "_apkpyRemove(%s, %s)" % (container, _json_value_java(args[0], val_to_java))
+    if op == 'extend':
+        return "_apkpyExtend(%s, String.valueOf(%s))" % (container, val_to_java(args[0]))
+    if op == 'sort':
+        return "_apkpySort(%s, %s)" % (container, _java_truth(args[0], val_to_java))
+    if op == 'reverse':
+        return "_apkpyReverse(%s)" % container
+    if op == 'clear':
+        return "_apkpyClear(%s)" % container
+    if op == 'update':
+        return "_apkpyUpdate(%s, String.valueOf(%s))" % (container, val_to_java(args[0]))
+    fallback = ("%s, true" % _json_value_java(args[1], val_to_java)) if len(args) > 1 \
+        else "null, false"
+    return "_apkpyPop(%s, String.valueOf(%s), %s, %s)" % (
+        container, val_to_java(args[0]), 'true' if op == 'popvalue' else 'false', fallback)
+
+
+def _java_truth(node, val_to_java):
+    """A Java boolean for an argument like reverse=True."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, bool):
+        return 'true' if node.value else 'false'
+    return _truthy_java(node, val_to_java)
+
+
+def _sorted_java(node, val_to_java):
+    """sorted(x, reverse=...) and reversed(x): a new list, of any list, text or dict."""
+    items = "_apkpyItems(String.valueOf(%s)).toString()" % val_to_java(node.args[0])
+    if node.func.id == 'reversed':
+        return "_apkpyReverse(%s)" % items
+    reverse = 'false'
+    for kw in node.keywords:
+        if kw.arg != 'reverse':
+            unsupported.raise_unsupported(
+                node,
+                cause=('sorted(..., %s=...) is not translated: the key is a function, '
+                       'and a function handed around as a value is not translated '
+                       'yet. sorted(x) and sorted(x, reverse=True) are.' % kw.arg),
+                suggestions=['Sort a list of plain values: sorted(names).'],
+            )
+        reverse = _java_truth(kw.value, val_to_java)
+    return "_apkpySort(%s, %s)" % (items, reverse)
+
+
+def _logic_value_java(node, val_to_java):
+    """A comparison, `not x`, or `a or b` used as a value.
+
+    `same = a == b` is ApkpyValues.TRUE or FALSE. `name = typed or "nobody"` is
+    one of the two values, as in Python, and the second is only worked out
+    when the first is false: the first goes through the _apkpyOrT field, read
+    right after it is written, so nothing runs twice.
+    """
+    if isinstance(node, ast.Compare) or (
+            isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not)):
+        cond = _cond_to_java(node, val_to_java)
+        if cond is None:
+            unsupported.raise_untranslated_condition(node)
+        return "_apkpyBool(%s)" % cond
+    # BoolOp: right-nested, a or b or c == a or (b or c)
+    values = node.values
+    out = _text_value_java(values[-1], val_to_java)
+    for value in reversed(values[:-1]):
+        holder = "_apkpyOrT"
+        first = _text_value_java(value, val_to_java)
+        numeric = getattr(val_to_java, 'numeric', None)
+        known = numeric(value) if numeric is not None else None
+        if known is not None:
+            truth = "(Double.parseDouble(%s = %s) != 0)" % (holder, first)
+        elif _kind_from(val_to_java, value) in ('list', 'dict'):
+            truth = "(_apkpyLen(%s = %s) > 0)" % (holder, first)
+        else:
+            truth = "_apkpyTruthy(%s = %s)" % (holder, first)
+        if isinstance(node.op, ast.Or):
+            out = "(%s ? %s : %s)" % (truth, holder, out)
+        else:
+            out = "(!%s ? %s : %s)" % (truth, holder, out)
+    return out
+
+
+def _unpack_java(node, val_to_java):
+    """``a, b = value`` after unpacking.desugar: the items of *value* as a JSON
+    list, after checking that there are as many as the names (CPython's
+    "too many values to unpack")."""
+    source = node.args[0]
+    before, after, star = (arg.value for arg in node.args[1:4])
+    kind = _kind_from(val_to_java, source)
+    walk = {'dict': '_apkpyKeys', 'text': '_apkpyChars'}.get(kind, '_apkpyItems')
+    return "_apkpyUnpack(%s(String.valueOf(%s)), %d, %d, %s)" % (
+        walk, val_to_java(source), before, after, 'true' if star else 'false')
+
+
+def _len_int_java(node, val_to_java):
+    """``len(x)`` as a Java int: characters of text, items of a list, keys of
+    a dict."""
+    inner = val_to_java(node.args[0]) if node.args else '""'
+    kind = _kind_from(val_to_java, node.args[0]) if node.args else 'text'
+    if kind == 'text':
+        return f"_apkpyTextLen(String.valueOf({inner}))"
+    return f"_apkpyLen(String.valueOf({inner}))"
+
+
+def _len_java(node, val_to_java):
+    """``len(x)`` as text."""
+    return f"String.valueOf({_len_int_java(node, val_to_java)})"
+
+
+def _round_parts(node, val_to_java, numeric):
+    """``round(x)`` / ``round(x, n)`` as (Java, is_float), or None.
+
+    Python answers an int for round(x) and for round(an int, n); a decimal
+    only for round(a decimal, n). None when the digits are not written out:
+    the old translation ignored them and rounded to a whole number.
+    """
+    arg = node.args[0] if node.args else ast.Constant(0)
+    known = numeric(arg)
+    whole = known is not None and not known[1]
+    if known is not None:
+        x = f"((double)({known[0]}))"
+    else:
+        x = f"Double.parseDouble(String.valueOf({val_to_java(arg)}).trim())"
+    digits_node = node.args[1] if len(node.args) > 1 else None
+    if digits_node is None or (isinstance(digits_node, ast.Constant)
+                               and digits_node.value is None):
+        if whole:
+            return (known[0], False)                 # round(7) is 7
+        # Math.rint rounds a half to the even neighbour, as Python does;
+        # _apkpyTrunc refuses nan and inf, as round() does.
+        return (f"_apkpyTrunc(Math.rint({x}))", False)
+    digits = _int_literal(digits_node)
+    if digits is None:
+        return None
+    if whole:
+        if digits >= 0:
+            return (known[0], False)                 # round(7, 2) is 7
+        # round(1234, -2) is 1200: the factor used to come out as "0.01.0",
+        # which javac refused.
+        return (f"_apkpyRoundL((long)({known[0]}), {digits})", False)
+    # The exact value of the double, rounded half to even: what CPython does.
+    # Math.rint(x * 100) / 100 rounded the product first, and disagreed in
+    # about one case in a hundred (round(-0.025, 2)).
+    return (f"_apkpyRoundTo({x}, {digits})", True)
+
+
+def _round_java(node, val_to_java, numeric):
+    """``round(...)`` as a value."""
+    parts = _round_parts(node, val_to_java, numeric)
+    if parts is None:
+        unsupported.raise_unsupported(
+            node,
+            cause=('round() with the number of digits in a name is not '
+                   'translated: the phone would have rounded to a whole '
+                   'number.'),
+            suggestions=['Write the digits out: round(price, 2).'],
+        )
+    return f"_apkpyFloat({parts[0]})" if parts[1] else f"String.valueOf({parts[0]})"
+
+
+def _add_java(node, val_to_java, numeric):
+    """``a + b`` that is not a sum of two numbers the source proves.
+
+    Two lists join as one list; gluing their JSON gave '["a"]["b"]'. Text
+    glues to text. A number on one side and, on the other, something the
+    source does not say (a parameter, a value from a dict) is added when the
+    app runs: CPython would add two numbers or raise TypeError, and gluing
+    them as text, as the phone did, matched neither. Text the source writes
+    out plus a number is CPython's TypeError, so it stops the build.
+    """
+    kinds = (_kind_from(val_to_java, node.left), _kind_from(val_to_java, node.right))
+    if 'list' in kinds:
+        return (f"_apkpyListConcat(String.valueOf({val_to_java(node.left)}), "
+                f"String.valueOf({val_to_java(node.right)}))")
+    if numeric(node.left) is not None or numeric(node.right) is not None:
+        if 'text' in kinds:
+            unsupported.raise_mixed_sum(node)
+        return (f"_apkpyAdd(String.valueOf({val_to_java(node.left)}), "
+                f"String.valueOf({val_to_java(node.right)}))")
+    # rows[0]["n"] + rows[1]["n"]: an item keeps its JSON type, so the sum is
+    # decided by what the list or dict holds -- 10 + 7 is 17, "10" + "7" is
+    # "107". Both used to be glued as text.
+    if 'text' not in kinds and any(_item_read(side) is not None
+                                   for side in (node.left, node.right)):
+        return "_apkpyAddRaw(%s, %s)" % (_raw_side_java(node.left, val_to_java),
+                                         _raw_side_java(node.right, val_to_java))
+    return f'{val_to_java(node.left)} + {val_to_java(node.right)}'
+
+
+def _item_read(node):
+    """(container, key) for d[k] / rows[i] read the same however often, or None."""
+    if not isinstance(node, ast.Subscript):
+        return None
+    key = node.slice.value if isinstance(node.slice, ast.Index) else node.slice  # 3.8
+    if isinstance(key, ast.Slice) or not _reads_the_same_twice(node):
+        return None
+    return node.value, key
+
+
+def _raw_side_java(node, val_to_java):
+    """One side of _apkpyAddRaw: an item as JSON holds it, anything else as text."""
+    item = _item_read(node)
+    if item is None:
+        return "String.valueOf(%s)" % val_to_java(node)
+    container, key = item
+    return "_apkpyRawOr(String.valueOf(%s), String.valueOf(%s), String.valueOf(%s))" % (
+        val_to_java(container), val_to_java(key), val_to_java(node))
+
+
+def _numeric_call_java(node, numeric, val_to_java):
+    """(Java, is_float) for a call that answers a number, or None.
+
+    The value translations of these calls answer text, and a sum with text on
+    one side glued the two: len(name) + 1 showed "31" for "abc", abs(n) + 1
+    "51" for 5.
+    """
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+            and node.func.attr in ('find', 'rfind', 'count', 'index') and len(node.args) == 1 \
+            and not node.keywords:
+        # Always a whole number, as text: xs.count(a) + xs.count(b) glued them.
+        return (f"Long.parseLong(String.valueOf({val_to_java(node)}))", False)
+    if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name))             or node.keywords:
+        return None
+    name, args = node.func.id, node.args
+    if name == 'pow' and len(args) == 3:
+        # pow(a, b, m): exact (BigInteger), with Python's sign and its inverse
+        # for a negative b. Whole numbers only, as in Python.
+        parts = [numeric(arg) for arg in args]
+        if any(part is None or part[1] for part in parts):
+            return None
+        return (f"_apkpyPowMod((long)({parts[0][0]}), (long)({parts[1][0]}), (long)({parts[2][0]}))", False)
+    if name == 'ord' and len(args) == 1:
+        return (f"_apkpyOrd(String.valueOf({val_to_java(args[0])}))", False)
+    if name == 'len' and len(args) == 1:
+        return (f"((long) {_len_int_java(node, val_to_java)})", False)
+    if name == 'abs' and len(args) == 1:
+        inner = numeric(args[0])
+        if inner is None:
+            return None
+        if inner[1]:
+            return (f"Math.abs({inner[0]})", True)
+        return (f"_apkpyAbsL({inner[0]})", False)
+    if name == 'round' and 1 <= len(args) <= 2:
+        return _round_parts(node, val_to_java, numeric)
+    if name in ('max', 'min') and len(args) >= 2:
+        parts = [numeric(arg) for arg in args]
+        if any(part is None for part in parts):
+            return None
+        if any(part[1] for part in parts):
+            if not all(part[1] for part in parts):
+                return None          # max(3, 2.5) is the int 3: not a float
+            return (f"Double.parseDouble({val_to_java(node)})", True)
+        java = parts[0][0]
+        fn = "Math.max" if name == 'max' else "Math.min"
+        for part in parts[1:]:
+            java = f"{fn}((long)({java}), (long)({part[0]}))"
+        return (java, False)
+    if name in _NUMERIC_RETURNS[0]:
+        if _NUMERIC_RETURNS[0][name]:
+            return (f"Double.parseDouble(String.valueOf({val_to_java(node)}))", True)
+        return (f"Long.parseLong(String.valueOf({val_to_java(node)}))", False)
+    return None
+
+
+def _drop_unused_struct_fields(lines):
+    """Keep a module list's field only in the classes that read it.
+
+    Every class gets the fields while it is being written, before its code
+    is known; a catalogue that only the list on one screen shows would
+    otherwise be copied into every screen of the app.
+    """
+    names = set(_MODULE_STRUCT_TEXT[0])
+    if not names:
+        return lines
+    prefix = '    private static final String '
+
+    def field_name(line):
+        if isinstance(line, str) and line.startswith(prefix):
+            name = line[len(prefix):].split(' ', 1)[0]
+            if name in names:
+                return name
+        return None
+
+    body = "\n".join(line for line in lines if field_name(line) is None)
+    return [line for line in lines
+            if field_name(line) is None
+            or re.search(r'\b%s\b' % re.escape(field_name(line)), body)]
+
+
+def _module_struct_fields(string_constants=None):
+    """The Java fields of the module-level lists, tuples and dicts.
+
+    A literal bigger than a Java string constant can hold (64 KB in the class
+    file) is left without one rather than breaking the build somewhere else.
+    """
+    fields = []
+    for name, text in _MODULE_STRUCT_TEXT[0].items():
+        if name in (string_constants or {}) or name in _NUMERIC_CONST_TEXT[0]:
+            continue
+        if len(text.encode('utf-8')) > 60000:
+            continue
+        fields.append(f'    private static final String {name} = "{_escape_java_literal(text)}";')
+    return fields
 
 
 def _is_split_call(node):
@@ -1353,7 +2485,9 @@ def _compare_node_to_java(cmp, val_to_java):
         return None
     left = cmp.left
     right_node = cmp.comparators[0]
-    left_j = left.id if isinstance(left, ast.Name) else f"String.valueOf({val_to_java(left)})"
+    # A name goes through val_to_java too: a `global` name is read from the
+    # shared store, not from a local of the same spelling.
+    left_j = val_to_java(left) if isinstance(left, ast.Name) else f"String.valueOf({val_to_java(left)})"
     if isinstance(right_node, ast.Constant) and isinstance(right_node.value, str):
         rv = '"' + _escape_java_literal(right_node.value) + '"'
         if op == '==':
@@ -1392,7 +2526,16 @@ def _compare_node_to_java(cmp, val_to_java):
 # matches("\\d+") (1+ dígitos; "" e "12a" dão False nos dois lados). NÃO incluímos
 # `isalpha` de propósito (aceita letras Unicode á/ã/ç que "[a-zA-Z]+" rejeitaria).
 _STR_BOOL_PREDICATES = {
-    'isdigit':    (0, r'String.valueOf({b}).matches("\\d+")'),
+    # \d in a Java regex is 0-9 only; Python's isdigit() takes ٣ and ² too.
+    'isdigit':    (0, r'_apkpyStrIs(String.valueOf({b}), "digit")'),
+    'isalpha':    (0, r'_apkpyStrIs(String.valueOf({b}), "alpha")'),
+    'isalnum':    (0, r'_apkpyStrIs(String.valueOf({b}), "alnum")'),
+    'isdecimal':  (0, r'_apkpyStrIs(String.valueOf({b}), "decimal")'),
+    'isnumeric':  (0, r'_apkpyStrIs(String.valueOf({b}), "numeric")'),
+    'isspace':    (0, r'_apkpyStrIs(String.valueOf({b}), "space")'),
+    'isupper':    (0, r'_apkpyStrIs(String.valueOf({b}), "upper")'),
+    'islower':    (0, r'_apkpyStrIs(String.valueOf({b}), "lower")'),
+    'isascii':    (0, r'_apkpyStrIs(String.valueOf({b}), "ascii")'),
     'startswith': (1, r'String.valueOf({b}).startsWith(String.valueOf({a}))'),
     'endswith':   (1, r'String.valueOf({b}).endsWith(String.valueOf({a}))'),
 }
@@ -1417,6 +2560,20 @@ _OAUTH_USERINFO = {
 }
 
 
+# Methods whose answer is text (or a list, for split), the same in the
+# Previewer and on the phone, so its truth is the truth of that text. A kit
+# call answering True or False is not here: each has its own arm.
+_TRUTH_TEXT_METHODS = frozenset({
+    'get_value', 'upper', 'lower', 'strip', 'lstrip', 'rstrip', 'title',
+    'capitalize', 'casefold', 'replace', 'join', 'split', 'format',
+})
+
+
+def _is_text_method_call(node):
+    return (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+            and node.func.attr in _TRUTH_TEXT_METHODS)
+
+
 def _cond_shape_supported(node):
     """True se o `if` é uma combinação de comparações/nomes com and/or/not que
     sabemos traduzir. Verificado no parsing (sem precisar de val_to_java)."""
@@ -1427,21 +2584,35 @@ def _cond_shape_supported(node):
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
         return _cond_shape_supported(node.operand)
     if isinstance(node, ast.Compare):
-        # One operator only. A chain like 0 < x < 10 used to compile as its
-        # first comparison and quietly lose the rest.
-        return len(node.ops) == 1 and (
-            type(node.ops[0]) in _CMP_OPS
-            or isinstance(node.ops[0], (ast.In, ast.NotIn)))
+        # A chain like 0 < x < 10 is each pair joined with && (it used to
+        # compile as its first comparison and quietly lose the rest).
+        if len(node.ops) > 1:
+            return all(type(op) in _CMP_OPS for op in node.ops)
+        return (type(node.ops[0]) in _CMP_OPS
+                or isinstance(node.ops[0], (ast.In, ast.NotIn, ast.Is, ast.IsNot)))
     if isinstance(node, ast.Name):
+        return True
+    # if d["done"]:  |  if is_valid(x):  |  if q.strip():  -- the truth of a value.
+    if isinstance(node, ast.Subscript):
+        return True
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        return True
+    if _is_text_method_call(node):
         return True
     if isinstance(node, ast.Constant) and isinstance(node.value, bool):
         return True
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in _STR_BOOL_PREDICATES:
         return len(node.args) >= _STR_BOOL_PREDICATES[node.func.attr][0]
     # ReactiveState.get() in a condition. The value is stored as "true"/"false"
-    # on Android and converted back to a boolean by _cond_to_java.
+    # on Android and converted back to a boolean by _cond_to_java. A dict's
+    # get() is the truth of the value.
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
-            and isinstance(node.func.value, ast.Name) and node.func.attr == 'get':
+            and node.func.attr == 'get' and (isinstance(node.func.value, ast.Name)
+                                             or _dict_receiver(node.func.value)):
+        return True
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+            and node.func.attr in _DICT_VALUE_METHODS + ('copy',) and not node.args \
+            and _dict_receiver(node.func.value):
         return True
     # files.exists("nome") — ficheiro local já descarregado? (if offline)
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
@@ -1478,7 +2649,7 @@ def _cond_to_java(node, val_to_java, bool_names=()):
     """Constrói a condição Java de um `if` com and/or/not (Tier 1 C do roadmap).
 
     `and`→`&&`, `or`→`||`, `not`→`!`. Cada operando é uma comparação
-    (via `_compare_node_to_java`), um nome (truthiness, via `_gen_if_var_condition`,
+    (via `_compare_node_to_java`), um nome (truthiness, via `_truthy_java`,
     respeitando args boolean de callbacks) ou um literal booleano. Devolve None se
     algum operando não for suportado.
     """
@@ -1498,9 +2669,11 @@ def _cond_to_java(node, val_to_java, bool_names=()):
         inner = _cond_to_java(node.operand, val_to_java, bool_names)
         return f"!({inner})" if inner is not None else None
     if isinstance(node, ast.Compare):
-        return _compare_node_to_java(node, val_to_java)
+        return _compare_cond_java(node, val_to_java, bool_names)
     if isinstance(node, ast.Name):
-        return _gen_if_var_condition(node.id, bool_names)
+        if node.id in _BOOL_VAR_NAMES or node.id in bool_names:
+            return "(%s)" % node.id
+        return _truthy_java(node, val_to_java)
     if isinstance(node, ast.Constant) and isinstance(node.value, bool):
         return 'true' if node.value else 'false'
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in _STR_BOOL_PREDICATES:
@@ -1511,6 +2684,11 @@ def _cond_to_java(node, val_to_java, bool_names=()):
         if node.args:
             return tmpl.format(b=base, a=val_to_java(node.args[0]))
         return None
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+            and node.func.attr in ('get',) + _DICT_VALUE_METHODS + ('copy',) \
+            and _dict_method_java(node, val_to_java) is not None:
+        # if d.get("done"): -- the truth of the value, as Python reads it.
+        return _truthy_java(node, val_to_java)
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
             and isinstance(node.func.value, ast.Name) and node.func.attr == 'get':
         return f"Boolean.parseBoolean(String.valueOf({val_to_java(node)}))"
@@ -1536,9 +2714,87 @@ def _cond_to_java(node, val_to_java, bool_names=()):
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
             and isinstance(node.func.value, ast.Name) and node.func.value.id == 'auth' \
             and node.func.attr == 'is_logged_in':
-        return ('(!getApplicationContext().getSharedPreferences("apkpy_auth", android.content.Context.MODE_PRIVATE)'
-                '.getString("token", "").isEmpty())')
+        return 'ApkpyAuth.loggedIn(getApplicationContext())'
+    if _is_isinstance(node):
+        return _isinstance_java(node, val_to_java, bool_names)
+    # if d["done"]:  |  if is_valid(x):  |  if q.strip():  -- the value's
+    # truth, as Python reads it.
+    if isinstance(node, ast.Subscript) or _is_text_method_call(node) or (
+            isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
+        return _truthy_java(node, val_to_java)
     return None
+
+
+# Builtins that answer the same however often they are asked.
+_SAME_TWICE_CALLS = frozenset({'len', 'abs', 'int', 'float', 'str', 'round', 'min', 'max'})
+
+
+def _reads_the_same_twice(node):
+    """True when reading node twice gives what Python's one read gives.
+
+    Names, values written out, items, arithmetic and len()-like builtins of
+    those. A call to a function of the app could change something, or
+    answer differently the second time.
+    """
+    if isinstance(node, (ast.Name, ast.Constant)):
+        return True
+    if isinstance(node, ast.Subscript):
+        index = node.slice.value if isinstance(node.slice, ast.Index) else node.slice  # 3.8
+        return _reads_the_same_twice(node.value) and _reads_the_same_twice(index)
+    if isinstance(node, ast.BinOp):
+        return _reads_the_same_twice(node.left) and _reads_the_same_twice(node.right)
+    if isinstance(node, ast.UnaryOp):
+        return _reads_the_same_twice(node.operand)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+            and node.func.id in _SAME_TWICE_CALLS and not node.keywords:
+        return all(_reads_the_same_twice(arg) for arg in node.args)
+    return False
+
+
+def _compare_cond_java(node, val_to_java, bool_names=()):
+    """A comparison in a condition: `is None`, chains, and the rest.
+
+    ``0 < x < 10`` is each pair joined with &&, as Python reads it. A middle
+    value is read twice that way, which is the same as Python's one read only
+    when nothing in it can change or answer differently (_reads_the_same_twice).
+    """
+    if len(node.ops) > 1:
+        sides = [node.left] + list(node.comparators)
+        for middle in sides[1:-1]:
+            if not _reads_the_same_twice(middle):
+                unsupported.raise_unsupported(
+                    node,
+                    cause=('In a chain like 0 < x < 10 the middle value is read '
+                           'twice on the phone, and a call to a function could '
+                           'answer differently the second time. Python reads it '
+                           'once.'),
+                    suggestions=['Put the value in a name first: x = f(), '
+                                 'then 0 < x < 10.'],
+                )
+        parts = []
+        for left, op, right in zip(sides, node.ops, sides[1:]):
+            pair = ast.copy_location(ast.Compare(left=left, ops=[op], comparators=[right]), node)
+            part = _compare_cond_java(pair, val_to_java, bool_names)
+            if part is None:
+                return None
+            parts.append("(%s)" % part)
+        return " && ".join(parts)
+    op = node.ops[0]
+    right = node.comparators[0]
+    left = node.left
+    if isinstance(op, (ast.Is, ast.IsNot, ast.Eq, ast.NotEq)):
+        for a, b in ((left, right), (right, left)):
+            if isinstance(b, ast.Constant) and isinstance(b.value, _SINGLETONS):
+                return _identity_java(a, b, isinstance(op, (ast.IsNot, ast.NotEq)),
+                                      val_to_java, bool_names)
+    if isinstance(op, (ast.Is, ast.IsNot)):
+        unsupported.raise_unsupported(
+            node,
+            cause=('is compares objects. On the phone every value is text, so '
+                   'only None, True and False can be compared with is.'),
+            suggestions=['Use == to compare values: if a == b:'],
+        )
+    return _compare_node_to_java(node, val_to_java)
 
 
 # A ordem dos parametros de service.every/once no Previewer (ui.ServiceAPI):
@@ -1626,6 +2882,11 @@ def _callback_call_args(name, nodes, val, functions_map, boolean_first=(), bool_
             if expression is None:
                 unsupported.raise_untranslated_condition(node)
             result.append(expression)
+        elif isinstance(node, ast.Constant) and (node.value is None
+                                                 or isinstance(node.value, bool)):
+            # None/True/False reach a text parameter as the app's own values,
+            # which `if flag:` and `is None` recognise inside the function.
+            result.append(_text_value_java(node, val))
         else:
             result.append(f"String.valueOf({val(node)})")
     return ", ".join(result)
@@ -1675,8 +2936,10 @@ def _cmds_definitely_return(cmds, if_types=_IF_TYPES_THAT_RETURN):
         # seguinte alcancavel, e ai o return final faz mesmo falta.
         if _cmds_definitely_return(last.get('final') or [], if_types):
             return True
+        # Each except is its own branch; one that no except names is thrown.
         return (_cmds_definitely_return(last.get('body') or [], if_types)
-                and _cmds_definitely_return(last.get('handler') or [], if_types))
+                and all(_cmds_definitely_return(clause.get('body') or [], if_types)
+                        for clause in last.get('handler') or []))
     return False
 
 
@@ -1798,18 +3061,72 @@ def _fstring_format_spec(format_spec):
     return None
 
 
+def _format_kind(node, val_to_java):
+    """1 for a number the source proves, 2 for text, 0 when it does not say."""
+    numeric = getattr(val_to_java, 'numeric', None)
+    if numeric is not None and numeric(node) is not None:
+        return 1
+    return 2 if _kind_from(val_to_java, node) == 'text' else 0
+
+
+def _check_format_spec(node, spec):
+    """A spec Python refuses for every kind of value stops the build here."""
+    errors = []
+    for sample in (0, 0.0, ""):
+        try:
+            format(sample, spec)
+            return
+        except (ValueError, TypeError) as exc:
+            errors.append(str(exc))
+    unsupported.raise_bad_format(node, spec, errors[0])
+
+
+def _formatted_java(value_java, kind, spec_node, conversion, node, val_to_java):
+    """One {value!c:spec}: Python's format() of it (_apkpyFormat)."""
+    if conversion == ord('r') and kind == 2:
+        value_java, kind = "_apkpyRepr(String.valueOf(%s))" % value_java, 2
+    elif conversion in (ord('r'), ord('s'), ord('a')):
+        kind = 2 if conversion != ord('r') else kind
+    if spec_node is None or (isinstance(spec_node, ast.JoinedStr) and not spec_node.values):
+        return "String.valueOf(%s)" % value_java
+    literal = _fstring_format_spec(spec_node)
+    if isinstance(literal, str):
+        _check_format_spec(node, literal)
+        spec_java = '"%s"' % _escape_java_literal(literal)
+    else:
+        # f"{x:{width}}": the spec is itself built when the app runs.
+        spec_java = _fstring_node_to_java(spec_node, val_to_java)
+    return "_apkpyFormat(String.valueOf(%s), %s, %d)" % (value_java, spec_java, kind)
+
+
+def _shown_java(val, val_to_java):
+    """{xs} of a list, a dict or a tuple the source proves, as str() shows it
+    -- or None. Only without a spec: format() of a list with one is an error
+    in CPython, and that path already says so."""
+    spec = val.format_spec
+    if spec is not None and not (isinstance(spec, ast.JoinedStr) and not spec.values):
+        return None
+    if val.conversion not in (-1, ord('s'), ord('r')):
+        return None
+    if tuples_feature.is_tuple(val.value):
+        return "_apkpyShowTuple(String.valueOf(%s))" % val_to_java(val.value)
+    if _kind_from(val_to_java, val.value) in ('list', 'dict'):
+        return "_apkpyShow(String.valueOf(%s))" % val_to_java(val.value)
+    return None
+
+
 def _fstring_node_to_java(node, val_to_java):
     """Converte uma f-string (ast.JoinedStr) numa concatenação Java de Strings.
 
     - Partes literais são escapadas como literal Java (aspas, '\\', newline...).
     - {expr}        → String.valueOf(<expr>)
-    - {expr:.Nf}    → String.format(Locale.US, "%.Nf", <double>) — casas decimais
-      fixas (ex.: dinheiro). Suporta o separador de milhares ',' ({x:,.2f}).
-      Locale.US garante '.' como separador decimal, igual ao Python (paridade
-      com o previewer, que corre a f-string real).
-    - Outras format specs ({n:03d}, {x:>10}) são recusadas com U2033: o
-      Previewer corre a f-string real e os dois ecrãs discordariam calados.
-    - Conversões (!r/!s/!a) caem em String.valueOf, como o resto do modelo."""
+    - {expr:spec}   → _apkpyFormat: a mini-linguagem de formatação do Python
+      inteira (largura, alinhamento, zeros, separadores, f/e/g/%/d/x/b/o/c),
+      conferida com format() do CPython em ~48 000 casos. O String.format do
+      Java que fazia o {x:.2f} arredondava o texto curto meio-para-cima, e o
+      Python arredonda o valor binario exacto meio-para-par: 2.675 dava 2.68
+      no telemovel e 2.67 no Previewer.
+    - {expr!r} de um texto leva as aspas, como o repr do Python."""
     parts = []
     for val in node.values:
         if isinstance(val, ast.Constant) and isinstance(val.value, str):
@@ -1817,23 +3134,124 @@ def _fstring_node_to_java(node, val_to_java):
         elif isinstance(val, ast.Str):  # compat Python <3.8
             parts.append('"' + _escape_java_literal(val.s) + '"')
         elif isinstance(val, ast.FormattedValue):
-            inner = val_to_java(val.value)
-            spec = _fstring_format_spec(val.format_spec)
-            m = re.match(r'^(,?)\.(\d+)f$', spec) if isinstance(spec, str) else None
-            if m:
-                parts.append(
-                    f'String.format(java.util.Locale.US, "%{m.group(1)}.{m.group(2)}f", '
-                    f'Double.parseDouble(String.valueOf({inner})))'
-                )
-            elif val.format_spec is None or (
-                    isinstance(val.format_spec, ast.JoinedStr)
-                    and not val.format_spec.values):
-                parts.append(f'String.valueOf({inner})')
-            else:
-                unsupported.raise_untranslated_format(val, spec)
+            shown = _shown_java(val, val_to_java)
+            if shown is not None:
+                parts.append(shown)
+                continue
+            parts.append(_formatted_java(
+                val_to_java(val.value), _format_kind(val.value, val_to_java),
+                val.format_spec, val.conversion, val, val_to_java))
         else:
             parts.append('""')
     return ' + '.join(parts) if parts else '""'
+
+
+def _str_format_java(node, val_to_java):
+    """"{} {:.2f}".format(a, b) with the template written out -- or None."""
+    import string
+    template = node.func.value.value
+    try:
+        pieces = list(string.Formatter().parse(template))
+    except ValueError as exc:
+        unsupported.raise_bad_format(node, template, str(exc))
+    args, kwargs = list(node.args), {kw.arg: kw.value for kw in node.keywords if kw.arg}
+    if any(isinstance(a, ast.Starred) for a in args) or any(kw.arg is None for kw in node.keywords):
+        return None
+    out, auto = [], 0
+    for literal, field, spec, conversion in pieces:
+        if literal:
+            out.append('"%s"' % _escape_java_literal(literal))
+        if field is None:
+            continue
+        if field == '':
+            index, auto = auto, auto + 1
+            value = args[index] if index < len(args) else None
+        elif field.isdigit():
+            value = args[int(field)] if int(field) < len(args) else None
+        elif field.isidentifier():
+            value = kwargs.get(field)
+        else:
+            unsupported.raise_unsupported(
+                node, cause=('"{%s}" reads into the value (an item or an attribute). '
+                             'Only {}, {0} and {name} are translated in format().' % field),
+                suggestions=['Read it first: name = row["name"], then "{}".format(name).'])
+        if value is None:
+            unsupported.raise_bad_format(node, template, 'Replacement index %s out of range' % field)
+        if spec and '{' in spec:
+            unsupported.raise_unsupported(
+                node, cause='A format spec built from other fields is not translated in format().',
+                suggestions=['Use an f-string: f"{value:{width}}".'])
+        spec_node = ast.Constant(value=spec) if spec else None
+        out.append(_formatted_java(val_to_java(value), _format_kind(value, val_to_java),
+                                   spec_node, ord(conversion) if conversion else -1, node, val_to_java))
+    return ' + '.join(out) if out else '""'
+
+
+_PERCENT = re.compile(r'%(?:\((?P<key>[^)]*)\))?(?P<flags>[-+ #0]*)(?P<width>\*|\d+)?'
+                      r'(?:\.(?P<prec>\*|\d+))?(?P<type>[diouxXeEfFgGcrsa%])')
+
+
+def _percent_java(node, val_to_java):
+    """"%.2f %s" % (x, y) with the template written out: each conversion as the
+    format spec it stands for. None when it cannot be read that way."""
+    template = node.left.value
+    values = list(node.right.elts) if isinstance(node.right, ast.Tuple) else [node.right]
+    out, pos, used = [], 0, 0
+    for m in _PERCENT.finditer(template):
+        if m.start() > pos:
+            out.append('"%s"' % _escape_java_literal(template[pos:m.start()]))
+        pos = m.end()
+        kind_char = m.group('type')
+        if kind_char == '%':
+            out.append('"%"')
+            continue
+        if m.group('key') is not None or m.group('width') == '*' or m.group('prec') == '*':
+            unsupported.raise_unsupported(
+                node, cause='"%(name)s" and "*" widths are not translated in % formatting.',
+                suggestions=['Use an f-string: f"{name:>10}".'])
+        if used >= len(values):
+            unsupported.raise_bad_format(node, template, 'not enough arguments for format string')
+        value = values[used]
+        used += 1
+        flags = m.group('flags')
+        spec = ''
+        if '-' in flags:
+            spec += '<'
+        if '+' in flags:
+            spec += '+'
+        elif ' ' in flags:
+            spec += ' '
+        if '#' in flags:
+            spec += '#'
+        if '0' in flags and '-' not in flags:
+            spec += '0'
+        spec += m.group('width') or ''
+        if m.group('prec') is not None and kind_char not in 'diucrsa':
+            spec += '.' + m.group('prec')
+        java = val_to_java(value)
+        kind = _format_kind(value, val_to_java)
+        if kind_char in 'diu':
+            # "%d" % 3.7 is "3": Python takes the whole part.
+            java, kind, spec = "_apkpyWholePart(String.valueOf(%s))" % java, 1, spec + 'd'
+        elif kind_char in 'rsa':
+            if kind_char == 'r' and kind == 2:
+                java = "_apkpyRepr(String.valueOf(%s))" % java
+            if m.group('prec') is not None:
+                spec += '.' + m.group('prec')
+            kind = 2
+        elif kind_char == 'c':
+            java, kind = ("_apkpyChr(Long.parseLong(String.valueOf(%s).trim()))" % java, 2) \
+                if kind == 1 else (java, 2)
+        else:
+            spec += kind_char
+            kind = 1
+        out.append("_apkpyFormat(String.valueOf(%s), \"%s\", %d)" % (java, _escape_java_literal(spec), kind)
+                   if spec else "String.valueOf(%s)" % java)
+    if pos < len(template):
+        out.append('"%s"' % _escape_java_literal(template[pos:]))
+    if used != len(values):
+        unsupported.raise_bad_format(node, template, 'not all arguments converted during string formatting')
+    return ' + '.join(out) if out else '""'
 
 
 def _sql_params_java(params_node, val_to_java):
@@ -2181,7 +3599,27 @@ def _emit_for_loop(lines, indent, c, val_to_java, gen_body, json_iter_vars,
             start, stop = val_to_java(it.args[0]), val_to_java(it.args[1])
         else:
             start, stop = '0', (val_to_java(it.args[0]) if it.args else '0')
-        lines.append(f"{indent}for (int _i_{sfx} = Integer.parseInt(String.valueOf({start})); _i_{sfx} < Integer.parseInt(String.valueOf({stop})); _i_{sfx}++) {{")
+        # The end is worked out once, as Python does: re-reading it on every
+        # pass ran `for i in range(len(items))` for ever when the body
+        # appended to items. And the step was dropped -- range(0, 10, 2) went
+        # 0, 1, 2, ... on the phone.
+        first = f"int _i_{sfx} = Integer.parseInt(String.valueOf({start})), _e_{sfx} = Integer.parseInt(String.valueOf({stop}))"
+        step_node = it.args[2] if len(it.args) >= 3 else None
+        step = _int_literal(step_node) if step_node is not None else 1
+        if step_node is not None and step == 0:
+            unsupported.raise_unsupported(
+                it, cause='Python stops here with ValueError: range() arg 3 must not be zero.',
+                suggestions=['Give the step you mean, such as 2, or -1 to count down.'])
+        if step is None:
+            lines.append(
+                f"{indent}for ({first}, _s_{sfx} = _apkpyRangeStep(String.valueOf({val_to_java(step_node)})); "
+                f"_s_{sfx} > 0 ? _i_{sfx} < _e_{sfx} : _i_{sfx} > _e_{sfx}; _i_{sfx} += _s_{sfx}) {{")
+        elif step == 1:
+            lines.append(f"{indent}for ({first}; _i_{sfx} < _e_{sfx}; _i_{sfx}++) {{")
+        elif step > 0:
+            lines.append(f"{indent}for ({first}; _i_{sfx} < _e_{sfx}; _i_{sfx} += {step}) {{")
+        else:
+            lines.append(f"{indent}for ({first}; _i_{sfx} > _e_{sfx}; _i_{sfx} -= {-step}) {{")
         lines.append(f"{indent}    String {var} = String.valueOf(_i_{sfx});")
         # range() da ints. Sem o dizer, i + 1 era "0" + "1" -- "01" no
         # telemovel e 1 no Previewer -- e i % 2 nao tinha traducao nenhuma.
@@ -2211,15 +3649,30 @@ def _emit_for_loop(lines, indent, c, val_to_java, gen_body, json_iter_vars,
         if (isinstance(it, ast.Name) and it.id not in _MUTATED_LISTS[0]
                 and isinstance(_MODULE_LISTS[0].get(it.id), ast.List)):
             it = _MODULE_LISTS[0][it.id]
+        # What Python walks depends on what the value is: a list its items, a
+        # dict its keys, text its characters. The loop used to parse every
+        # value as a JSON list inside a try that swallowed the failure, so
+        # `for k in PRICES` and `for ch in name` ran no times -- and an error
+        # raised by the body itself vanished with it. The kind comes from the
+        # source where the source says (_static_kind); otherwise
+        # _apkpyItems decides from the JSON shape, and nothing is swallowed.
+        kind_of = getattr(val_to_java, 'kind_of', None)
+        kind = kind_of(it) if kind_of is not None else _static_kind(it)
         src = val_to_java(it)
-        json_iter_vars.add(var)
-        lines.append(f"{indent}try {{")
-        lines.append(f"{indent}    org.json.JSONArray _fa_{sfx} = new org.json.JSONArray(String.valueOf({src}));")
+        if kind == 'dict':
+            walk = f"_apkpyKeys(String.valueOf({src}))"
+        elif kind == 'text':
+            walk = f"_apkpyChars(String.valueOf({src}))"
+        else:
+            walk = f"_apkpyItems(String.valueOf({src}))"
+            json_iter_vars.add(var)
+        lines.append(f"{indent}{{")
+        lines.append(f"{indent}    org.json.JSONArray _fa_{sfx} = {walk};")
         lines.append(f"{indent}    for (int _fi_{sfx} = 0; _fi_{sfx} < _fa_{sfx}.length(); _fi_{sfx}++) {{")
-        lines.append(f"{indent}        String {var} = String.valueOf(_fa_{sfx}.get(_fi_{sfx}));")
+        lines.append(f"{indent}        String {var} = _apkpyFromJson(_fa_{sfx}.opt(_fi_{sfx}));")
         gen_body(c['body'], indent + "        ")
         lines.append(f"{indent}    }}")
-        lines.append(f"{indent}}} catch (Exception _fe_{sfx}) {{ }}")
+        lines.append(f"{indent}}}")
 
 
 def _emit_list_append(lines, indent, c, val_to_java, json_iter_vars=()):
@@ -2256,42 +3709,201 @@ def _emit_list_append(lines, indent, c, val_to_java, json_iter_vars=()):
         lines.append(f"{indent}{target} = _apkpyListAppend(String.valueOf({target}), {value});")
 
 
+# Python's built-in errors that ``except`` and ``raise`` name. Their family
+# tree is ApkpyValues.parent() on the phone.
+_PY_ERRORS = frozenset((
+    'BaseException', 'Exception', 'ArithmeticError', 'ZeroDivisionError',
+    'OverflowError', 'FloatingPointError', 'LookupError', 'KeyError',
+    'IndexError', 'ValueError', 'UnicodeError', 'TypeError', 'AttributeError',
+    'NameError', 'RuntimeError', 'RecursionError', 'NotImplementedError',
+    'AssertionError', 'MemoryError', 'OSError', 'FileNotFoundError',
+    'PermissionError', 'FileExistsError', 'TimeoutError', 'ConnectionError',
+    'IsADirectoryError', 'NotADirectoryError', 'ImportError',
+    'ModuleNotFoundError', 'StopIteration', 'EOFError'))
+_ERROR_ALIASES = {'IOError': 'OSError', 'EnvironmentError': 'OSError'}
+# An except naming one of these also catches a missing key or index, so
+# inside its try d[k] and xs[i] raise (ApkpyValues.strict).
+_LOOKUP_CATCHERS = frozenset(('KeyError', 'IndexError', 'LookupError',
+                              'Exception', 'BaseException'))
+
+
+def _error_name(node):
+    """The built-in error *node* names (IOError is OSError), or None."""
+    if isinstance(node, ast.Name):
+        name = _ERROR_ALIASES.get(node.id, node.id)
+        if name in _PY_ERRORS:
+            return name
+    return None
+
+
+def _refuse_error_name(node, where):
+    unsupported.raise_unsupported(
+        node,
+        cause=('This %s names %s, which is not one of Python\'s built-in errors. '
+               'ApkPy knows those by name -- ValueError, KeyError, IndexError, '
+               'TypeError, ZeroDivisionError, OSError, Exception and the rest -- '
+               'and an error of your own would need a class, which is not '
+               'translated.' % (where, unsupported.describe(node))),
+        suggestions=['Use the built-in error closest to it: raise ValueError("...").'],
+    )
+
+
+def _except_types(node):
+    """The errors an except catches, by name; None for a bare except."""
+    if node is None:
+        return None
+    parts = node.elts if isinstance(node, ast.Tuple) else [node]
+    names = []
+    for part in parts:
+        name = _error_name(part)
+        if name is None:
+            _refuse_error_name(part, 'except')
+        names.append(name)
+    return names
+
+
+def _raise_command(stmt, handlers):
+    """``raise X(msg)``, or a bare ``raise`` / ``raise e`` inside an except.
+
+    *handlers* is the stack of excepts the statement is in, innermost last,
+    as (Java name of the caught error, the ``as`` name).
+    """
+    exc = stmt.exc
+    if exc is None:
+        if not handlers:
+            unsupported.raise_unsupported(
+                stmt,
+                cause=('raise on its own throws again the error being handled, '
+                       'so it only means something inside an except.'),
+                suggestions=['Name the error: raise ValueError("...").'],
+            )
+        return {'type': 'raise', 'rethrow': handlers[-1][0]}
+    if isinstance(exc, ast.Name):
+        caught = [err for err, name in handlers if name == exc.id]
+        if caught:
+            return {'type': 'raise', 'rethrow': caught[-1]}
+    call = exc if isinstance(exc, ast.Call) else None
+    target = call.func if call is not None else exc
+    name = _error_name(target)
+    if name is None:
+        _refuse_error_name(target, 'raise')
+    if call is not None and (call.keywords or len(call.args) > 1
+                             or any(isinstance(a, ast.Starred) for a in call.args)):
+        unsupported.raise_unsupported(
+            exc,
+            cause=('An error raised with more than one value shows them as a '
+                   'tuple, and ApkPy keeps one text per error.'),
+            suggestions=['Put it in one text: raise ValueError(f"{name}: {value}").'],
+        )
+    return {'type': 'raise', 'kind': name,
+            'msg_node': call.args[0] if call is not None and call.args else None}
+
+
+def _emit_raise(lines, indent, c, val_to_java, numeric):
+    """``raise``. Written as ``if (true) throw``: Java refuses a line after a
+    throw as unreachable, and the generator writes some (a global written
+    back, a closing return) without knowing a raise came before them."""
+    if c.get('rethrow'):
+        lines.append(f"{indent}if (true) throw ApkpyValues.rethrow({c['rethrow']});")
+        return
+    node = c.get('msg_node')
+    message = '""' if node is None else _text_value_java(node, val_to_java)
+    if c['kind'] == 'KeyError' and node is not None and numeric(node) is None:
+        # str(KeyError("k")) is 'k', quotes and all.
+        message = f"_apkpyRepr({message})"
+    lines.append(f'{indent}if (true) throw new ApkpyValues.Raised("{c["kind"]}", {message});')
+
+
+def _emit_print(lines, indent, c, val_to_java):
+    """``print(a, b, sep=..., end=...)``: each value as str() shows it, joined
+    by sep, to ApkpyValues.print (Logcat)."""
+    parts = []
+    for arg in c['args']:
+        shown = ast.copy_location(ast.Call(func=ast.Name(id='str', ctx=ast.Load()),
+                                           args=[arg], keywords=[]), arg)
+        parts.append(val_to_java(shown))
+    sep = '" "' if c.get('sep') is None else f"String.valueOf({val_to_java(c['sep'])})"
+    end = '"\\n"' if c.get('end') is None else f"String.valueOf({val_to_java(c['end'])})"
+    text = f" + {sep} + ".join(parts) if parts else '""'
+    lines.append(f"{indent}ApkpyValues.print({text}, {end});")
+
+
+def _print_command(call):
+    """The command for a print() call, or a refusal for what it cannot keep."""
+    keywords = {kw.arg: kw.value for kw in call.keywords}
+    unknown = sorted(k for k in keywords if k not in ('sep', 'end', 'flush'))
+    if unknown or any(isinstance(a, ast.Starred) for a in call.args) or None in keywords:
+        unsupported.raise_unsupported(
+            call,
+            cause=('print() goes to Logcat on the phone, so only sep= and end= '
+                   'mean anything there; a file= has nowhere to go.'),
+            suggestions=['Write the text with files.write(name, text), or show it '
+                         'with toast() or a label.'],
+        )
+
+    def given(name):
+        value = keywords.get(name)
+        if isinstance(value, ast.Constant) and value.value is None:
+            return None      # sep=None and end=None are the defaults
+        return value
+    return {'type': 'print', 'args': list(call.args), 'sep': given('sep'), 'end': given('end')}
+
+
 def _emit_try_block(lines, indent, c, gen_body, declared=()):
-    """``try`` / ``except`` / ``finally``.
+    """``try`` / ``except`` / ``finally``, with Python's error types.
 
-    Python names an exception type; Java names different ones, and here every
-    value is text -- so ``except ValueError:`` cannot be honoured as written.
-    It is not pretended either: one handler catches everything, and a second
-    handler is refused while parsing rather than quietly running the first.
+    One Java catch, and in it each except in order, tested by the error's
+    Python type (ApkpyValues.isA, which knows the family: LookupError catches
+    KeyError). The helpers throw their errors by Python name, and the Java
+    errors that stand for one are read as it -- NumberFormatException is
+    int("x")'s ValueError. An error no except names is thrown again, as in
+    Python. A try with only a finally has no catch.
 
-    ``except ... as e`` binds a **String**, because that is what every use of
-    it does here: show it, store it, send it. ``getMessage()`` is null for a
-    NullPointerException, which would print the word "null" to whoever is
-    reading the screen, so the class name stands in.
+    When an except catches a missing key or index, the body runs with
+    ApkpyValues.strict on, so ``d[k]`` raises the KeyError it is waiting for;
+    outside such a try the empty text of before stays, and an app that
+    worked keeps working.
 
-    Variables assigned inside either block are declared before it by
+    ``except ... as e`` binds a **String** (ApkpyValues.message), because
+    that is what every use of it does here: show it, store it, send it.
+
+    Variables assigned inside any block are declared before it by
     :func:`_hoist_branch_assignments` -- Java scopes them to the braces and
     Python does not, and the difference is a cannot-find-symbol on the line
     after the block.
     """
-    sfx = id(c) & 0xFFFF
-    err = f"_te_{sfx}"
+    err = c.get('err') or f"_te_{id(c) & 0xFFFF}"
+    clauses = c.get('handler') or []
+    inner = indent + "    "
     lines.append(f"{indent}try {{")
-    gen_body(c.get('body'), indent + "    ")
-    lines.append(f"{indent}}} catch (Exception {err}) {{")
-    name = c.get('name')
-    if name:
-        # Um nome já declarado neste método não pode ser redeclarado aqui.
-        prefix = "" if name in declared else "String "
-        lines.append(
-            f"{indent}    {prefix}{name} = {err}.getMessage() != null "
-            f"? {err}.getMessage() : {err}.getClass().getSimpleName();")
-    gen_body(c.get('handler'), indent + "    ")
-    lines.append(f"{indent}}}")
+    if clauses and c.get('strict'):
+        lines.append(f"{inner}ApkpyValues.strict(1);")
+        lines.append(f"{inner}try {{")
+        gen_body(c.get('body'), inner + "    ")
+        lines.append(f"{inner}}} finally {{")
+        lines.append(f"{inner}    ApkpyValues.strict(-1);")
+        lines.append(f"{inner}}}")
+    else:
+        gen_body(c.get('body'), inner)
+    if clauses:
+        lines.append(f"{indent}}} catch (Throwable {err}) {{")
+        for i, clause in enumerate(clauses):
+            names = ", ".join('"%s"' % n for n in (clause.get('types') or ['BaseException']))
+            opening = "if" if i == 0 else "} else if"
+            lines.append(f"{inner}{opening} (ApkpyValues.isA({err}, {names})) {{")
+            name = clause.get('name')
+            if name:
+                # Um nome já declarado neste método não pode ser redeclarado aqui.
+                prefix = "" if name in declared else "String "
+                lines.append(f"{inner}    {prefix}{name} = ApkpyValues.message({err});")
+            gen_body(clause.get('body'), inner + "    ")
+        lines.append(f"{inner}}} else {{")
+        lines.append(f"{inner}    throw ApkpyValues.rethrow({err});")
+        lines.append(f"{inner}}}")
     if c.get('final'):
-        lines.append(f"{indent}finally {{")
-        gen_body(c.get('final'), indent + "    ")
-        lines.append(f"{indent}}}")
+        lines.append(f"{indent}}} finally {{")
+        gen_body(c.get('final'), inner)
+    lines.append(f"{indent}}}")
 
 
 # Tecto de segurança do `while` no Android: o código corre na UI thread, por isso
@@ -2308,6 +3920,9 @@ def _assign_rhs_java(val_node, val_to_java):
     Um literal numérico nu (`i = 0`) tem de virar a String "0" — senão geraria
     `String i = 0;`, que é Java inválido. Os restantes casos já saem como String
     do val_to_java (BinOp → String.valueOf(...), chamadas, f-strings, etc.)."""
+    if isinstance(val_node, ast.Constant) and (val_node.value is None
+                                               or isinstance(val_node.value, bool)):
+        return _text_value_java(val_node, val_to_java)
     if isinstance(val_node, ast.Constant) and isinstance(val_node.value, (int, float)) \
             and not isinstance(val_node.value, bool):
         return f'"{val_node.value}"'
@@ -2402,7 +4017,17 @@ def _json_node_to_java(node, val_to_java, struct_vars=()):
     if regex_feature.is_sequence(node):
         return "_apkpyJsonVal(String.valueOf(%s))" % val_to_java(node)
 
-    return "String.valueOf(%s)" % val_to_java(node)
+    # [word, len(word)] holds a number and [pair] a list, as in Python: str()
+    # shows 3 and not '3', and a request body sends 3. Until 1.14 every value
+    # worked out here went in as text.
+    numeric = getattr(val_to_java, 'numeric', None)
+    known = numeric(node) if numeric is not None else None
+    if known is not None:
+        return ("Double.valueOf(%s)" if known[1] else "Long.valueOf(%s)") % known[0]
+    if _kind_from(val_to_java, node) in ('list', 'dict'):
+        return "_apkpyJsonVal(String.valueOf(%s))" % val_to_java(node)
+
+    return "_apkpyJsonOut(String.valueOf(%s))" % val_to_java(node)
 
 
 def _https_body_java(node, val_to_java):
@@ -2419,16 +4044,28 @@ def _https_body_java(node, val_to_java):
     return f"String.valueOf({body})"
 
 
-def _track_json_struct(var, val_node, struct_vars):
+def _track_json_struct(var, val_node, struct_vars, kinds=None, kind_of=None):
     """Regista (ou esquece) um nome que passou a guardar JSON estruturado.
 
     Esquecer importa tanto como registar: `x = {...}` seguido de `x = "olá"`
     deixa de ser estrutura, e reinjetá-lo como objeto daria um corpo partido.
+    *kinds* guarda tambem o que o nome passou a ser (ver _static_kind).
     """
     if isinstance(val_node, (ast.Dict, ast.List, ast.Tuple)) or regex_feature.is_sequence(val_node):
         struct_vars.add(var)
+    elif (isinstance(val_node, ast.Call) and isinstance(val_node.func, ast.Name)
+          and val_node.func.id in (item_feature.SETITEM, item_feature.DELITEM)
+          and val_node.args and isinstance(val_node.args[0], ast.Name)
+          and val_node.args[0].id in struct_vars):
+        pass
     else:
         struct_vars.discard(var)
+    if kinds is not None:
+        if regex_feature.is_sequence(val_node):
+            kinds[var] = 'list'
+        else:
+            kind = kind_of(val_node) if kind_of is not None else _static_kind(val_node, kinds)
+            kinds[var] = kind or 'other'
 
 
 def _emit_json_build_helpers(lines, ctx=""):
@@ -2508,11 +4145,14 @@ def _emit_json_build_helpers(lines, ctx=""):
     lines.append("     *  todas: uma funciona, a outra fecha. */")
     lines.append("    private String _apkpySlice(String text, String from, String to) {")
     lines.append("        String value = text == null ? \"\" : text;")
-    lines.append("        int size = value.length();")
+    lines.append("        // Contado como o Python conta: um emoji e' uma letra, e o")
+    lines.append("        // substring em unidades UTF-16 partia-o ao meio.")
+    lines.append("        int size = value.codePointCount(0, value.length());")
     lines.append("        int start = _apkpySliceEdge(from, 0, size);")
     lines.append("        int end = _apkpySliceEdge(to, size, size);")
     lines.append("        if (start >= end) return \"\";")
-    lines.append("        return value.substring(start, end);")
+    lines.append("        return value.substring(value.offsetByCodePoints(0, start),")
+    lines.append("                value.offsetByCodePoints(0, end));")
     lines.append("    }")
     lines.append("")
     lines.append("    private int _apkpySliceEdge(String raw, int fallback, int size) {")
@@ -2615,9 +4255,1026 @@ def _emit_json_build_helpers(lines, ctx=""):
     lines.append("     *  try/except apanha-o nos dois. */")
     lines.append("    private double _apkpyMathCheck(double result) {")
     lines.append("        if (Double.isNaN(result) || Double.isInfinite(result)) {")
-    lines.append("            throw new IllegalArgumentException(\"math domain error\");")
+    lines.append("            throw new ApkpyValues.Raised(\"ValueError\", \"math domain error\");")
     lines.append("        }")
     lines.append("        return result;")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** a / b. O Python para com ZeroDivisionError; o / do Java entre")
+    lines.append("     *  doubles dava Infinity ou NaN e seguia em frente. */")
+    lines.append("    private double _apkpyDiv(double a, double b) {")
+    lines.append("        if (b == 0d) throw new ApkpyValues.Raised(\"ZeroDivisionError\", \"division by zero\");")
+    lines.append("        return a / b;")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** a % b entre decimais, com o sinal do divisor, como o float_rem")
+    lines.append("     *  do CPython: -7.5 % 2 da' 0.5 la' e dava -1.5 aqui. */")
+    lines.append("    private double _apkpyModF(double a, double b) {")
+    lines.append("        if (b == 0d) throw new ApkpyValues.Raised(\"ZeroDivisionError\", \"float modulo\");")
+    lines.append("        double mod = a % b;")
+    lines.append("        if (mod != 0d) {")
+    lines.append("            if ((b < 0d) != (mod < 0d)) mod += b;")
+    lines.append("        } else {")
+    lines.append("            mod = Math.copySign(0d, b);")
+    lines.append("        }")
+    lines.append("        return mod;")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** a // b entre decimais: o float_divmod do CPython, passo a passo,")
+    lines.append("     *  incluindo o acerto final ao inteiro mais proximo. */")
+    lines.append("    private double _apkpyFloorDivF(double a, double b) {")
+    lines.append("        if (b == 0d) throw new ApkpyValues.Raised(\"ZeroDivisionError\", \"float floor division by zero\");")
+    lines.append("        double mod = a % b;")
+    lines.append("        double div = (a - mod) / b;")
+    lines.append("        if (mod != 0d && ((b < 0d) != (mod < 0d))) div -= 1d;")
+    lines.append("        if (div == 0d) return Math.copySign(0d, a / b);")
+    lines.append("        double floor = Math.floor(div);")
+    lines.append("        if (div - floor > 0.5d) floor += 1d;")
+    lines.append("        return floor;")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** a ** b com decimais. Onde o Python para, isto tambem para: 0.0")
+    lines.append("     *  elevado a um negativo, e um resultado que deixa de caber. Um")
+    lines.append("     *  negativo elevado a uma fracao e' um complexo em Python, que")
+    lines.append("     *  aqui nao existe -- para em vez de mostrar NaN. */")
+    lines.append("    private double _apkpyPowF(double a, double b) {")
+    lines.append("        if (a == 0d && b < 0d) {")
+    lines.append("            throw new ApkpyValues.Raised(\"ZeroDivisionError\", \"0.0 cannot be raised to a negative power\");")
+    lines.append("        }")
+    lines.append("        if (a < 0d && b != Math.rint(b) && !Double.isInfinite(b)) {")
+    lines.append("            throw new ArithmeticException(\"a negative number to a fractional power has no real answer\");")
+    lines.append("        }")
+    lines.append("        double result = Math.pow(a, b);")
+    lines.append("        if (Double.isInfinite(result) && !Double.isInfinite(a) && !Double.isInfinite(b)) {")
+    lines.append("            throw new ApkpyValues.Raised(\"OverflowError\", \"Numerical result out of range\");")
+    lines.append("        }")
+    lines.append("        return result;")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** int ** int, exato. O Python nunca transborda; isto para em vez")
+    lines.append("     *  de dar a volta. Um expoente negativo da' um decimal em Python,")
+    lines.append("     *  e o tipo da resposta nao pode depender do valor -- para. */")
+    lines.append("    private long _apkpyPowL(long base, long exp) {")
+    lines.append("        if (exp < 0L) {")
+    lines.append("            throw new ArithmeticException(\"a negative exponent gives a decimal: write float(x) ** n\");")
+    lines.append("        }")
+    lines.append("        long result = 1L;")
+    lines.append("        long square = base;")
+    lines.append("        long left = exp;")
+    lines.append("        while (left > 0L) {")
+    lines.append("            if ((left & 1L) == 1L) result = Math.multiplyExact(result, square);")
+    lines.append("            left >>= 1;")
+    lines.append("            if (left > 0L) square = Math.multiplyExact(square, square);")
+    lines.append("        }")
+    lines.append("        return result;")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** for x in v, quando o codigo nao diz o que v e': uma lista JSON")
+    lines.append("     *  percorre os itens e um objeto JSON as chaves, como uma lista e")
+    lines.append("     *  um dict em Python; o resto e' texto, e texto percorre as letras.")
+    lines.append("     *  \"\" nao percorre nada. */")
+    lines.append("    private org.json.JSONArray _apkpyItems(String value) {")
+    lines.append("        String text = value == null ? \"\" : value;")
+    lines.append("        int shape = _apkpyJsonShape(text);")
+    lines.append("        try {")
+    lines.append("            if (shape == 91) return new org.json.JSONArray(text.trim());")
+    lines.append("            if (shape == 123) return _apkpyKeys(new org.json.JSONObject(text.trim()).toString());")
+    lines.append("        } catch (Exception ignored) {}")
+    lines.append("        return _apkpyChars(text);")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** As chaves de um dict, pela ordem em que foram escritas. */")
+    lines.append("    private org.json.JSONArray _apkpyKeys(String json) {")
+    lines.append("        org.json.JSONArray keys = new org.json.JSONArray();")
+    lines.append("        try {")
+    lines.append("            org.json.JSONObject obj = new org.json.JSONObject(json == null ? \"{}\" : json);")
+    lines.append("            java.util.Iterator<String> names = obj.keys();")
+    lines.append("            while (names.hasNext()) keys.put(names.next());")
+    lines.append("        } catch (Exception ignored) {}")
+    lines.append("        return keys;")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** As letras de um texto, uma a uma como o Python as conta: um")
+    lines.append("     *  emoji e' uma so', e nao as duas metades que o Java guarda. */")
+    lines.append("    private org.json.JSONArray _apkpyChars(String text) {")
+    lines.append("        org.json.JSONArray chars = new org.json.JSONArray();")
+    lines.append("        String value = text == null ? \"\" : text;")
+    lines.append("        int i = 0;")
+    lines.append("        while (i < value.length()) {")
+    lines.append("            int code = value.codePointAt(i);")
+    lines.append("            chars.put(new String(Character.toChars(code)));")
+    lines.append("            i += Character.charCount(code);")
+    lines.append("        }")
+    lines.append("        return chars;")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** O passo de range(), que em Python nao pode ser zero. */")
+    lines.append("    private int _apkpyRangeStep(String step) {")
+    lines.append("        int value = Integer.parseInt(String.valueOf(step).trim());")
+    lines.append("        if (value == 0) throw new ApkpyValues.Raised(\"ValueError\", \"range() arg 3 must not be zero\");")
+    lines.append("        return value;")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** int(decimal): corta para o lado do zero, como o Python. O cast")
+    lines.append("     *  do Java fazia de NaN um 0 e de um numero enorme o maior long,")
+    lines.append("     *  em silencio; o Python para nos dois. */")
+    lines.append("    private long _apkpyTrunc(double value) {")
+    lines.append("        if (Double.isNaN(value) || Double.isInfinite(value)) {")
+    lines.append("            throw new ApkpyValues.Raised(\"ValueError\", \"cannot convert float NaN or infinity to integer\");")
+    lines.append("        }")
+    lines.append("        if (Math.abs(value) >= 9.223372036854775807E18) {")
+    lines.append("            throw new ApkpyValues.Raised(\"OverflowError\", \"integer too large\");")
+    lines.append("        }")
+    lines.append("        return (long) value;")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** a + b com um numero de um lado e, do outro, um valor que o codigo")
+    lines.append("     *  nao diz o que e'. Dois numeros somam como no Python; texto e numero")
+    lines.append("     *  e' o TypeError do Python. Colar os dois dava \"01\" para 0 + 1. */")
+    lines.append("    private String _apkpyAdd(String a, String b) {")
+    lines.append("        String x = String.valueOf(a).trim(), y = String.valueOf(b).trim();")
+    lines.append("        if (!_apkpyIsNumber(x) || !_apkpyIsNumber(y)) {")
+    lines.append("            throw new ApkpyValues.Raised(\"TypeError\", \"unsupported operand type(s) for +: '\" + a + \"' and '\" + b + \"'\");")
+    lines.append("        }")
+    lines.append("        if (_apkpyIsWhole(x) && _apkpyIsWhole(y)) {")
+    lines.append("            return String.valueOf(Math.addExact(Long.parseLong(x), Long.parseLong(y)));")
+    lines.append("        }")
+    lines.append("        return _apkpyFloat(Double.parseDouble(x) + Double.parseDouble(y));")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** a[k] + b[k]: os itens como o JSON os guarda. 10 + 7 da 17 e \"10\" + \"7\"")
+    lines.append("     *  da \"107\"; um numero com texto e' o TypeError do Python (ou a soma,")
+    lines.append("     *  se o texto for um numero, como em _apkpyAdd). */")
+    lines.append("    private String _apkpyAddRaw(Object a, Object b) {")
+    lines.append("        if (a instanceof Number || b instanceof Number) {")
+    lines.append("            return _apkpyAdd(String.valueOf(a), String.valueOf(b));")
+    lines.append("        }")
+    lines.append("        if (a instanceof org.json.JSONArray && b instanceof org.json.JSONArray) {")
+    lines.append("            return _apkpyListConcat(a.toString(), b.toString());")
+    lines.append("        }")
+    lines.append("        return _apkpyFromJson(a) + _apkpyFromJson(b);")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** O item tal como o JSON o tem (Integer, String, ...); o texto de")
+    lines.append("     *  sempre se o contentor nao for JSON ou o item nao existir. */")
+    lines.append("    private Object _apkpyRawOr(String container, String key, String fallback) {")
+    lines.append("        try {")
+    lines.append("            String c = container == null ? \"\" : container.trim();")
+    lines.append("            if (c.startsWith(\"[\")) {")
+    lines.append("                org.json.JSONArray arr = new org.json.JSONArray(c);")
+    lines.append("                int i = Integer.parseInt(key.trim());")
+    lines.append("                return arr.get(i < 0 ? i + arr.length() : i);")
+    lines.append("            }")
+    lines.append("            return new org.json.JSONObject(c).get(key);   // lanca se nao for um dict")
+    lines.append("        } catch (Exception ignored) { }")
+    lines.append("        return fallback;")
+    lines.append("    }")
+    lines.append("")
+    lines.append('    /** O nome do tipo como o Python o diz, para as mensagens de TypeError. */')
+    lines.append('    private String _apkpyTypeName(Object v) {')
+    lines.append('        if (v == null || v == org.json.JSONObject.NULL || v == ApkpyValues.NONE) return "NoneType";')
+    lines.append('        if (v instanceof Boolean || v == ApkpyValues.TRUE || v == ApkpyValues.FALSE) return "bool";')
+    lines.append('        if (v instanceof Integer || v instanceof Long || v instanceof java.math.BigInteger) return "int";')
+    lines.append('        if (v instanceof Number) return "float";')
+    lines.append('        if (v instanceof org.json.JSONArray) return "list";')
+    lines.append('        if (v instanceof org.json.JSONObject) return "dict";')
+    lines.append('        return "str";')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** Um item para comparar: o True/False/None da app como JSON, e um bool')
+    lines.append('     *  como numero (no Python True == 1). */')
+    lines.append('    private Object _apkpyComparable(Object v) {')
+    lines.append('        if (v instanceof String) v = _apkpyJsonOut((String) v);')
+    lines.append('        if (v instanceof Boolean) return ((Boolean) v) ? 1L : 0L;')
+    lines.append('        return v;')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    private int _apkpyNumCmp(Number a, Number b) {')
+    lines.append('        try {')
+    lines.append('            return new java.math.BigDecimal(a.toString()).compareTo(new java.math.BigDecimal(b.toString()));')
+    lines.append('        } catch (Exception e) {')
+    lines.append('            return Double.compare(a.doubleValue(), b.doubleValue());')
+    lines.append('        }')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** Texto contra texto pela ordem do Python: ponto de codigo a ponto de codigo. */')
+    lines.append('    private int _apkpyTextCmp(String a, String b) {')
+    lines.append('        int i = 0, j = 0;')
+    lines.append('        while (i < a.length() && j < b.length()) {')
+    lines.append('            int x = a.codePointAt(i), y = b.codePointAt(j);')
+    lines.append('            if (x != y) return x < y ? -1 : 1;')
+    lines.append('            i += Character.charCount(x);')
+    lines.append('            j += Character.charCount(y);')
+    lines.append('        }')
+    lines.append('        return (i < a.length() ? 1 : 0) - (j < b.length() ? 1 : 0);')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** a == b entre itens, como o Python: 1 == 1.0, listas item a item. Um')
+    lines.append('     *  numero e o seu texto ("3" e 3) contam como iguais, como no x in lista:')
+    lines.append('     *  no telemovel um numero chega muitas vezes como texto. */')
+    lines.append('    private boolean _apkpyEq(Object a, Object b) {')
+    lines.append('        a = _apkpyComparable(a);')
+    lines.append('        b = _apkpyComparable(b);')
+    lines.append('        if (a instanceof Number && b instanceof Number) return _apkpyNumCmp((Number) a, (Number) b) == 0;')
+    lines.append('        if (a instanceof org.json.JSONArray && b instanceof org.json.JSONArray) {')
+    lines.append('            org.json.JSONArray x = (org.json.JSONArray) a, y = (org.json.JSONArray) b;')
+    lines.append('            if (x.length() != y.length()) return false;')
+    lines.append('            for (int i = 0; i < x.length(); i++) if (!_apkpyEq(x.opt(i), y.opt(i))) return false;')
+    lines.append('            return true;')
+    lines.append('        }')
+    lines.append('        if (a instanceof org.json.JSONObject && b instanceof org.json.JSONObject) {')
+    lines.append('            org.json.JSONObject x = (org.json.JSONObject) a, y = (org.json.JSONObject) b;')
+    lines.append('            if (x.length() != y.length()) return false;')
+    lines.append('            java.util.Iterator<String> keys = x.keys();')
+    lines.append('            while (keys.hasNext()) {')
+    lines.append('                String k = keys.next();')
+    lines.append('                if (!y.has(k) || !_apkpyEq(x.opt(k), y.opt(k))) return false;')
+    lines.append('            }')
+    lines.append('            return true;')
+    lines.append('        }')
+    lines.append('        return _apkpyFromJson(a).equals(_apkpyFromJson(b));')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** a < b para o sort(): numeros com numeros, texto com texto, listas item')
+    lines.append("     *  a item. O resto e' o TypeError do Python. */")
+    lines.append('    private int _apkpyCmp(Object a, Object b) {')
+    lines.append('        a = _apkpyComparable(a);')
+    lines.append('        b = _apkpyComparable(b);')
+    lines.append('        if (a instanceof Number && b instanceof Number) return _apkpyNumCmp((Number) a, (Number) b);')
+    lines.append('        if (a instanceof String && b instanceof String) return _apkpyTextCmp((String) a, (String) b);')
+    lines.append('        if (a instanceof org.json.JSONArray && b instanceof org.json.JSONArray) {')
+    lines.append('            org.json.JSONArray x = (org.json.JSONArray) a, y = (org.json.JSONArray) b;')
+    lines.append('            for (int i = 0; i < Math.min(x.length(), y.length()); i++) {')
+    lines.append('                if (!_apkpyEq(x.opt(i), y.opt(i))) return _apkpyCmp(x.opt(i), y.opt(i));')
+    lines.append('            }')
+    lines.append('            return Integer.compare(x.length(), y.length());')
+    lines.append('        }')
+    lines.append('        throw new ApkpyValues.Raised("TypeError", "\'<\' not supported between instances of \'"')
+    lines.append('                + _apkpyTypeName(a) + "\' and \'" + _apkpyTypeName(b) + "\'");')
+    lines.append('    }')
+    lines.append("")
+    lines.append("    /** A lista de um metodo de lista; outra coisa e' o AttributeError do Python. */")
+    lines.append('    private org.json.JSONArray _apkpyListArg(String json, String method) {')
+    lines.append('        String text = json == null ? "" : json.trim();')
+    lines.append('        if (_apkpyJsonShape(text) == 91) {')
+    lines.append('            try { return new org.json.JSONArray(text); } catch (Exception ignored) { }')
+    lines.append('        }')
+    lines.append('        String kind = _apkpyJsonShape(text) == 123 ? "dict" : "str";')
+    lines.append('        throw new ApkpyValues.Raised("AttributeError", "\'" + kind + "\' object has no attribute \'" + method + "\'");')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    private Object _apkpyStored(Object value) {')
+    lines.append('        return value instanceof String ? _apkpyJsonOut((String) value) : value;')
+    lines.append('    }')
+    lines.append("")
+    lines.append("    /** lista.insert(i, v): como o Python, uma posicao para la' do fim")
+    lines.append('     *  acrescenta, e uma negativa demais poe a frente. */')
+    lines.append('    private String _apkpyInsert(String json, String index, Object value) {')
+    lines.append('        org.json.JSONArray arr = _apkpyListArg(json, "insert");')
+    lines.append('        int n = arr.length(), at;')
+    lines.append('        try { at = Integer.parseInt(String.valueOf(index).trim()); }')
+    lines.append('        catch (Exception e) { throw new ApkpyValues.Raised("TypeError", "\'str\' object cannot be interpreted as an integer"); }')
+    lines.append('        if (at < 0) at = Math.max(0, at + n);')
+    lines.append('        if (at > n) at = n;')
+    lines.append('        org.json.JSONArray out = new org.json.JSONArray();')
+    lines.append('        for (int i = 0; i < n; i++) {')
+    lines.append('            if (i == at) out.put(_apkpyStored(value));')
+    lines.append('            out.put(arr.opt(i));')
+    lines.append('        }')
+    lines.append('        if (at == n) out.put(_apkpyStored(value));')
+    lines.append('        return out.toString();')
+    lines.append('    }')
+    lines.append("")
+    lines.append("    /** lista.remove(v): o primeiro igual; nenhum e' o ValueError do Python. */")
+    lines.append('    private String _apkpyRemove(String json, Object value) {')
+    lines.append('        org.json.JSONArray arr = _apkpyListArg(json, "remove");')
+    lines.append('        for (int i = 0; i < arr.length(); i++) {')
+    lines.append('            if (_apkpyEq(arr.opt(i), value)) {')
+    lines.append('                arr.remove(i);')
+    lines.append('                return arr.toString();')
+    lines.append('            }')
+    lines.append('        }')
+    lines.append('        throw new ApkpyValues.Raised("ValueError", "list.remove(x): x not in list");')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** lista.extend(xs): os itens de uma lista, as letras de um texto, as')
+    lines.append('     *  chaves de um dict -- o que o for percorreria. */')
+    lines.append('    private String _apkpyExtend(String json, String items) {')
+    lines.append('        org.json.JSONArray arr = _apkpyListArg(json, "extend");')
+    lines.append('        org.json.JSONArray more = _apkpyItems(items);')
+    lines.append('        for (int i = 0; i < more.length(); i++) arr.put(more.opt(i));')
+    lines.append('        return arr.toString();')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** sort() e sorted(): estavel, como o do Python, tambem ao contrario. */')
+    lines.append('    private String _apkpySort(String json, final boolean reverse) {')
+    lines.append('        org.json.JSONArray arr = _apkpyListArg(json, "sort");')
+    lines.append('        java.util.List<Object> items = new java.util.ArrayList<Object>();')
+    lines.append('        for (int i = 0; i < arr.length(); i++) items.add(arr.opt(i));')
+    lines.append('        java.util.Collections.sort(items, new java.util.Comparator<Object>() {')
+    lines.append('            @Override public int compare(Object x, Object y) {')
+    lines.append('                return reverse ? _apkpyCmp(y, x) : _apkpyCmp(x, y);')
+    lines.append('            }')
+    lines.append('        });')
+    lines.append('        return new org.json.JSONArray(items).toString();')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    private String _apkpyReverse(String json) {')
+    lines.append('        org.json.JSONArray arr = _apkpyListArg(json, "reverse");')
+    lines.append('        org.json.JSONArray out = new org.json.JSONArray();')
+    lines.append('        for (int i = arr.length() - 1; i >= 0; i--) out.put(arr.opt(i));')
+    lines.append('        return out.toString();')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    private String _apkpyClear(String json) {')
+    lines.append('        return _apkpyJsonShape(json) == 123 ? "{}" : "[]";')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** lista.pop(i) e d.pop(k, padrao). value=true devolve o item tirado;')
+    lines.append('     *  false, a lista ou o dict sem ele. Vazio, fora ou sem a chave para,')
+    lines.append('     *  como o IndexError e o KeyError do Python. */')
+    lines.append('    private String _apkpyPop(String json, String key, boolean value, Object fallback, boolean hasFallback) {')
+    lines.append('        String text = json == null ? "" : json.trim();')
+    lines.append('        int shape = _apkpyJsonShape(text);')
+    lines.append('        try {')
+    lines.append('            if (shape == 123) {')
+    lines.append('                org.json.JSONObject obj = new org.json.JSONObject(text);')
+    lines.append('                if (!obj.has(key)) {')
+    lines.append('                    if (!hasFallback) throw new ApkpyValues.Raised("KeyError", _apkpyRepr(String.valueOf(key)));')
+    lines.append('                    return value ? _apkpyFromJson(fallback) : obj.toString();')
+    lines.append('                }')
+    lines.append('                Object item = obj.remove(key);')
+    lines.append('                return value ? _apkpyFromJson(item) : obj.toString();')
+    lines.append('            }')
+    lines.append('            if (shape == 91 && !hasFallback) {')
+    lines.append('                org.json.JSONArray arr = new org.json.JSONArray(text);')
+    lines.append('                if (arr.length() == 0) throw new ApkpyValues.Raised("IndexError", "pop from empty list");')
+    lines.append('                Object item = arr.remove(_apkpyListIndex(arr.length(), key, "pop index out of range"));')
+    lines.append('                return value ? _apkpyFromJson(item) : arr.toString();')
+    lines.append('            }')
+    lines.append('        } catch (org.json.JSONException e) {')
+    lines.append('            throw new IllegalArgumentException(e.getMessage());')
+    lines.append('        }')
+    lines.append('        throw new ApkpyValues.Raised("AttributeError", "\'" + (shape == 91 ? "list" : "str") + "\' object has no attribute \'pop\'");')
+    lines.append('    }')
+    lines.append("")
+    lines.append("    /** lista.index(x) e texto.index(sub): onde esta', ou o ValueError. No")
+    lines.append('     *  texto conta pontos de codigo, como o Python (kind 3 = texto). */')
+    lines.append('    private String _apkpyIndexOf(String container, Object needle, int kind) {')
+    lines.append('        String text = container == null ? "" : container;')
+    lines.append('        if (kind != 3 && _apkpyJsonShape(text) == 91) {')
+    lines.append('            org.json.JSONArray arr = _apkpyListArg(text, "index");')
+    lines.append('            for (int i = 0; i < arr.length(); i++) {')
+    lines.append('                if (_apkpyEq(arr.opt(i), needle)) return String.valueOf(i);')
+    lines.append('            }')
+    lines.append('            Object shown = _apkpyComparable(needle);')
+    lines.append('            throw new ApkpyValues.Raised("ValueError", (shown instanceof String ? "\'" + shown + "\'" : _apkpyFromJson(shown))')
+    lines.append('                    + " is not in list");')
+    lines.append('        }')
+    lines.append('        int at = text.indexOf(_apkpyFromJson(needle));')
+    lines.append('        if (at < 0) throw new ApkpyValues.Raised("ValueError", "substring not found");')
+    lines.append('        return String.valueOf(text.codePointCount(0, at));')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** d.get(k, padrao): o valor, ou o padrao -- None sem ele, como no Python. */')
+    lines.append('    private String _apkpyDictGetOr(String json, String key, String fallback) {')
+    lines.append('        String text = json == null ? "" : json.trim();')
+    lines.append('        int shape = _apkpyJsonShape(text);')
+    lines.append('        if (shape != 123) {')
+    lines.append('            throw new ApkpyValues.Raised("AttributeError", "\'" + (shape == 91 ? "list" : "str") + "\' object has no attribute \'get\'");')
+    lines.append('        }')
+    lines.append('        try {')
+    lines.append('            org.json.JSONObject obj = new org.json.JSONObject(text);')
+    lines.append('            return obj.has(key) ? _apkpyFromJson(obj.opt(key)) : fallback;')
+    lines.append('        } catch (org.json.JSONException e) {')
+    lines.append('            throw new IllegalArgumentException(e.getMessage());')
+    lines.append('        }')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    private org.json.JSONObject _apkpyDictArg(String json, String method) {')
+    lines.append('        String text = json == null ? "" : json.trim();')
+    lines.append('        int shape = _apkpyJsonShape(text);')
+    lines.append('        if (shape == 123) {')
+    lines.append('            try { return new org.json.JSONObject(text); } catch (Exception ignored) { }')
+    lines.append('        }')
+    lines.append('        throw new ApkpyValues.Raised("AttributeError", "\'" + (shape == 91 ? "list" : "str") + "\' object has no attribute \'" + method + "\'");')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** d.keys(), d.values(), d.items(): listas, pela ordem em que as chaves entraram. */')
+    lines.append('    private String _apkpyKeyList(String json) {')
+    lines.append('        return _apkpyKeys(_apkpyDictArg(json, "keys").toString()).toString();')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    private String _apkpyValues(String json) {')
+    lines.append('        org.json.JSONObject obj = _apkpyDictArg(json, "values");')
+    lines.append('        org.json.JSONArray keys = _apkpyKeys(obj.toString());')
+    lines.append('        org.json.JSONArray out = new org.json.JSONArray();')
+    lines.append('        for (int i = 0; i < keys.length(); i++) out.put(obj.opt(keys.optString(i)));')
+    lines.append('        return out.toString();')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    private String _apkpyPairs(String json) {')
+    lines.append('        org.json.JSONObject obj = _apkpyDictArg(json, "items");')
+    lines.append('        org.json.JSONArray keys = _apkpyKeys(obj.toString());')
+    lines.append('        org.json.JSONArray out = new org.json.JSONArray();')
+    lines.append('        for (int i = 0; i < keys.length(); i++) {')
+    lines.append('            org.json.JSONArray pair = new org.json.JSONArray();')
+    lines.append('            pair.put(keys.optString(i));')
+    lines.append('            pair.put(obj.opt(keys.optString(i)));')
+    lines.append('            out.put(pair);')
+    lines.append('        }')
+    lines.append('        return out.toString();')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** d.update(outro): as chaves do outro por cima, as novas no fim. */')
+    lines.append('    private String _apkpyUpdate(String json, String other) {')
+    lines.append('        org.json.JSONObject obj = _apkpyDictArg(json, "update");')
+    lines.append('        org.json.JSONObject more = _apkpyDictArg(other, "keys");')
+    lines.append('        org.json.JSONArray keys = _apkpyKeys(more.toString());')
+    lines.append('        try {')
+    lines.append('            for (int i = 0; i < keys.length(); i++) obj.put(keys.optString(i), more.opt(keys.optString(i)));')
+    lines.append('        } catch (org.json.JSONException e) {')
+    lines.append('            throw new IllegalArgumentException(e.getMessage());')
+    lines.append('        }')
+    lines.append('        return obj.toString();')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** O texto em pontos de codigo: as posicoes que o Python conta. */')
+    lines.append('    private int[] _apkpyCodes(String s) {')
+    lines.append('        return (s == null ? "" : s).codePoints().toArray();')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** str.isspace() de um ponto de codigo. */')
+    lines.append('    private boolean _apkpyPySpace(int c) {')
+    lines.append('        return Character.isWhitespace(c) || Character.isSpaceChar(c) || c == 133;')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    private boolean _apkpyStripped(int c, int[] drop) {')
+    lines.append('        if (drop == null) return _apkpyPySpace(c);')
+    lines.append('        for (int d : drop) if (d == c) return true;')
+    lines.append('        return false;')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** strip/lstrip/rstrip, com ou sem os caracteres a tirar (mode 0 os dois')
+    lines.append('     *  lados, 1 a esquerda, 2 a direita). O argumento era ignorado. */')
+    lines.append('    private String _apkpyStrip(String s, String chars, int mode) {')
+    lines.append('        int[] cp = _apkpyCodes(s);')
+    lines.append('        int[] drop = chars == null ? null : _apkpyCodes(chars);')
+    lines.append('        int a = 0, b = cp.length;')
+    lines.append('        if (mode != 2) while (a < b && _apkpyStripped(cp[a], drop)) a++;')
+    lines.append('        if (mode != 1) while (b > a && _apkpyStripped(cp[b - 1], drop)) b--;')
+    lines.append('        return new String(cp, a, b - a);')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** find/rfind contam pontos de codigo, como o Python; -1 se nao estiver. */')
+    lines.append('    private String _apkpyFind(String s, String sub, boolean last) {')
+    lines.append('        String t = s == null ? "" : s;')
+    lines.append('        int at = last ? t.lastIndexOf(sub) : t.indexOf(sub);')
+    lines.append('        return String.valueOf(at < 0 ? -1 : t.codePointCount(0, at));')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** "42".zfill(5) = "00042", "-42".zfill(5) = "-0042". */')
+    lines.append('    private String _apkpyZfill(String s, long width) {')
+    lines.append('        int[] cp = _apkpyCodes(s);')
+    lines.append('        long fill = width - cp.length;')
+    lines.append('        if (fill <= 0) return s;')
+    lines.append('        StringBuilder out = new StringBuilder();')
+    lines.append('        int start = 0;')
+    lines.append('        if (cp.length > 0 && (cp[0] == 43 || cp[0] == 45)) {')
+    lines.append('            out.appendCodePoint(cp[0]);')
+    lines.append('            start = 1;')
+    lines.append('        }')
+    lines.append("        for (long i = 0; i < fill; i++) out.append('0');")
+    lines.append('        out.append(new String(cp, start, cp.length - start));')
+    lines.append('        return out.toString();')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** ljust (mode 0), rjust (1), center (2): o centro como o do CPython. */')
+    lines.append('    private String _apkpyPad(String s, long width, String fillchar, int mode) {')
+    lines.append('        int[] cp = _apkpyCodes(s);')
+    lines.append('        int[] f = _apkpyCodes(fillchar);')
+    lines.append('        if (f.length != 1) throw new ApkpyValues.Raised("TypeError", "The fill character must be exactly one character long");')
+    lines.append('        long marg = width - cp.length;')
+    lines.append('        if (marg <= 0) return s;')
+    lines.append('        long left = mode == 0 ? 0 : mode == 1 ? marg : marg / 2 + (marg & width & 1);')
+    lines.append('        StringBuilder out = new StringBuilder();')
+    lines.append('        for (long i = 0; i < left; i++) out.appendCodePoint(f[0]);')
+    lines.append('        out.append(s);')
+    lines.append('        for (long i = 0; i < marg - left; i++) out.appendCodePoint(f[0]);')
+    lines.append('        return out.toString();')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** A primeira em titulo, o resto em minusculas. */')
+    lines.append('    private String _apkpyCapitalize(String s) {')
+    lines.append('        int[] cp = _apkpyCodes(s);')
+    lines.append('        if (cp.length == 0) return "";')
+    lines.append('        return new String(Character.toChars(Character.toTitleCase(cp[0])))')
+    lines.append('                + new String(cp, 1, cp.length - 1).toLowerCase(java.util.Locale.ROOT);')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    private String _apkpySwapcase(String s) {')
+    lines.append('        StringBuilder out = new StringBuilder();')
+    lines.append('        for (int c : _apkpyCodes(s)) {')
+    lines.append('            String one = new String(Character.toChars(c));')
+    lines.append('            if (Character.isUpperCase(c)) out.append(one.toLowerCase(java.util.Locale.ROOT));')
+    lines.append('            else if (Character.isLowerCase(c)) out.append(one.toUpperCase(java.util.Locale.ROOT));')
+    lines.append('            else out.append(one);')
+    lines.append('        }')
+    lines.append('        return out.toString();')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** splitlines(): as quebras que o Python conhece, sem a parte vazia do fim. */')
+    lines.append('    private String _apkpySplitLines(String s, boolean keep) {')
+    lines.append('        org.json.JSONArray out = new org.json.JSONArray();')
+    lines.append('        String t = s == null ? "" : s;')
+    lines.append('        int i = 0, start = 0, n = t.length();')
+    lines.append('        while (i < n) {')
+    lines.append('            char c = t.charAt(i);')
+    lines.append('            int eol = 0;')
+    lines.append('            if (c == 13) eol = (i + 1 < n && t.charAt(i + 1) == 10) ? 2 : 1;')
+    lines.append('            else if (c == 10 || c == 11 || c == 12 || c == 28 || c == 29 || c == 30')
+    lines.append('                    || c == 133 || c == 8232 || c == 8233) eol = 1;')
+    lines.append('            if (eol > 0) {')
+    lines.append('                out.put(t.substring(start, keep ? i + eol : i));')
+    lines.append('                i += eol;')
+    lines.append('                start = i;')
+    lines.append('            } else {')
+    lines.append('                i++;')
+    lines.append('            }')
+    lines.append('        }')
+    lines.append('        if (start < n) out.put(t.substring(start));')
+    lines.append('        return out.toString();')
+    lines.append('    }')
+    lines.append("")
+    lines.append("    /** isalpha, isdigit, ... por ponto de codigo, como o Python; vazio e' falso")
+    lines.append('     *  (menos isascii). */')
+    lines.append('    private boolean _apkpyStrIs(String s, String what) {')
+    lines.append('        int[] cp = _apkpyCodes(s);')
+    lines.append('        if (what.equals("ascii")) {')
+    lines.append('            for (int c : cp) if (c > 127) return false;')
+    lines.append('            return true;')
+    lines.append('        }')
+    lines.append('        if (cp.length == 0) return false;')
+    lines.append('        boolean cased = false;')
+    lines.append('        for (int c : cp) {')
+    lines.append('            int type = Character.getType(c);')
+    lines.append('            boolean decimal = type == Character.DECIMAL_DIGIT_NUMBER;')
+    lines.append('            boolean digit = decimal || (type == Character.OTHER_NUMBER')
+    lines.append('                    && Character.getNumericValue(c) >= 0 && Character.getNumericValue(c) <= 9);')
+    lines.append('            boolean numeric = decimal || type == Character.LETTER_NUMBER || type == Character.OTHER_NUMBER;')
+    lines.append('            switch (what) {')
+    lines.append('                case "alpha": if (!Character.isLetter(c)) return false; break;')
+    lines.append('                case "alnum": if (!Character.isLetter(c) && !numeric) return false; break;')
+    lines.append('                case "decimal": if (!decimal) return false; break;')
+    lines.append('                case "digit": if (!digit) return false; break;')
+    lines.append('                case "numeric": if (!numeric) return false; break;')
+    lines.append('                case "space": if (!_apkpyPySpace(c)) return false; break;')
+    lines.append('                case "upper":')
+    lines.append('                    if (Character.isLowerCase(c) || Character.isTitleCase(c)) return false;')
+    lines.append('                    if (Character.isUpperCase(c)) cased = true;')
+    lines.append('                    break;')
+    lines.append('                case "lower":')
+    lines.append('                    if (Character.isUpperCase(c) || Character.isTitleCase(c)) return false;')
+    lines.append('                    if (Character.isLowerCase(c)) cased = true;')
+    lines.append('                    break;')
+    lines.append('                default: return false;')
+    lines.append('            }')
+    lines.append('        }')
+    lines.append('        return (what.equals("upper") || what.equals("lower")) ? cased : true;')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** texto.replace(a, b, n): so as n primeiras. */')
+    lines.append('    private String _apkpyReplaceN(String s, String old, String now, long count) {')
+    lines.append('        String t = s == null ? "" : s;')
+    lines.append('        if (count < 0) return t.replace(old, now);')
+    lines.append('        StringBuilder out = new StringBuilder();')
+    lines.append('        int from = 0;')
+    lines.append('        for (long done = 0; done < count; done++) {')
+    lines.append('            int at = old.isEmpty() ? (from <= t.length() ? from : -1) : t.indexOf(old, from);')
+    lines.append('            if (at < 0) break;')
+    lines.append('            out.append(t, from, at).append(now);')
+    lines.append('            if (old.isEmpty()) {')
+    lines.append('                if (at < t.length()) out.appendCodePoint(t.codePointAt(at));')
+    lines.append('                from = at + (at < t.length() ? Character.charCount(t.codePointAt(at)) : 1);')
+    lines.append('            } else {')
+    lines.append('                from = at + old.length();')
+    lines.append('            }')
+    lines.append('        }')
+    lines.append('        if (from <= t.length()) out.append(t.substring(from));')
+    lines.append('        return out.toString();')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    private String _apkpyChr(long n) {')
+    lines.append('        if (n < 0 || n > 1114111) throw new ApkpyValues.Raised("ValueError", "chr() arg not in range(0x110000)");')
+    lines.append('        return new String(Character.toChars((int) n));')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    private long _apkpyOrd(String s) {')
+    lines.append('        int[] cp = _apkpyCodes(s);')
+    lines.append('        if (cp.length != 1) {')
+    lines.append('            throw new ApkpyValues.Raised("TypeError", "ord() expected a character, but string of length " + cp.length + " found");')
+    lines.append('        }')
+    lines.append('        return cp[0];')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** "-" * 10 e [0] * 3. */')
+    lines.append('    private String _apkpyRepeat(String s, long n, boolean list) {')
+    lines.append('        if (list) {')
+    lines.append('            org.json.JSONArray arr = _apkpyListArg(s, "__mul__");')
+    lines.append('            org.json.JSONArray out = new org.json.JSONArray();')
+    lines.append('            for (long k = 0; k < n; k++) for (int i = 0; i < arr.length(); i++) out.put(arr.opt(i));')
+    lines.append('            return out.toString();')
+    lines.append('        }')
+    lines.append('        StringBuilder out = new StringBuilder();')
+    lines.append('        for (long k = 0; k < n; k++) out.append(s);')
+    lines.append('        return out.toString();')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    private long _apkpySliceBound(String raw, long n, long step, boolean upper) {')
+    lines.append('        if (raw == null || raw.trim().isEmpty()) {')
+    lines.append('            if (step < 0) return upper ? -1 : n - 1;')
+    lines.append('            return upper ? n : 0;')
+    lines.append('        }')
+    lines.append('        long i = Long.parseLong(raw.trim());')
+    lines.append('        if (i < 0) {')
+    lines.append('            i += n;')
+    lines.append('            if (i < 0) i = step < 0 ? -1 : 0;')
+    lines.append('        } else if (i >= n) {')
+    lines.append('            i = step < 0 ? n - 1 : n;')
+    lines.append('        }')
+    lines.append('        return i;')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** a[i:j:k] com as regras do slice.indices do Python. kind 3 = texto,')
+    lines.append('     *  1 = lista, 0 = pela forma do valor. */')
+    lines.append('    private String _apkpySliceStep(String value, String lo, String hi, String step, int kind) {')
+    lines.append('        String text = value == null ? "" : value;')
+    lines.append('        boolean list = kind == 1 || (kind == 0 && _apkpyJsonShape(text) == 91);')
+    lines.append('        org.json.JSONArray arr = list ? _apkpyListArg(text, "__getitem__") : null;')
+    lines.append('        int[] cp = list ? null : _apkpyCodes(text);')
+    lines.append('        long n = list ? arr.length() : cp.length;')
+    lines.append('        long k = step.trim().isEmpty() ? 1 : Long.parseLong(step.trim());')
+    lines.append('        if (k == 0) throw new ApkpyValues.Raised("ValueError", "slice step cannot be zero");')
+    lines.append('        long a = _apkpySliceBound(lo, n, k, false);')
+    lines.append('        long b = _apkpySliceBound(hi, n, k, true);')
+    lines.append('        StringBuilder out = new StringBuilder();')
+    lines.append('        org.json.JSONArray picked = new org.json.JSONArray();')
+    lines.append('        for (long i = a; k > 0 ? i < b : i > b; i += k) {')
+    lines.append('            if (list) picked.put(arr.opt((int) i));')
+    lines.append('            else out.appendCodePoint(cp[(int) i]);')
+    lines.append('        }')
+    lines.append('        return list ? picked.toString() : out.toString();')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** format(valor, spec) com a mini-linguagem do Python:')
+    lines.append('     *  [[fill]align][sign][#][0][width][,|_][.precision][type], e as mesmas')
+    lines.append('     *  recusas (ValueError). kind 1 = numero, 2 = texto, 0 = pelo tipo pedido. */')
+    lines.append('    private String _apkpyFormat(String value, String spec, int kind) {')
+    lines.append('        String v = value == null ? "" : value;')
+    lines.append('        int[] sp = spec.codePoints().toArray();')
+    lines.append('        int i = 0, n = sp.length;')
+    lines.append('        int fill = -1, align = 0;')
+    lines.append('        if (n >= 2 && "<>=^".indexOf(sp[1]) >= 0) { fill = sp[0]; align = sp[1]; i = 2; }')
+    lines.append('        else if (n >= 1 && "<>=^".indexOf(sp[0]) >= 0) { align = sp[0]; i = 1; }')
+    lines.append('        int sign = 0;')
+    lines.append('        if (i < n && (sp[i] == 43 || sp[i] == 45 || sp[i] == 32)) sign = sp[i++];')
+    lines.append('        boolean alt = false;')
+    lines.append('        if (i < n && sp[i] == 35) { alt = true; i++; }')
+    lines.append('        boolean zero = false;')
+    lines.append('        if (i < n && sp[i] == 48) { zero = true; i++; }')
+    lines.append('        int width = 0;')
+    lines.append('        while (i < n && sp[i] >= 48 && sp[i] <= 57) width = width * 10 + (sp[i++] - 48);')
+    lines.append('        int group = 0;')
+    lines.append('        if (i < n && (sp[i] == 44 || sp[i] == 95)) group = sp[i++];')
+    lines.append('        int precision = -1;')
+    lines.append('        if (i < n && sp[i] == 46) {')
+    lines.append('            i++;')
+    lines.append('            int start = i;')
+    lines.append('            precision = 0;')
+    lines.append('            while (i < n && sp[i] >= 48 && sp[i] <= 57) precision = precision * 10 + (sp[i++] - 48);')
+    lines.append('            if (i == start) throw new ApkpyValues.Raised("ValueError", "Format specifier missing precision");')
+    lines.append('        }')
+    lines.append('        int type = i < n ? sp[i++] : 0;')
+    lines.append('        if (i != n) throw new ApkpyValues.Raised("ValueError", "Invalid format specifier \'" + spec + "\'");')
+    lines.append('        String t = v.trim();')
+    lines.append('        boolean number = kind == 1 || (kind == 0 && type != 0 && type != 115);')
+    lines.append('        if (zero && fill < 0) fill = 48;')
+    lines.append('        if (fill < 0) fill = 32;')
+    lines.append('        String typeName = type == 0 ? "" : new String(Character.toChars(type));')
+    lines.append('        if (!number) {')
+    lines.append('            if (type != 0 && type != 115) {')
+    lines.append('                throw new ApkpyValues.Raised("ValueError", "Unknown format code \'" + typeName + "\' for object of type \'str\'");')
+    lines.append('            }')
+    lines.append('            if (sign != 0) throw new ApkpyValues.Raised("ValueError", "Sign not allowed in string format specifier");')
+    lines.append('            if (alt) throw new ApkpyValues.Raised("ValueError", "Alternate form (#) not allowed in string format specifier");')
+    lines.append('            if (group != 0) throw new ApkpyValues.Raised("ValueError", "Cannot specify \'" + (char) group + "\' with \'s\'.");')
+    lines.append('            if (align == 61) throw new ApkpyValues.Raised("ValueError", "\'=\' alignment not allowed in string format specifier");')
+    lines.append('            int[] cp = v.codePoints().toArray();')
+    lines.append('            String body = precision >= 0 && precision < cp.length ? new String(cp, 0, precision) : v;')
+    lines.append('            return _apkpyAlign(body, "", fill, align == 0 ? 60 : align, width);')
+    lines.append('        }')
+    lines.append('        if (zero && align == 0) align = 61;')
+    lines.append('        boolean whole = t.matches("[+-]?[0-9]+");')
+    lines.append('        boolean intType = type == 0 && whole || type == 100 || type == 110 || type == 120')
+    lines.append('                || type == 88 || type == 111 || type == 98 || type == 99;')
+    lines.append('        String body;')
+    lines.append('        String prefix = "";')
+    lines.append('        boolean negative;')
+    lines.append('        int every = 3;')
+    lines.append('        if (intType) {')
+    lines.append('            if (!whole) throw new ApkpyValues.Raised("ValueError", "Unknown format code \'" + typeName + "\' for object of type \'float\'");')
+    lines.append('            if (precision >= 0) throw new ApkpyValues.Raised("ValueError", "Precision not allowed in integer format specifier");')
+    lines.append('            if (group == 44 && type != 0 && type != 100) throw new ApkpyValues.Raised("ValueError", "Cannot specify \',\' with \'" + typeName + "\'.");')
+    lines.append('            if (group == 95 && (type == 110 || type == 99)) throw new ApkpyValues.Raised("ValueError", "Cannot specify \'_\' with \'" + typeName + "\'.");')
+    lines.append('            java.math.BigInteger big = new java.math.BigInteger(t.startsWith("+") ? t.substring(1) : t);')
+    lines.append('            if (type == 99) {')
+    lines.append('                if (sign != 0) throw new ApkpyValues.Raised("ValueError", "Sign not allowed with integer format specifier \'c\'");')
+    lines.append('                if (alt) throw new ApkpyValues.Raised("ValueError", "Alternate form (#) not allowed with integer format specifier \'c\'");')
+    lines.append('                if (big.signum() < 0 || big.compareTo(java.math.BigInteger.valueOf(1114111)) > 0) {')
+    lines.append('                    throw new ApkpyValues.Raised("OverflowError", "%c arg not in range(0x110000)");')
+    lines.append('                }')
+    lines.append('                return _apkpyAlign(new String(Character.toChars(big.intValue())), "", fill, align == 0 ? 62 : align, width);')
+    lines.append('            }')
+    lines.append('            negative = big.signum() < 0;')
+    lines.append('            int radix = type == 120 || type == 88 ? 16 : type == 111 ? 8 : type == 98 ? 2 : 10;')
+    lines.append('            body = big.abs().toString(radix);')
+    lines.append('            if (type == 88) body = body.toUpperCase(java.util.Locale.ROOT);')
+    lines.append('            if (radix != 10) every = 4;')
+    lines.append('            if (alt && radix != 10) prefix = type == 120 ? "0x" : type == 88 ? "0X" : type == 111 ? "0o" : "0b";')
+    lines.append('        } else {')
+    lines.append('            if (type != 0 && "fFeEgG%".indexOf(type) < 0) {')
+    lines.append('                throw new ApkpyValues.Raised("ValueError", "Unknown format code \'" + typeName + "\' for object of type \'float\'");')
+    lines.append('            }')
+    lines.append('            double d = t.equals("inf") || t.equals("+inf") ? Double.POSITIVE_INFINITY')
+    lines.append('                    : t.equals("-inf") ? Double.NEGATIVE_INFINITY')
+    lines.append('                    : t.equals("nan") || t.equals("-nan") || t.equals("+nan") ? Double.NaN : Double.parseDouble(t);')
+    lines.append('            negative = d < 0 || (d == 0 && 1 / d < 0);')
+    lines.append('            double a = Math.abs(d);')
+    lines.append('            boolean upper = type == 70 || type == 69 || type == 71;')
+    lines.append('            if (Double.isNaN(d) || Double.isInfinite(d)) {')
+    lines.append('                body = Double.isNaN(d) ? "nan" : "inf";')
+    lines.append('                if (upper) body = body.toUpperCase(java.util.Locale.ROOT);')
+    lines.append('                if (type == 37) body += "%";')
+    lines.append('                negative = d < 0;')
+    lines.append('            } else if (type == 102 || type == 70) {')
+    lines.append('                body = _apkpyFixed(new java.math.BigDecimal(a), precision < 0 ? 6 : precision, alt);')
+    lines.append('            } else if (type == 37) {')
+    lines.append('                // x * 100 in floating point, as Python does it, then the digits.')
+    lines.append('                body = _apkpyFixed(new java.math.BigDecimal(a * 100), precision < 0 ? 6 : precision, alt) + "%";')
+    lines.append('            } else if (type == 101 || type == 69) {')
+    lines.append('                body = _apkpySci(new java.math.BigDecimal(a), precision < 0 ? 6 : precision, alt, type == 69);')
+    lines.append('            } else if (type == 0 && precision < 0) {')
+    lines.append('                body = _apkpyFloat(a);')
+    lines.append("                int e = body.indexOf('e');")
+    lines.append('                if (alt && e >= 0 && body.lastIndexOf(\'.\', e) < 0) body = body.substring(0, e) + "." + body.substring(e);')
+    lines.append('            } else {')
+    lines.append('                int p = precision < 0 ? 6 : (precision == 0 ? 1 : precision);')
+    lines.append('                body = _apkpyGeneral(new java.math.BigDecimal(a), p, alt, type == 71, type == 0);')
+    lines.append('            }')
+    lines.append('        }')
+    lines.append('        String signText = negative ? "-" : sign == 43 ? "+" : sign == 32 ? " " : "";')
+    lines.append('        if (align == 0) align = 62;')
+    lines.append('        boolean finite = !body.startsWith("nan") && !body.startsWith("inf") && !body.startsWith("NAN") && !body.startsWith("INF");')
+    lines.append('        int cut = body.length();')
+    lines.append('        if (!intType) {')
+    lines.append('            for (int k = 0; k < body.length(); k++) {')
+    lines.append('                char c = body.charAt(k);')
+    lines.append("                if (c == '.' || c == 'e' || c == 'E' || c == '%') { cut = k; break; }")
+    lines.append('            }')
+    lines.append('        }')
+    lines.append('        String digits = body.substring(0, cut), tail = body.substring(cut);')
+    lines.append('        if (group != 0 && finite) {')
+    lines.append('            if (align == 61 && fill == 48) {')
+    lines.append('                // Zeros padding a grouped number are grouped too, as in Python.')
+    lines.append('                int room = width - signText.length() - prefix.length() - tail.length();')
+    lines.append('                String grouped = _apkpyGroup(digits, group, every);')
+    lines.append('                while (grouped.length() < room) {')
+    lines.append('                    digits = "0" + digits;')
+    lines.append('                    grouped = _apkpyGroup(digits, group, every);')
+    lines.append('                }')
+    lines.append('                return signText + prefix + grouped + tail;')
+    lines.append('            }')
+    lines.append('            body = _apkpyGroup(digits, group, every) + tail;')
+    lines.append('        }')
+    lines.append('        return _apkpyAlign(body, signText + prefix, fill, align, width);')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    private String _apkpyGroup(String digits, int sep, int every) {')
+    lines.append('        if (sep == 0 || digits.length() <= every) return digits;')
+    lines.append('        StringBuilder out = new StringBuilder();')
+    lines.append('        int first = digits.length() % every;')
+    lines.append('        if (first == 0) first = every;')
+    lines.append('        out.append(digits, 0, first);')
+    lines.append('        for (int k = first; k < digits.length(); k += every) out.appendCodePoint(sep).append(digits, k, k + every);')
+    lines.append('        return out.toString();')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    private String _apkpyAlign(String body, String sign, int fill, int align, int width) {')
+    lines.append('        int len = sign.codePointCount(0, sign.length()) + body.codePointCount(0, body.length());')
+    lines.append('        int pad = Math.max(0, width - len);')
+    lines.append('        String f = new String(Character.toChars(fill));')
+    lines.append('        int left = align == 60 ? 0 : align == 94 ? pad / 2 : pad;')
+    lines.append('        StringBuilder before = new StringBuilder(), after = new StringBuilder();')
+    lines.append('        for (int k = 0; k < left; k++) before.append(f);')
+    lines.append('        for (int k = 0; k < pad - left; k++) after.append(f);')
+    lines.append('        if (align == 61) return sign + before + after + body;')
+    lines.append('        return before + sign + body + after;')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    private String _apkpyFixed(java.math.BigDecimal a, int precision, boolean alt) {')
+    lines.append('        String s = a.setScale(precision, java.math.RoundingMode.HALF_EVEN).toPlainString();')
+    lines.append('        return alt && precision == 0 ? s + "." : s;')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    private String _apkpySci(java.math.BigDecimal a, int precision, boolean alt, boolean upper) {')
+    lines.append('        int exp = 0;')
+    lines.append('        StringBuilder digits = new StringBuilder();')
+    lines.append('        if (a.signum() == 0) {')
+    lines.append("            for (int k = 0; k <= precision; k++) digits.append('0');")
+    lines.append('        } else {')
+    lines.append('            java.math.BigDecimal r = a.round(new java.math.MathContext(precision + 1, java.math.RoundingMode.HALF_EVEN));')
+    lines.append('            exp = r.precision() - r.scale() - 1;')
+    lines.append('            digits.append(r.unscaledValue().toString());')
+    lines.append("            while (digits.length() < precision + 1) digits.append('0');")
+    lines.append('            digits.setLength(precision + 1);')
+    lines.append('        }')
+    lines.append('        String mant = digits.substring(0, 1) + (precision > 0 || alt ? "." : "") + digits.substring(1);')
+    lines.append('        return mant + (upper ? "E" : "e") + (exp < 0 ? "-" : "+") + (Math.abs(exp) < 10 ? "0" : "") + Math.abs(exp);')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    private String _apkpyGeneral(java.math.BigDecimal a, int p, boolean alt, boolean upper, boolean none) {')
+    lines.append('        int exp = 0;')
+    lines.append('        if (a.signum() != 0) {')
+    lines.append('            java.math.BigDecimal r = a.round(new java.math.MathContext(p, java.math.RoundingMode.HALF_EVEN));')
+    lines.append('            exp = r.precision() - r.scale() - 1;')
+    lines.append('        }')
+    lines.append('        // With no type, CPython goes to the exponent one digit sooner.')
+    lines.append('        if (-4 <= exp && exp < p - (none ? 1 : 0)) {')
+    lines.append('            String s = _apkpyFixed(a, p - 1 - exp, false);')
+    lines.append("            if (!alt && s.indexOf('.') >= 0) s = _apkpyTrimZeros(s);")
+    lines.append('            if (s.indexOf(\'.\') < 0) s += none ? ".0" : alt ? "." : "";')
+    lines.append('            return s;')
+    lines.append('        }')
+    lines.append('        String s = _apkpySci(a, p - 1, alt, upper);')
+    lines.append('        if (alt) return s;')
+    lines.append("        int e = s.indexOf(upper ? 'E' : 'e');")
+    lines.append('        String m = s.substring(0, e);')
+    lines.append("        return (m.indexOf('.') >= 0 ? _apkpyTrimZeros(m) : m) + s.substring(e);")
+    lines.append('    }')
+    lines.append("")
+    lines.append('    private String _apkpyTrimZeros(String s) {')
+    lines.append('        int end = s.length();')
+    lines.append("        while (end > 0 && s.charAt(end - 1) == '0') end--;")
+    lines.append("        if (end > 0 && s.charAt(end - 1) == '.') end--;")
+    lines.append('        return s.substring(0, end);')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** "%d" % 3.7 = "3": a parte inteira, sem perder digitos num inteiro grande. */')
+    lines.append('    private String _apkpyWholePart(String v) {')
+    lines.append('        String t = v == null ? "" : v.trim();')
+    lines.append('        if (t.matches("[+-]?[0-9]+")) return t;')
+    lines.append('        return new java.math.BigDecimal(Double.toString(Double.parseDouble(t))).toBigInteger().toString();')
+    lines.append('    }')
+    lines.append("")
+    lines.append('    /** O repr de um texto, como o Python: aspas simples, ou duplas se so')
+    lines.append('     *  houver simples dentro, e os escapes. */')
+    lines.append('    private String _apkpyRepr(String s) {')
+    lines.append('        String t = s == null ? "" : s;')
+    lines.append('        char quote = t.indexOf(\'\\\'\') >= 0 && t.indexOf(\'"\') < 0 ? \'"\' : \'\\\'\';')
+    lines.append('        StringBuilder out = new StringBuilder().append(quote);')
+    lines.append('        for (int c : t.codePoints().toArray()) {')
+    lines.append("            if (c == quote || c == '\\\\') out.append('\\\\').appendCodePoint(c);")
+    lines.append('            else if (c == \'\\n\') out.append("\\\\n");')
+    lines.append('            else if (c == \'\\r\') out.append("\\\\r");')
+    lines.append('            else if (c == \'\\t\') out.append("\\\\t");')
+    lines.append('            else if (c < 32 || c == 127) out.append(String.format("\\\\x%02x", c));')
+    lines.append('            else {')
+    lines.append('                int type = Character.getType(c);')
+    lines.append('                boolean hidden = type == Character.CONTROL || type == Character.FORMAT')
+    lines.append('                        || type == Character.SURROGATE || type == Character.PRIVATE_USE')
+    lines.append('                        || type == Character.UNASSIGNED || type == Character.LINE_SEPARATOR')
+    lines.append('                        || type == Character.PARAGRAPH_SEPARATOR')
+    lines.append('                        || (type == Character.SPACE_SEPARATOR && c != 32);')
+    lines.append('                if (!hidden) out.appendCodePoint(c);')
+    lines.append('                else if (c <= 255) out.append(String.format("\\\\x%02x", c));')
+    lines.append('                else if (c <= 65535) out.append(String.format("\\\\u%04x", c));')
+    lines.append('                else out.append(String.format("\\\\U%08x", c));')
+    lines.append('            }')
+    lines.append('        }')
+    lines.append('        return out.append(quote).toString();')
+    lines.append('    }')
+    lines.append("")
+    lines.append("")
+    lines.append("    /** str() of a list or dict as Python shows it: [1, 'a', None],")
+    lines.append("     *  {'k': True}. The JSON it is kept as says the type of each item. */")
+    lines.append('    private String _apkpyShow(String json) {')
+    lines.append('        String text = json == null ? "" : json.trim();')
+    lines.append('        try {')
+    lines.append('            if (_apkpyJsonShape(text) == 91) return _apkpyShowItem(new org.json.JSONArray(text));')
+    lines.append('            if (_apkpyJsonShape(text) == 123) return _apkpyShowItem(new org.json.JSONObject(text));')
+    lines.append('        } catch (Exception ignored) {}')
+    lines.append('        return json == null ? "" : json;')
+    lines.append('    }')
+    lines.append('')
+    lines.append('    /** str() of a tuple: (1, 2), and (1,) with one item. Kept as a list. */')
+    lines.append('    private String _apkpyShowTuple(String json) {')
+    lines.append('        try {')
+    lines.append('            org.json.JSONArray arr = new org.json.JSONArray(json == null ? "[]" : json.trim());')
+    lines.append("            StringBuilder out = new StringBuilder().append('(');")
+    lines.append('            for (int i = 0; i < arr.length(); i++) {')
+    lines.append('                if (i > 0) out.append(", ");')
+    lines.append('                out.append(_apkpyShowItem(arr.opt(i)));')
+    lines.append('            }')
+    lines.append("            if (arr.length() == 1) out.append(',');")
+    lines.append("            return out.append(')').toString();")
+    lines.append('        } catch (Exception ignored) {')
+    lines.append('            return _apkpyShow(json);')
+    lines.append('        }')
+    lines.append('    }')
+    lines.append('')
+    lines.append('    private String _apkpyShowItem(Object item) {')
+    lines.append('        if (item == null || item == org.json.JSONObject.NULL) return "None";')
+    lines.append('        if (item instanceof Boolean) return ((Boolean) item) ? "True" : "False";')
+    lines.append('        if (item instanceof String) return _apkpyRepr((String) item);')
+    lines.append('        if (item instanceof Double || item instanceof Float || item instanceof java.math.BigDecimal)')
+    lines.append('            return _apkpyFloat(((Number) item).doubleValue());')
+    lines.append('        if (item instanceof Number) return String.valueOf(((Number) item).longValue());')
+    lines.append('        StringBuilder out = new StringBuilder();')
+    lines.append('        if (item instanceof org.json.JSONArray) {')
+    lines.append('            org.json.JSONArray arr = (org.json.JSONArray) item;')
+    lines.append("            out.append('[');")
+    lines.append('            for (int i = 0; i < arr.length(); i++) {')
+    lines.append('                if (i > 0) out.append(", ");')
+    lines.append('                out.append(_apkpyShowItem(arr.opt(i)));')
+    lines.append('            }')
+    lines.append("            return out.append(']').toString();")
+    lines.append('        }')
+    lines.append('        if (item instanceof org.json.JSONObject) {')
+    lines.append('            org.json.JSONObject obj = (org.json.JSONObject) item;')
+    lines.append('            out.append((char) 123);')
+    lines.append('            java.util.Iterator<String> keys = obj.keys();')
+    lines.append('            boolean first = true;')
+    lines.append('            while (keys.hasNext()) {')
+    lines.append('                String key = keys.next();')
+    lines.append('                if (!first) out.append(", ");')
+    lines.append('                first = false;')
+    lines.append('                out.append(_apkpyRepr(key)).append(": ").append(_apkpyShowItem(obj.opt(key)));')
+    lines.append('            }')
+    lines.append('            return out.append((char) 125).toString();')
+    lines.append('        }')
+    lines.append('        return String.valueOf(item);')
+    lines.append('    }')
+    lines.append('')
+    lines.append('    /** pow(a, b, m): exact, with the sign of m and, for b < 0, the inverse. */')
+    lines.append('    private static long _apkpyPowMod(long base, long exp, long mod) {')
+    lines.append('        if (mod == 0) throw new ApkpyValues.Raised("ValueError", "pow() 3rd argument cannot be 0");')
+    lines.append('        java.math.BigInteger m = java.math.BigInteger.valueOf(mod).abs();')
+    lines.append('        java.math.BigInteger r;')
+    lines.append('        try {')
+    lines.append('            r = java.math.BigInteger.valueOf(base).modPow(java.math.BigInteger.valueOf(exp), m);')
+    lines.append('        } catch (ArithmeticException e) {')
+    lines.append('            throw new ApkpyValues.Raised("ValueError", "base is not invertible for the given modulus");')
+    lines.append('        }')
+    lines.append('        long out = r.longValue();')
+    lines.append('        return mod < 0 && out != 0 ? out + mod : out;')
+    lines.append('    }')
+    lines.append("")
+    lines.append("    /** Um numero como o Python o escreve: 12, -3, 2.5, 1e-05. */")
+    lines.append("    private boolean _apkpyIsNumber(String t) {")
+    lines.append("        if (t == null || t.isEmpty()) return false;")
+    lines.append("        for (int i = 0; i < t.length(); i++) {")
+    lines.append("            char c = t.charAt(i);")
+    lines.append("            if (!(Character.isDigit(c) || c == '.' || c == '-' || c == '+' || c == 'e' || c == 'E')) return false;")
+    lines.append("        }")
+    lines.append("        try {")
+    lines.append("            Double.parseDouble(t);")
+    lines.append("            if (_apkpyIsWhole(t)) Long.parseLong(t);")
+    lines.append("            return true;")
+    lines.append("        } catch (Exception e) {")
+    lines.append("            return false;")
+    lines.append("        }")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** round(x, n) de um decimal, como o CPython: o valor EXACTO do double")
+    lines.append("     *  arredondado a n casas, meio para o par. Multiplicar por 10^n arredondava")
+    lines.append("     *  antes do tempo: round(-0.025, 2) dava -0.02 e o Python -0.03. */")
+    lines.append("    private double _apkpyRoundTo(double value, int digits) {")
+    lines.append("        if (Double.isNaN(value) || Double.isInfinite(value)) return value;")
+    lines.append("        double out = new java.math.BigDecimal(value)")
+    lines.append("                .setScale(digits, java.math.RoundingMode.HALF_EVEN).doubleValue();")
+    lines.append("        return out == 0d ? Math.copySign(0d, value) : out;")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** round(n, -2) de um inteiro: 1250 da' 1200, meio para o par. */")
+    lines.append("    private long _apkpyRoundL(long value, int digits) {")
+    lines.append("        return java.math.BigDecimal.valueOf(value)")
+    lines.append("                .setScale(digits, java.math.RoundingMode.HALF_EVEN).longValueExact();")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** abs() de um inteiro: o Math.abs do menor long devolve-o negativo. */")
+    lines.append("    private long _apkpyAbsL(long value) {")
+    lines.append("        if (value == Long.MIN_VALUE) throw new ArithmeticException(\"integer overflow\");")
+    lines.append("        return Math.abs(value);")
     lines.append("    }")
     lines.append("")
     lines.append("    /** Em Python abs(-3) e' 3 e nao 3.0. Aqui todos os valores sao")
@@ -2638,7 +5295,7 @@ def _emit_json_build_helpers(lines, ctx=""):
     lines.append("            return String.valueOf(")
     lines.append("                    Math.abs(Double.parseDouble(String.valueOf(value).trim())));")
     lines.append("        } catch (Exception e) {")
-    lines.append("            throw new IllegalArgumentException(\"abs() needs a number\");")
+    lines.append("            throw new ApkpyValues.Raised(\"TypeError\", \"abs() needs a number\");")
     lines.append("        }")
     lines.append("    }")
     lines.append("")
@@ -2662,7 +5319,7 @@ def _emit_json_build_helpers(lines, ctx=""):
     lines.append("            for (String v : values) items.add(String.valueOf(v));")
     lines.append("        }")
     lines.append("        if (items.isEmpty()) {")
-    lines.append("            throw new IllegalArgumentException(\"min/max of an empty list\");")
+    lines.append("            throw new ApkpyValues.Raised(\"ValueError\", \"min/max of an empty list\");")
     lines.append("        }")
     lines.append("        String best = items.get(0);")
     lines.append("        for (String item : items) {")
@@ -2692,9 +5349,9 @@ def _emit_json_build_helpers(lines, ctx=""):
     lines.append("                total += Double.parseDouble(item);")
     lines.append("            }")
     lines.append("        } catch (Exception e) {")
-    lines.append("            throw new IllegalArgumentException(\"sum() needs a list of numbers\");")
+    lines.append("            throw new ApkpyValues.Raised(\"TypeError\", \"sum() needs a list of numbers\");")
     lines.append("        }")
-    lines.append("        return whole ? String.valueOf((long) total) : String.valueOf(total);")
+    lines.append("        return whole ? String.valueOf((long) total) : _apkpyFloat(total);")
     lines.append("    }")
     lines.append("")
     lines.append("    /** lista.append(x). Uma lista é texto JSON aqui, por isso isto")
@@ -2706,22 +5363,116 @@ def _emit_json_build_helpers(lines, ctx=""):
     lines.append("        } catch (Exception e) {")
     lines.append("            arr = new org.json.JSONArray();")
     lines.append("        }")
-    lines.append("        arr.put(value);")
+    lines.append("        // flags.append(n > 2): the app's True goes in as JSON true, not the word.")
+    lines.append("        arr.put(value instanceof String ? _apkpyJsonOut((String) value) : value);")
     lines.append("        return arr.toString();")
     lines.append("    }")
     lines.append("")
     lines.append("    /** lista[i], com o índice negativo do Python. Fora dos limites")
-    lines.append("     *  devolve vazio: o resto do modelo também não rebenta. */")
+    lines.append("     *  devolve vazio, como o resto do modelo -- menos dentro de um try")
+    lines.append("     *  que apanha o IndexError, onde o levanta (ApkpyValues.strict). */")
     lines.append("    private String _apkpyListGet(String json, String index) {")
+    lines.append("        org.json.JSONArray arr;")
+    lines.append("        int i;")
     lines.append("        try {")
-    lines.append("            org.json.JSONArray arr = new org.json.JSONArray(json == null ? \"[]\" : json);")
-    lines.append("            int i = Integer.parseInt(String.valueOf(index).trim());")
-    lines.append("            if (i < 0) i += arr.length();")
-    lines.append("            if (i < 0 || i >= arr.length()) return \"\";")
-    lines.append("            return String.valueOf(arr.get(i));")
+    lines.append("            arr = new org.json.JSONArray(json == null ? \"[]\" : json);")
+    lines.append("            i = Integer.parseInt(String.valueOf(index).trim());")
     lines.append("        } catch (Exception e) {")
     lines.append("            return \"\";")
     lines.append("        }")
+    lines.append("        if (i < 0) i += arr.length();")
+    lines.append("        if (i < 0 || i >= arr.length()) {")
+    lines.append("            if (ApkpyValues.strict()) throw new ApkpyValues.Raised(\"IndexError\", \"list index out of range\");")
+    lines.append("            return \"\";")
+    lines.append("        }")
+    lines.append("        return _apkpyFromJson(arr.opt(i));")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** lista[a:b], com as pontas do Python. Fatiar a lista como texto")
+    lines.append("     *  cortava o proprio JSON: itens[1:] dava '\"a\",\"b\"]'. */")
+    lines.append("    private String _apkpyListSlice(String json, String from, String to) {")
+    lines.append("        org.json.JSONArray arr;")
+    lines.append("        try {")
+    lines.append("            arr = new org.json.JSONArray(json == null ? \"[]\" : json);")
+    lines.append("        } catch (Exception e) {")
+    lines.append("            arr = new org.json.JSONArray();")
+    lines.append("        }")
+    lines.append("        int size = arr.length();")
+    lines.append("        int start = _apkpySliceEdge(from, 0, size);")
+    lines.append("        int end = _apkpySliceEdge(to, size, size);")
+    lines.append("        org.json.JSONArray out = new org.json.JSONArray();")
+    lines.append("        for (int i = start; i < end; i++) out.put(arr.opt(i));")
+    lines.append("        return out.toString();")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** v[a:b] quando o codigo nao diz o que v e': lista se for JSON de")
+    lines.append("     *  uma lista, texto se nao. */")
+    lines.append("    private String _apkpySliceAny(String value, String from, String to) {")
+    lines.append("        if (_apkpyJsonShape(value) == 91) {")
+    lines.append("            try {")
+    lines.append("                new org.json.JSONArray(value.trim());")
+    lines.append("                return _apkpyListSlice(value.trim(), from, to);")
+    lines.append("            } catch (Exception ignored) {}")
+    lines.append("        }")
+    lines.append("        return _apkpySlice(value, from, to);")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** texto[i]: a letra, contada como o Python conta (um emoji e' uma),")
+    lines.append("     *  com o indice negativo de la'. Fora do texto devolve vazio, como o")
+    lines.append("     *  _apkpyListGet. */")
+    lines.append("    private String _apkpyCharAt(String text, String index) {")
+    lines.append("        String value = text == null ? \"\" : text;")
+    lines.append("        int count = value.codePointCount(0, value.length());")
+    lines.append("        int i;")
+    lines.append("        try { i = Integer.parseInt(String.valueOf(index).trim()); }")
+    lines.append("        catch (Exception e) { return \"\"; }")
+    lines.append("        if (i < 0) i += count;")
+    lines.append("        if (i < 0 || i >= count) {")
+    lines.append("            if (ApkpyValues.strict()) throw new ApkpyValues.Raised(\"IndexError\", \"string index out of range\");")
+    lines.append("            return \"\";")
+    lines.append("        }")
+    lines.append("        int at = value.offsetByCodePoints(0, i);")
+    lines.append("        return new String(Character.toChars(value.codePointAt(at)));")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** d[chave] com a chave num nome. A chave e' uma chave, mesmo com")
+    lines.append("     *  um ponto la' dentro; o que falta da' vazio, como o _jsonGet. */")
+    lines.append("    private String _apkpyDictGet(String json, String key) {")
+    lines.append("        org.json.JSONObject obj;")
+    lines.append("        try {")
+    lines.append("            obj = new org.json.JSONObject(json == null ? \"{}\" : json);")
+    lines.append("        } catch (Exception e) {")
+    lines.append("            return \"\";")
+    lines.append("        }")
+    lines.append("        String k = String.valueOf(key);")
+    lines.append("        if (!obj.has(k)) {")
+    lines.append("            if (ApkpyValues.strict()) throw new ApkpyValues.Raised(\"KeyError\", _apkpyRepr(k));")
+    lines.append("            return \"\";")
+    lines.append("        }")
+    lines.append("        return _apkpyFromJson(obj.opt(k));")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** v[i] quando o codigo nao diz o que v e': item de uma lista JSON,")
+    lines.append("     *  valor de um objeto JSON, ou letra de um texto. */")
+    lines.append("    private String _apkpyItemAt(String value, String index) {")
+    lines.append("        String text = value == null ? \"\" : value;")
+    lines.append("        int shape = _apkpyJsonShape(text);")
+    lines.append("        // Only the reading of the JSON is caught: the KeyError of a")
+    lines.append("        // strict lookup has to get out.")
+    lines.append("        boolean list = false, dict = false;")
+    lines.append("        try {")
+    lines.append("            if (shape == 91) {")
+    lines.append("                new org.json.JSONArray(text.trim());")
+    lines.append("                list = true;")
+    lines.append("            }")
+    lines.append("            if (shape == 123) {")
+    lines.append("                new org.json.JSONObject(text.trim());")
+    lines.append("                dict = true;")
+    lines.append("            }")
+    lines.append("        } catch (Exception ignored) {}")
+    lines.append("        if (list) return _apkpyListGet(text.trim(), index);")
+    lines.append("        if (dict) return _apkpyDictGet(text.trim(), index);")
+    lines.append("        return _apkpyCharAt(text, index);")
     lines.append("    }")
     lines.append("")
     lines.append("    /** 91 e 123 são o parêntesis reto e a chaveta de abrir, escritos")
@@ -2763,6 +5514,178 @@ def _emit_json_build_helpers(lines, ctx=""):
     lines.append("        return false;")
     lines.append("    }")
     lines.append("")
+    lines.append("    /** chave in dicionario: pergunta as chaves. Procurar no texto do JSON")
+    lines.append("     *  encontrava tambem os valores, e pedacos de chaves. */")
+    lines.append("    private boolean _apkpyHasKey(String json, String key) {")
+    lines.append("        try {")
+    lines.append("            return new org.json.JSONObject(json == null ? \"{}\" : json).has(String.valueOf(key));")
+    lines.append("        } catch (Exception e) {")
+    lines.append("            return false;")
+    lines.append("        }")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** lista.count(x): itens iguais a x, comparados pelo texto. Contar no")
+    lines.append("     *  texto do JSON contava letras. */")
+    lines.append("    private String _apkpyListCount(String json, String needle) {")
+    lines.append("        String want = needle == null ? \"\" : needle;")
+    lines.append("        int n = 0;")
+    lines.append("        try {")
+    lines.append("            org.json.JSONArray arr = new org.json.JSONArray(json == null ? \"[]\" : json);")
+    lines.append("            for (int i = 0; i < arr.length(); i++) {")
+    lines.append("                if (want.equals(String.valueOf(arr.opt(i)))) n++;")
+    lines.append("            }")
+    lines.append("        } catch (Exception ignored) {}")
+    lines.append("        return String.valueOf(n);")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** a or b / a and b: o primeiro valor passa por aqui, lido logo a")
+    lines.append("     *  seguir a ser escrito, para nao ser calculado duas vezes. */")
+    lines.append("    private String _apkpyOrT;")
+    lines.append("")
+    lines.append("    /** if x: como o Python. None, False e o texto vazio sao falsos; o")
+    lines.append("     *  texto \"False\" que alguem escreveu nao e' o False da app. */")
+    lines.append("    private boolean _apkpyTruthy(Object v) {")
+    lines.append("        if (v == null || v == ApkpyValues.NONE || v == ApkpyValues.FALSE) return false;")
+    lines.append("        if (v == ApkpyValues.ZERO || v == ApkpyValues.ZERO_FLOAT) return false;")
+    lines.append("        if (v instanceof Boolean) return (Boolean) v;")
+    lines.append("        if (v instanceof Number) return ((Number) v).doubleValue() != 0;")
+    lines.append("        return !String.valueOf(v).isEmpty();")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    private String _apkpyBool(boolean b) {")
+    lines.append("        return b ? ApkpyValues.TRUE : ApkpyValues.FALSE;")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    private boolean _apkpyIsNone(Object v) {")
+    lines.append("        return v == null || v == ApkpyValues.NONE;")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** Um valor lido de JSON, como o Python o veria: true e false sao True e")
+    lines.append("     *  False, null e' None. Liam-se \"true\", \"false\" e \"null\", e todos eram")
+    lines.append("     *  verdadeiros num if. */")
+    lines.append("    private String _apkpyFromJson(Object v) {")
+    lines.append("        if (v == null || v == org.json.JSONObject.NULL) return ApkpyValues.NONE;")
+    lines.append("        if (v instanceof Boolean) return ((Boolean) v) ? ApkpyValues.TRUE : ApkpyValues.FALSE;")
+    lines.append("        if (v instanceof Number && ((Number) v).doubleValue() == 0 && !String.valueOf(v).startsWith(\"-\")) {")
+    lines.append("            // d.get(\"cake\") or \"out\": a 0 from JSON is false, as in Python.")
+    lines.append("            return (v instanceof Double || v instanceof Float) ? ApkpyValues.ZERO_FLOAT : ApkpyValues.ZERO;")
+    lines.append("        }")
+    lines.append("        return String.valueOf(v);")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** E de volta: o True, o False e o None da app saem como JSON a serio. */")
+    lines.append("    private Object _apkpyJsonOut(String v) {")
+    lines.append("        if (v == ApkpyValues.TRUE) return Boolean.TRUE;")
+    lines.append("        if (v == ApkpyValues.FALSE) return Boolean.FALSE;")
+    lines.append("        if (v == ApkpyValues.NONE) return org.json.JSONObject.NULL;")
+    lines.append("        if (v == ApkpyValues.ZERO) return Long.valueOf(0);")
+    lines.append("        if (v == ApkpyValues.ZERO_FLOAT) return Double.valueOf(0);")
+    lines.append("        return v;")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** d[k] = v e lista[i] = v: o mesmo JSON com o item trocado. Uma lista")
+    lines.append("     *  ou um dicionario sao texto aqui, por isso o nome recebe o texto novo.")
+    lines.append("     *  aug (d[k] += 1): o que era numero continua numero. */")
+    lines.append("    private String _apkpySetItem(String json, String key, Object value, int kind, boolean aug) {")
+    lines.append("        if (value instanceof String) value = _apkpyJsonOut((String) value);")
+    lines.append("        String text = json == null ? \"\" : json.trim();")
+    lines.append("        int shape = kind == 1 ? 91 : kind == 2 ? 123 : _apkpyJsonShape(text);")
+    lines.append("        try {")
+    lines.append("            if (shape == 91) {")
+    lines.append("                org.json.JSONArray arr = new org.json.JSONArray(text.isEmpty() ? \"[]\" : text);")
+    lines.append("                int i = _apkpyListIndex(arr.length(), key, \"list assignment index out of range\");")
+    lines.append("                arr.put(i, aug ? _apkpyKeepNumber(arr.opt(i), value) : value);")
+    lines.append("                return arr.toString();")
+    lines.append("            }")
+    lines.append("            if (shape == 123) {")
+    lines.append("                org.json.JSONObject obj = new org.json.JSONObject(text.isEmpty() ? \"{}\" : text);")
+    lines.append("                if (aug && !obj.has(key)) throw new ApkpyValues.Raised(\"KeyError\", _apkpyRepr(String.valueOf(key)));")
+    lines.append("                obj.put(key, aug ? _apkpyKeepNumber(obj.opt(key), value) : value);")
+    lines.append("                return obj.toString();")
+    lines.append("            }")
+    lines.append("        } catch (org.json.JSONException e) {")
+    lines.append("            throw new IllegalArgumentException(e.getMessage());")
+    lines.append("        }")
+    lines.append("        throw new ApkpyValues.Raised(\"TypeError\", \"'str' object does not support item assignment\");")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** del d[k] e del lista[i]: o que falta para, como o KeyError e o")
+    lines.append("     *  IndexError do Python. */")
+    lines.append("    private String _apkpyDelItem(String json, String key, int kind) {")
+    lines.append("        String text = json == null ? \"\" : json.trim();")
+    lines.append("        int shape = kind == 1 ? 91 : kind == 2 ? 123 : _apkpyJsonShape(text);")
+    lines.append("        try {")
+    lines.append("            if (shape == 91) {")
+    lines.append("                org.json.JSONArray arr = new org.json.JSONArray(text.isEmpty() ? \"[]\" : text);")
+    lines.append("                arr.remove(_apkpyListIndex(arr.length(), key, \"list assignment index out of range\"));")
+    lines.append("                return arr.toString();")
+    lines.append("            }")
+    lines.append("            if (shape == 123) {")
+    lines.append("                org.json.JSONObject obj = new org.json.JSONObject(text.isEmpty() ? \"{}\" : text);")
+    lines.append("                if (!obj.has(key)) throw new ApkpyValues.Raised(\"KeyError\", _apkpyRepr(String.valueOf(key)));")
+    lines.append("                obj.remove(key);")
+    lines.append("                return obj.toString();")
+    lines.append("            }")
+    lines.append("        } catch (org.json.JSONException e) {")
+    lines.append("            throw new IllegalArgumentException(e.getMessage());")
+    lines.append("        }")
+    lines.append("        throw new ApkpyValues.Raised(\"TypeError\", \"'str' object doesn't support item deletion\");")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** Uma posicao de lista como o Python a le: negativa conta do fim, e")
+    lines.append("     *  fora da lista para (IndexError) em vez de crescer ou ficar vazia. */")
+    lines.append("    private int _apkpyListIndex(int size, String raw, String message) {")
+    lines.append("        int i;")
+    lines.append("        try { i = Integer.parseInt(String.valueOf(raw).trim()); }")
+    lines.append("        catch (Exception e) { throw new ApkpyValues.Raised(\"TypeError\", \"list indices must be integers\"); }")
+    lines.append("        if (i < 0) i += size;")
+    lines.append("        if (i < 0 || i >= size) throw new ApkpyValues.Raised(\"IndexError\", message);")
+    lines.append("        return i;")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** d[k] += 1 deixa um numero numero. O resultado chega como texto. */")
+    lines.append("    private Object _apkpyKeepNumber(Object old, Object value) {")
+    lines.append("        if (!(old instanceof Number) || value instanceof Number) return value;")
+    lines.append("        String t = String.valueOf(value).trim();")
+    lines.append("        try {")
+    lines.append("            if (_apkpyIsWhole(t)) return Long.parseLong(t);")
+    lines.append("            return Double.parseDouble(t);")
+    lines.append("        } catch (Exception e) {")
+    lines.append("            return value;")
+    lines.append("        }")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** a, b = valor: os itens, se forem tantos como os nomes. O Python")
+    lines.append("     *  para com ValueError quando nao sao; deixar um de fora, ou um")
+    lines.append("     *  nome vazio, seria responder outra coisa. */")
+    lines.append("    private String _apkpyUnpack(org.json.JSONArray items, int before, int after, boolean star) {")
+    lines.append("        int n = items.length();")
+    lines.append("        if (star ? n < before + after : n != before) {")
+    lines.append("            if (!star && n > before) {")
+    lines.append("                throw new ApkpyValues.Raised(\"ValueError\", \"too many values to unpack (expected \" + before + \")\");")
+    lines.append("            }")
+    lines.append("            throw new ApkpyValues.Raised(\"ValueError\", \"not enough values to unpack (expected \"")
+    lines.append("                    + (star ? \"at least \" : \"\") + (before + after) + \", got \" + n + \")\");")
+    lines.append("        }")
+    lines.append("        return items.toString();")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    /** lista + lista: uma lista so'. Colar os dois JSON dava")
+    lines.append("     *  '[\"a\"][\"b\"]'. Somar uma lista a outra coisa para, como no Python. */")
+    lines.append("    private String _apkpyListConcat(String left, String right) {")
+    lines.append("        org.json.JSONArray out = new org.json.JSONArray();")
+    lines.append("        for (String side : new String[] {left, right}) {")
+    lines.append("            org.json.JSONArray arr;")
+    lines.append("            try {")
+    lines.append("                arr = new org.json.JSONArray(side == null ? \"\" : side.trim());")
+    lines.append("            } catch (Exception e) {")
+    lines.append("                throw new ApkpyValues.Raised(\"TypeError\", \"can only concatenate list to list\");")
+    lines.append("            }")
+    lines.append("            for (int i = 0; i < arr.length(); i++) out.put(arr.opt(i));")
+    lines.append("        }")
+    lines.append("        return out.toString();")
+    lines.append("    }")
+    lines.append("")
     lines.append("    /** texto.split(sep, maxsplit) com as regras do Python: o separador")
     lines.append("     *  e texto e nao regex, as partes vazias ficam, e sem separador")
     lines.append("     *  corta em espacos seguidos e ignora as pontas. Devolve JSON. */")
@@ -2786,7 +5709,7 @@ def _emit_json_build_helpers(lines, ctx=""):
     lines.append("            if (i < n) out.put(s.substring(i));")
     lines.append("            return out.toString();")
     lines.append("        }")
-    lines.append("        if (sep.isEmpty()) throw new IllegalArgumentException(\"empty separator\");")
+    lines.append("        if (sep.isEmpty()) throw new ApkpyValues.Raised(\"ValueError\", \"empty separator\");")
     lines.append("        int from = 0;")
     lines.append("        while (max < 0 || out.length() < max) {")
     lines.append("            int at = s.indexOf(sep, from);")
@@ -3890,21 +6813,133 @@ def _numeric_arg_kind(node, numeric_names, returns=None):
             return True
         if node.func.id in ('int', 'len'):
             return False
+        if node.func.id == 'pow' and len(node.args) == 3 and all(
+                _numeric_arg_kind(arg, numeric_names, returns) is False for arg in node.args):
+            return False
         # A function of the app's own whose every return is a number: this is
         # what lets one helper feed another, euros(with_vat(cents)).
         if returns and node.func.id in returns:
             return returns[node.func.id]
         return None
-    if isinstance(node, ast.BinOp) and isinstance(
-            node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod)):
+    if isinstance(node, ast.BinOp) and isinstance(node.op, _ARITH_OPS):
         left = _numeric_arg_kind(node.left, numeric_names, returns)
         right = _numeric_arg_kind(node.right, numeric_names, returns)
         if left is None or right is None:
             return None
         if isinstance(node.op, ast.Div):
             return True                       # Python's / is always a float
+        if isinstance(node.op, ast.Pow) and not (left or right):
+            exponent = _int_literal(node.right)
+            return exponent is not None and exponent < 0    # 2 ** -1 == 0.5
         return bool(left or right)
+    if isinstance(node, ast.IfExp):
+        # n if n < 2 else fib(n - 1): a number when both sides are the same
+        # kind. 1 if c else 2.5 is not claimed: Python keeps the 1 an int,
+        # and one Java expression would make it 1.0.
+        yes = _numeric_arg_kind(node.body, numeric_names, returns)
+        no = _numeric_arg_kind(node.orelse, numeric_names, returns)
+        if yes is None or no is None or yes != no or not _cond_shape_supported(node.test):
+            return None
+        return yes
     return None
+
+
+# The arithmetic ApkPy translates between two numbers.
+_ARITH_OPS = (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod, ast.FloorDiv, ast.Pow)
+
+
+def _int_call_java(node, numeric, val_to_java):
+    """``int(x)`` as a Java long, with Python's answer for each kind of x.
+
+    - text: parsed, after the spaces Python ignores (``int(" 42 ")`` is 42 and
+      Long.parseLong rejected it);
+    - a decimal: cut towards zero, as Python does. ``int(float(price) * 2)``
+      used to read "5.0" back as an int and stop;
+    - an int: itself.
+
+    ``int(text, base)`` reads the text in that base.
+    """
+    if not node.args:
+        return "0L"
+    arg = node.args[0]
+    if len(node.args) == 1:
+        known = numeric(arg)
+        if known is not None:
+            return f"_apkpyTrunc({known[0]})" if known[1] else f"((long)({known[0]}))"
+    text = f"String.valueOf({val_to_java(arg)}).trim()"
+    if len(node.args) > 1:
+        return f"Long.parseLong({text}, Integer.parseInt(String.valueOf({val_to_java(node.args[1])})))"
+    return f"Long.parseLong({text})"
+
+
+def _float_call_java(node, numeric, val_to_java):
+    """``float(x)`` as a Java double: a number converted, text parsed."""
+    if not node.args:
+        return "0d"
+    known = numeric(node.args[0])
+    if known is not None:
+        return f"((double)({known[0]}))"
+    return f"Double.parseDouble(String.valueOf({val_to_java(node.args[0])}))"
+
+
+def _int_literal(node):
+    """The value of an int written out (``3``, ``-2``), or None."""
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+        inner = _int_literal(node.operand)
+        if inner is None:
+            return None
+        return -inner if isinstance(node.op, ast.USub) else inner
+    if isinstance(node, ast.Constant) and isinstance(node.value, int) \
+            and not isinstance(node.value, bool):
+        return node.value
+    return None
+
+
+def _arith_java(op, left, right, right_node=None):
+    """Python arithmetic between two numbers, written as Java with Python's answers.
+
+    *left* and *right* are the (java, is_float) pairs of _numeric_java_expr;
+    the result is another one. Java's operators disagree with Python's in
+    ways nothing on the screen announces, and each one below is a place where
+    the phone used to show a different number from the Previewer:
+
+    - ``//`` and ``**`` had no translation and gave an empty value.
+    - ``%`` and ``//`` round towards minus infinity in Python and towards zero
+      in Java: ``-7 % 3`` is 2 in one and -1 in the other.
+    - a zero divisor stops Python with ZeroDivisionError; Java's ``/`` between
+      doubles gave Infinity or NaN and carried on.
+    - an int outgrowing 32 bits wrapped round to a negative number. Python's
+      ints do not overflow; here the sum is done in 64 bits with
+      Math.addExact and friends, which stop rather than wrap.
+
+    ``int ** int`` is an int, as in Python, unless the exponent is a negative
+    number written out (``2 ** -1`` is 0.5). An exponent that only turns out
+    negative while the app runs stops with a message, because the type of the
+    answer would depend on it.
+    """
+    le, lf = left
+    re_, rf = right
+    decimal = bool(lf or rf)
+    if isinstance(op, ast.Div):
+        return (f"_apkpyDiv((double)({le}), (double)({re_}))", True)
+    if isinstance(op, ast.Pow):
+        exponent = _int_literal(right_node) if right_node is not None else None
+        if decimal or (exponent is not None and exponent < 0):
+            return (f"_apkpyPowF((double)({le}), (double)({re_}))", True)
+        return (f"_apkpyPowL((long)({le}), (long)({re_}))", False)
+    if decimal:
+        if isinstance(op, ast.Mod):
+            return (f"_apkpyModF((double)({le}), (double)({re_}))", True)
+        if isinstance(op, ast.FloorDiv):
+            return (f"_apkpyFloorDivF((double)({le}), (double)({re_}))", True)
+        symbol = {ast.Add: '+', ast.Sub: '-', ast.Mult: '*'}[type(op)]
+        return (f"({le} {symbol} {re_})", True)
+    if isinstance(op, ast.Mod):
+        return (f"Math.floorMod((long)({le}), (long)({re_}))", False)
+    if isinstance(op, ast.FloorDiv):
+        return (f"Math.floorDiv((long)({le}), (long)({re_}))", False)
+    exact = {ast.Add: 'addExact', ast.Sub: 'subtractExact', ast.Mult: 'multiplyExact'}[type(op)]
+    return (f"Math.{exact}((long)({le}), (long)({re_}))", False)
 
 
 def _numeric_params(call_sites, arg_names):
@@ -3961,13 +6996,205 @@ def _numeric_body_names(tree, rounds=3):
                     _reject(target)
             elif isinstance(node, (ast.FunctionDef, ast.Lambda)):
                 for arg in list(node.args.args) + list(node.args.kwonlyargs):
-                    rejected.add(arg.arg)
+                    # A function moved out of another gets the outer names it
+                    # reads as parameters (features/nested_functions.py), and
+                    # every call passes that same name: still one value.
+                    if not getattr(arg, '_apkpy_captured', False):
+                        rejected.add(arg.arg)
 
         found = {n: k for n, k in kinds.items() if n not in rejected}
         if found == known:
             break
         known = found
     return known
+
+
+# ApkpyValues' part for Python's errors: raise, except with types, str(e).
+_VALUES_ERRORS_JAVA = r'''
+    /** An error raised the Python way: raise ValueError("..."), and the
+     *  helpers' own (list.remove of a missing item, a bad format spec). */
+    public static final class Raised extends RuntimeException {
+        public final String type;
+
+        public Raised(String type, String message) {
+            super(message);
+            this.type = type;
+        }
+
+        @Override
+        public String toString() {
+            String m = getMessage();
+            return m == null || m.isEmpty() ? type : type + ": " + m;
+        }
+    }
+
+    /** Inside a try that catches a missing key or index, d[k] and xs[i]
+     *  raise KeyError / IndexError as in Python; anywhere else they give the
+     *  empty text they always have. Counted per thread: a job has its own. */
+    private static final ThreadLocal<int[]> STRICT = new ThreadLocal<int[]>() {
+        @Override
+        protected int[] initialValue() {
+            return new int[1];
+        }
+    };
+
+    public static void strict(int step) {
+        STRICT.get()[0] += step;
+    }
+
+    public static boolean strict() {
+        return STRICT.get()[0] > 0;
+    }
+
+    private static Throwable unwrap(Throwable t) {
+        while (t != null && t.getClass() == RuntimeException.class && t.getCause() != null) {
+            t = t.getCause();
+        }
+        return t;
+    }
+
+    /** The Python type of an error. Raised says it; the Java errors that
+     *  stand for one are read as it (NumberFormatException is int("x")'s
+     *  ValueError). null for one of the VM's own, which no except catches. */
+    public static String typeOf(Throwable error) {
+        Throwable t = unwrap(error);
+        if (t == null) return null;
+        if (t instanceof Raised) return ((Raised) t).type;
+        if (t instanceof ArithmeticException) {
+            String m = String.valueOf(t.getMessage());
+            if (m.contains("zero")) return "ZeroDivisionError";
+            if (m.contains("overflow") || m.contains("too large")) return "OverflowError";
+            return "ArithmeticError";
+        }
+        if (t instanceof IndexOutOfBoundsException) return "IndexError";
+        if (t instanceof IllegalArgumentException) return "ValueError";
+        if (t instanceof java.io.FileNotFoundException) return "FileNotFoundError";
+        if (t instanceof java.net.SocketTimeoutException) return "TimeoutError";
+        if (t instanceof java.io.IOException) return "OSError";
+        if (t instanceof org.json.JSONException) return "ValueError";
+        if (t instanceof StackOverflowError) return "RecursionError";
+        if (t instanceof OutOfMemoryError) return "MemoryError";
+        if (t instanceof Error) return null;
+        return "Exception";
+    }
+
+    private static String parent(String type) {
+        switch (type) {
+            case "BaseException":
+                return null;
+            case "Exception":
+                return "BaseException";
+            case "ZeroDivisionError":
+            case "OverflowError":
+            case "FloatingPointError":
+                return "ArithmeticError";
+            case "KeyError":
+            case "IndexError":
+                return "LookupError";
+            case "UnicodeError":
+                return "ValueError";
+            case "RecursionError":
+            case "NotImplementedError":
+                return "RuntimeError";
+            case "ModuleNotFoundError":
+                return "ImportError";
+            case "FileNotFoundError":
+            case "PermissionError":
+            case "FileExistsError":
+            case "TimeoutError":
+            case "ConnectionError":
+            case "IsADirectoryError":
+            case "NotADirectoryError":
+                return "OSError";
+            default:
+                return "Exception";
+        }
+    }
+
+    /** except A, B: whether the error is one of them, or of their family. */
+    public static boolean isA(Throwable error, String... names) {
+        for (String type = typeOf(error); type != null; type = parent(type)) {
+            for (String name : names) {
+                if (name.equals(type)) return true;
+            }
+        }
+        return false;
+    }
+
+    /** str(e). A Java error without a message shows its class name rather
+     *  than the word null. */
+    public static String message(Throwable error) {
+        Throwable t = unwrap(error);
+        if (t == null) return "";
+        String m = t.getMessage();
+        if (t instanceof Raised) return m == null ? "" : m;
+        return m != null ? m : t.getClass().getSimpleName();
+    }
+
+    /** raise on its own: the caught error again, as it was. */
+    public static RuntimeException rethrow(Throwable t) {
+        if (t instanceof RuntimeException) return (RuntimeException) t;
+        if (t instanceof Error) throw (Error) t;
+        return new RuntimeException(t);
+    }
+'''
+
+
+# ApkpyValues' print(): Logcat, a line at a time.
+_VALUES_TYPES_JAVA = r'''
+    /** isinstance() of a value the source does not trace: the type the app
+     *  reads it as. True, False and None by what they are, a list or a dict by
+     *  its JSON, a whole number or a decimal by its digits, text otherwise. */
+    public static String pyType(String v) {
+        if (v == TRUE || v == FALSE) return "bool";
+        if (v == null || v == NONE) return "NoneType";
+        if (v == ZERO) return "int";
+        if (v == ZERO_FLOAT) return "float";
+        // 91 and 123 are [ and the opening brace: one loose in a string would
+        // throw off the brace count the tests check the generated Java by.
+        String t = v.trim();
+        char first = t.isEmpty() ? ' ' : t.charAt(0);
+        if (first == (char) 91) {
+            try { new org.json.JSONArray(t); return "list"; } catch (Exception ignored) { }
+        }
+        if (first == (char) 123) {
+            try { new org.json.JSONObject(t); return "dict"; } catch (Exception ignored) { }
+        }
+        if (v.matches("-?[0-9]+")) return "int";
+        if (v.matches("-?[0-9]+[.][0-9]+([eE][-+]?[0-9]+)?") || v.matches("-?[0-9]+[eE][-+]?[0-9]+"))
+            return "float";
+        return "str";
+    }
+
+    /** isinstance(v, (a, b)): bool counts as int, as in Python. */
+    public static boolean isInstance(String v, String names) {
+        String type = pyType(v);
+        String all = "," + names + ",";
+        return all.contains("," + type + ",") || ("bool".equals(type) && all.contains(",int,"));
+    }
+
+    /** True, once the value has been worked out: a call is still made. */
+    public static boolean evaluated(Object value) {
+        return true;
+    }
+'''
+
+
+_VALUES_PRINT_JAVA = r'''
+    private static final StringBuilder PRINTED = new StringBuilder();
+
+    /** print(): to Logcat, tag apkpy (adb logcat -s apkpy), a line at a
+     *  time. print("a", end="") waits for the rest of its line, as a
+     *  terminal does. */
+    public static synchronized void print(String text, String end) {
+        PRINTED.append(text).append(end);
+        int at;
+        while ((at = PRINTED.indexOf("\n")) >= 0) {
+            android.util.Log.i("apkpy", PRINTED.substring(0, at));
+            PRINTED.delete(0, at + 1);
+        }
+    }
+'''
 
 
 # ─── Multi-Screen Transpiler ──────────────────────────────────────────────────
@@ -4803,12 +8030,18 @@ class MultiScreenTranspiler(ast.NodeVisitor):
         # because nothing stops being a number once a round has found it.
         for _ in range(4):
             calls = {}
+            # fact(n - 1) inside fact: whether n is a number there depends on
+            # whether n is a number -- read once the other calls have said.
+            recursive = {}
 
-            def _record(root, scope):
+            def _record(root, scope, owner=None):
                 """Every call under *root*, read with that scope's numbers."""
                 for node in ast.walk(root):
                     if not (isinstance(node, ast.Call)
                             and isinstance(node.func, ast.Name)):
+                        continue
+                    if owner is not None and node.func.id == owner and not node.keywords:
+                        recursive.setdefault(owner, []).append(node)
                         continue
                     seen = calls.setdefault(node.func.id, [])
                     if node.keywords:
@@ -4828,7 +8061,7 @@ class MultiScreenTranspiler(ast.NodeVisitor):
                 scope = dict(numeric_names)
                 scope.update(params.get(name) or {})
                 for statement in node.body:
-                    _record(statement, scope)
+                    _record(statement, scope, owner=name)
 
             for node in tree.body:
                 if not isinstance(node, ast.FunctionDef):
@@ -4837,7 +8070,17 @@ class MultiScreenTranspiler(ast.NodeVisitor):
             fresh = {}
             for name, node in defs.items():
                 arg_names = [arg.arg for arg in node.args.args]
-                fresh[name] = _numeric_params(calls.get(name), arg_names)
+                outside = _numeric_params(calls.get(name), arg_names)
+                if recursive.get(name) and outside:
+                    # The calls from outside say which parameters are numbers;
+                    # the function's calls to itself keep them so only if they
+                    # pass numbers too, read with that same assumption.
+                    scope = dict(numeric_names)
+                    scope.update(outside)
+                    inner = [[_numeric_arg_kind(arg, scope, returns) for arg in call.args]
+                             for call in recursive[name]]
+                    outside = _numeric_params((calls.get(name) or []) + inner, arg_names)
+                fresh[name] = outside
 
             grown = {}
             for name, node in defs.items():
@@ -4849,6 +8092,21 @@ class MultiScreenTranspiler(ast.NodeVisitor):
                     continue
                 kinds = [_numeric_arg_kind(value, local, returns)
                          for value in values]
+                calls_itself = any(isinstance(c, ast.Call) and isinstance(c.func, ast.Name)
+                                   and c.func.id == name for v in values for c in ast.walk(v))
+                if any(kind is None for kind in kinds) and name not in returns and calls_itself:
+                    # return n * fact(n - 1), n if n < 2 else fib(n - 1) + ...:
+                    # if every return is a number once the calls to itself
+                    # are, each call that ends returns one -- the deepest
+                    # took a return that does not call it. Whole numbers
+                    # first, then decimals; the guess has to come back.
+                    for guess in (False, True):
+                        assumed = dict(returns)
+                        assumed[name] = guess
+                        trial = [_numeric_arg_kind(value, local, assumed) for value in values]
+                        if all(kind is not None for kind in trial) and any(trial) == guess:
+                            kinds = trial
+                            break
                 if any(kind is None for kind in kinds):
                     continue
                 grown[name] = any(kinds)
@@ -5779,6 +9037,7 @@ class MultiScreenTranspiler(ast.NodeVisitor):
         _stamped = [0]
         _previous = [None]
         for stmt in statements:
+            _queue_global_write(cmds, _stamped[0], _previous[0])
             _stamp_commands(cmds, _stamped, _previous[0])
             _previous[0] = stmt
             # ── Expressões simples (chamadas standalone) ──────────────────────
@@ -5808,6 +9067,11 @@ class MultiScreenTranspiler(ast.NodeVisitor):
 
                 if data_command is not None:
                     cmds.append(data_command)
+
+                # print() to Logcat -- unless the app has its own print.
+                elif func_id == 'print' and isinstance(func, ast.Name) \
+                        and 'print' not in getattr(self, 'own_function_names', ()):
+                    cmds.append(_print_command(call))
 
                 elif func_id == 'toast':
                     msg_node = call.args[0] if call.args else self._kw_node(call.keywords, 'message')
@@ -6506,11 +9770,34 @@ class MultiScreenTranspiler(ast.NodeVisitor):
                         if isinstance(node, ast.Name) and node.id in self.string_constants:
                             return self.string_constants[node.id]
                         return default
-                    provider = (_auth_str('provider', '') or '').lower()
-                    auth_url, token_url, def_scopes = _OAUTH_PROVIDERS.get(provider, ('', '', ''))
+                    def _auth_arg(index):
+                        # auth.login("microsoft", "client-id"): the first two
+                        # by position too, as the Previewer takes them.
+                        if len(call.args) <= index:
+                            return ''
+                        node = call.args[index]
+                        if isinstance(node, ast.Constant):
+                            return str(node.value)
+                        if isinstance(node, ast.Name) and node.id in self.string_constants:
+                            return self.string_constants[node.id]
+                        return ''
+                    provider = (_auth_str('provider', '') or _auth_arg(0) or '').lower()
+                    issuer = _auth_str('issuer', '')
+                    if provider == 'microsoft':
+                        # Entra ID: the tenant picks who may sign in -- common,
+                        # organizations, consumers, or the company's own.
+                        auth_url, token_url = auth_oidc_feature.microsoft_endpoints(
+                            _auth_str('tenant', 'common'))
+                        def_scopes = auth_oidc_feature.MICROSOFT_SCOPES
+                    elif issuer:
+                        # Okta, Auth0, Keycloak...: the endpoints come from the
+                        # issuer's discovery document, read when the sign-in starts.
+                        auth_url, token_url, def_scopes = '', '', auth_oidc_feature.OIDC_SCOPES
+                    else:
+                        auth_url, token_url, def_scopes = _OAUTH_PROVIDERS.get(provider, ('', '', ''))
                     auth_url = _auth_str('auth_url', auth_url)
                     token_url = _auth_str('token_url', token_url)
-                    client_id = _auth_str('client_id', '')
+                    client_id = _auth_str('client_id', '') or _auth_arg(1)
                     redirect = _auth_str('redirect', 'apkpy://auth')
                     # scopes: lista de literais OU string única
                     scopes_node = self._kw_node(call.keywords, 'scopes')
@@ -6528,9 +9815,16 @@ class MultiScreenTranspiler(ast.NodeVisitor):
                         _scheme, _rest = redirect.split('://', 1)
                         _host = _rest.split('/', 1)[0].split('?', 1)[0] or 'auth'
                     _ui = _OAUTH_USERINFO.get(provider, {})
+                    if provider == 'microsoft':
+                        # Graph's picture needs the token to load: no picture.
+                        _ui = {'url': auth_oidc_feature.MICROSOFT_USERINFO,
+                               'name': 'name', 'email': 'email', 'picture': ''}
+                    elif issuer:
+                        _ui = {'url': '', 'name': 'name', 'email': 'email', 'picture': 'picture'}
                     self.auth = {
                         'provider': provider, 'auth_url': auth_url, 'token_url': token_url,
                         'client_id': client_id, 'redirect': redirect, 'scopes': scopes,
+                        'issuer': issuer,
                         'then_sid': then_sid, 'scheme': _scheme, 'host': _host,
                         'userinfo_url': _auth_str('userinfo_url', _ui.get('url', '')),
                         'ui_name': _ui.get('name', 'name'),
@@ -6943,8 +10237,8 @@ class MultiScreenTranspiler(ast.NodeVisitor):
                         cmds.append({'type': 'comp_get_value_assign',
                                      'var': target_name, 'py_var': py_var})
 
-                elif target_name and (isinstance(val, (ast.JoinedStr, ast.Constant, ast.BinOp, ast.Name, ast.Subscript, ast.Call, ast.List, ast.Dict, ast.IfExp, ast.Attribute))
-                                      or (isinstance(val, ast.UnaryOp) and isinstance(val.op, (ast.USub, ast.UAdd)))):
+                elif target_name and (isinstance(val, (ast.JoinedStr, ast.Constant, ast.BinOp, ast.Name, ast.Subscript, ast.Call, ast.List, ast.Tuple, ast.Dict, ast.IfExp, ast.Attribute, ast.Compare, ast.BoolOp))
+                                      or (isinstance(val, ast.UnaryOp) and isinstance(val.op, (ast.USub, ast.UAdd, ast.Not)))):
                     # IfExp, Attribute (math.pi) e -x ja tinham traducao no
                     # _val_to_java; faltava so deixa-los chegar la.
                     # Atribuição de string local: url = f"...", msg = "...", etc.
@@ -6992,8 +10286,18 @@ class MultiScreenTranspiler(ast.NodeVisitor):
                         'false_body': self._parse_statements(stmt.orelse)
                     })
                 elif isinstance(test, ast.Compare):
-                    left = test.left.id if isinstance(test.left, ast.Name) else ""
-                    if len(test.ops) == 1 and test.comparators:
+                    # A `global` name is read from the shared store, which
+                    # if_compare's bare name would skip: it goes as a node.
+                    left = test.left.id if isinstance(test.left, ast.Name) \
+                        and test.left.id not in _GLOBALS[0] else ""
+                    if len(test.ops) > 1 and _cond_shape_supported(test):
+                        cmds.append({
+                            'type': 'if_cond',
+                            'test': test,
+                            'true_body': self._parse_statements(stmt.body),
+                            'false_body': self._parse_statements(stmt.orelse),
+                        })
+                    elif len(test.ops) == 1 and test.comparators:
                         op_node = test.ops[0]
                         comp_node = test.comparators[0]
                         # if_compare keeps the right side as a value, so it is
@@ -7007,7 +10311,7 @@ class MultiScreenTranspiler(ast.NodeVisitor):
                             continue  # Ignorar este bloco na compilação para Android
 
                         op = _CMP_OPS.get(type(op_node))  # ==, !=, <, >, <=, >=
-                        if written and op is not None and (left or isinstance(test.left, (ast.Subscript, ast.Call, ast.JoinedStr))):
+                        if written and op is not None and (left or isinstance(test.left, (ast.Subscript, ast.Call, ast.JoinedStr, ast.Name))):
                             # left pode ser um nome simples OU uma expressão
                             # (ex.: row["name"] == "Manga" dentro de um for) —
                             # nesse caso left_node é convertido com _val_to_java.
@@ -7020,7 +10324,7 @@ class MultiScreenTranspiler(ast.NodeVisitor):
                                 'true_body': self._parse_statements(stmt.body),
                                 'false_body': self._parse_statements(stmt.orelse)
                             })
-                        elif op is not None or isinstance(op_node, (ast.In, ast.NotIn)):
+                        elif op is not None or isinstance(op_node, (ast.In, ast.NotIn, ast.Is, ast.IsNot)):
                             # `x in y`, `x not in y`, and a comparison whose left
                             # side if_compare does not take. One general path
                             # writes all of them, so they cannot drift apart.
@@ -7032,7 +10336,7 @@ class MultiScreenTranspiler(ast.NodeVisitor):
                             })
                 # if a and b:  |  if a or b:  |  if not x:  (and/or/not — Tier 1 C)
                 # if a and b:  |  if not x:  |  if valor.isdigit():  (and/or/not + predicados)
-                elif isinstance(test, (ast.BoolOp, ast.UnaryOp, ast.Call, ast.Constant)) and _cond_shape_supported(test):
+                elif isinstance(test, (ast.BoolOp, ast.UnaryOp, ast.Call, ast.Constant, ast.Subscript)) and _cond_shape_supported(test):
                     cmds.append({
                         'type': 'if_cond',
                         'test': test,
@@ -7048,9 +10352,10 @@ class MultiScreenTranspiler(ast.NodeVisitor):
             # for x in ["a", "b"]:  |  for i in range(n):  |  for row in rows:
             # (rows = JSON de db.query / resposta https — itera as linhas)
             elif isinstance(stmt, ast.For):
+                # A dict or a text written out is walked like one in a name
+                # (keys, letters); a set has no order to walk in.
                 if not isinstance(stmt.target, ast.Name) or stmt.orelse \
-                        or isinstance(stmt.iter, (ast.JoinedStr, ast.Dict, ast.Set)) \
-                        or (isinstance(stmt.iter, ast.Constant) and isinstance(stmt.iter.value, str)):
+                        or isinstance(stmt.iter, ast.Set):
                     # Cada um destes deixava o loop de fora, ou corria-o sobre
                     # nada no telemovel enquanto o Previewer o corria.
                     unsupported.raise_untranslated_loop(stmt)
@@ -7067,6 +10372,10 @@ class MultiScreenTranspiler(ast.NodeVisitor):
             # (comparações, and/or/not, nome, bool). Formas não suportadas são
             # ignoradas (como nos `if`), em vez de gerar Java errado.
             elif isinstance(stmt, ast.While) and _cond_shape_supported(stmt.test):
+                if stmt.orelse:
+                    # Rewritten as a flag inside a function (features/
+                    # loop_else.py); anywhere else the else was left out.
+                    unsupported.raise_untranslated_loop(stmt)
                 cmds.append({
                     'type': 'while_loop',
                     'test': stmt.test,
@@ -7084,58 +10393,55 @@ class MultiScreenTranspiler(ast.NodeVisitor):
             elif isinstance(stmt, ast.Return):
                 cmds.append({'type': 'return', 'value_node': stmt.value})
 
+            # ── raise ─────────────────────────────────────────────────────────
+            # Python's built-in errors by name (ApkpyValues.Raised); a bare
+            # raise, or raise e, inside an except throws the caught one again.
+            elif isinstance(stmt, ast.Raise):
+                cmds.append(_raise_command(stmt, getattr(self, '_except_stack', [])))
+
             # ── try / except / finally ────────────────────────────────────────
-            # Um só handler, de propósito. Os tipos de excepção do Python não
-            # têm equivalente aqui (no telemóvel todos os valores são texto),
-            # por isso `except ValueError:` e `except KeyError:` seriam duas
-            # promessas que não sabemos distinguir — e correr a primeira em
-            # silêncio é exatamente o género de mentira que isto veio acabar.
+            # Each except keeps its Python types, tested on the phone by
+            # ApkpyValues.isA (see _emit_try_block). The else of a try was
+            # rewritten before this (features/errors.py).
             elif isinstance(stmt, ast.Try):
-                if len(stmt.handlers) != 1:
-                    unsupported.raise_unsupported(
-                        stmt,
-                        cause=(
-                            'ApkPy catches everything with one handler, because '
-                            'a Python exception type has no equivalent on the '
-                            'phone -- every value there is text, and the errors '
-                            'that reach this code are Java ones with different '
-                            'names. Telling two kinds apart is a promise it '
-                            'cannot keep.'
-                        ),
-                        suggestions=[
-                            'Use a single except, with or without a type.',
-                            'Tell the cases apart with an if inside it.',
-                        ],
-                        received='try with %d except clauses' % len(stmt.handlers),
-                    )
                 if stmt.orelse:
                     unsupported.raise_unsupported(
                         stmt,
                         cause=(
                             'The else of a try runs only when nothing failed, '
                             'and its own failures are not caught. Java has no '
-                            'such block, and putting those lines at the end of '
-                            'the try would quietly change which failures the '
-                            'handler sees.'
+                            'such block.'
                         ),
                         suggestions=[
                             'Move the else lines below the whole try.',
                         ],
                         received='try ... except ... else',
                     )
-                handler = stmt.handlers[0]
-                cmds.append({
-                    'type': 'try_block',
-                    'body': self._parse_statements(stmt.body),
-                    'handler': self._parse_statements(handler.body),
-                    'final': self._parse_statements(stmt.finalbody),
-                    'name': handler.name,
-                })
+                c = {'type': 'try_block', 'handler': []}
+                c['err'] = '_te_%d' % (id(c) & 0xFFFF)
+                c['body'] = self._parse_statements(stmt.body)
+                if getattr(self, '_except_stack', None) is None:
+                    self._except_stack = []
+                for handler in stmt.handlers:
+                    types = _except_types(handler.type)
+                    self._except_stack.append((c['err'], handler.name))
+                    try:
+                        body = self._parse_statements(handler.body)
+                    finally:
+                        self._except_stack.pop()
+                    c['handler'].append({'type': 'except_clause', 'types': types,
+                                         'name': handler.name, 'body': body})
+                c['final'] = self._parse_statements(stmt.finalbody)
+                c['strict'] = any(clause['types'] is None
+                                  or _LOOKUP_CATCHERS & set(clause['types'])
+                                  for clause in c['handler'])
+                cmds.append(c)
 
             # Uma instrução que ninguém acima reconheceu era deitada fora em
             # silêncio: o corpo da função ficava sem ela e ninguém sabia.
             else:
                 unsupported.check_statement(stmt)
+        _queue_global_write(cmds, _stamped[0], _previous[0])
         _stamp_commands(cmds, _stamped, _previous[0])
         return cmds
 
@@ -7145,7 +10451,7 @@ class MultiScreenTranspiler(ast.NodeVisitor):
         # A função devolve um valor? (algum `return <expr>` em qualquer ramo)
         returns_value = any(
             isinstance(n, ast.Return) and n.value is not None for n in ast.walk(node)
-        )
+        ) or node.name in getattr(self, 'value_called', ())
         self.functions[node.name] = {
             'args': arg_names,
             # Funções do utilizador chamadas com argumentos: por omissão cada
@@ -7159,6 +10465,9 @@ class MultiScreenTranspiler(ast.NodeVisitor):
             # `cents / 100` volta a ser uma conta em vez de um refúgio.
             'numeric_args': self.numeric_args_for(node.name, arg_names),
             'returns_value': returns_value,
+            # The defaults, for a button whose command= calls it with none.
+            'defaults': dict(zip(arg_names[len(arg_names) - len(node.args.defaults):],
+                                 node.args.defaults)),
             'cmds': self._parse_statements(node.body)
         }
         # Do not call generic_visit(node), otherwise we would incorrectly process
@@ -8288,7 +11597,7 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
     ]
     # Nomes de args boolean do callback que está a ser gerado agora;
     # atualizado antes de cada pythonCallback_X para que _gen_cmds/_gen_cmds_local
-    # possam passar os nomes certos a _gen_if_var_condition.
+    # possam passar os nomes certos a _cond_to_java.
     _cur_bool_args = [set()]
 
     # Helper: walk entire comp tree recursively
@@ -8539,15 +11848,17 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
         com semântica Python (ex.: '/' é SEMPRE divisão float)."""
         if isinstance(node, ast.Name) and node.id in _numeric_vars:
             # variável local já conhecida como número (preserva int vs float)
+            _ref = _global_read(node.id) if node.id in _GLOBALS[0] else node.id
             if _numeric_vars[node.id]:
-                return (f"Double.parseDouble(String.valueOf({node.id}))", True)
-            return (f"Integer.parseInt(String.valueOf({node.id}))", False)
+                return (f"Double.parseDouble(String.valueOf({_ref}))", True)
+            return (f"Long.parseLong(String.valueOf({_ref}))", False)
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'int':
-            inner = _val_to_java(node.args[0]) if node.args else '"0"'
-            return (f"Integer.parseInt(String.valueOf({inner}))", False)
+            return (_int_call_java(node, _numeric_java_expr, _val_to_java), False)
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'float':
-            inner = _val_to_java(node.args[0]) if node.args else '"0"'
-            return (f"Double.parseDouble(String.valueOf({inner}))", True)
+            return (_float_call_java(node, _numeric_java_expr, _val_to_java), True)
+        _nc = _numeric_call_java(node, _numeric_java_expr, _val_to_java)
+        if _nc is not None:
+            return _nc
         if isinstance(node, ast.Constant) and isinstance(node.value, bool):
             return None
         if isinstance(node, ast.Constant) and isinstance(node.value, int):
@@ -8559,20 +11870,29 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
             inner = _numeric_java_expr(node.operand)
             if inner is None:
                 return None
+            if isinstance(node.op, ast.USub) and not inner[1]                     and _int_literal(node.operand) is None:
+                # -n de um int: o menor long trocado de sinal dava-se a si
+                # proprio; os ints do Python nao tem esse fundo.
+                return (f"Math.negateExact((long)({inner[0]}))", False)
             sign = '-' if isinstance(node.op, ast.USub) else '+'
             return (f"({sign}{inner[0]})", inner[1])
-        if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod)):
+        if isinstance(node, ast.BinOp) and isinstance(node.op, _ARITH_OPS):
             left = _numeric_java_expr(node.left)
             right = _numeric_java_expr(node.right)
             if left is None or right is None:
                 return None
-            le, lf = left
-            re_, rf = right
-            if isinstance(node.op, ast.Div):
-                # Python '/' devolve sempre float — força double dos dois lados
-                return (f"((double)({le}) / (double)({re_}))", True)
-            op_map = {ast.Add: '+', ast.Sub: '-', ast.Mult: '*', ast.Mod: '%'}
-            return (f"({le} {op_map[type(node.op)]} {re_})", lf or rf)
+            return _arith_java(node.op, left, right, node.right)
+        if isinstance(node, ast.IfExp):
+            # Both sides the same kind of number (see _numeric_arg_kind).
+            yes = _numeric_java_expr(node.body)
+            no = _numeric_java_expr(node.orelse)
+            if yes is None or no is None or yes[1] != no[1] \
+                    or not _cond_shape_supported(node.test):
+                return None
+            cond = _cond_to_java(node.test, _val_to_java, _cur_bool_args[0])
+            if not cond:
+                return None
+            return (f"({cond} ? {yes[0]} : {no[0]})", yes[1])
         return None
 
     # Variáveis de `for row in rows:` (JSON): row["k"] compila p/ _jsonGet
@@ -8583,6 +11903,10 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
     # repor como estrutura — senão `{"messages": msgs}` sai com o array inteiro
     # entre aspas, que é uma coisa que nenhuma API aceita.
     _json_struct_vars = set()
+
+    # O que cada nome local guarda, quando o codigo o diz: 'list', 'dict',
+    # 'text', ou 'other' depois de ser reatribuido a outra coisa.
+    _struct_kinds = {}
 
     # Variáveis locais que guardam um número (assign de int()/float()/aritmética).
     # Mapeia nome -> is_float, para que `valor = float(x)` continue numérico em
@@ -8605,6 +11929,8 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
                 return f'"{_escape_java_literal(node.value)}"'
             elif isinstance(node.value, bool):
                 return 'true' if node.value else 'false'
+            elif node.value is None:
+                return "ApkpyValues.NONE"
             if isinstance(node.value, int):
                 return _java_int_literal(node.value, node)
             return str(node.value)
@@ -8633,14 +11959,18 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
             # origem, por muito que ela tivesse crescido.
             if node.id in _MUTATED_LISTS[0]:
                 return _mutated_list_read(node.id)
+            if node.id in _GLOBALS[0]:
+                return _global_read(node.id)
             return node.id
         elif isinstance(node, ast.IfExp):
             return _ternary_to_java(node, _val_to_java, _cur_bool_args[0]) or unsupported.raise_untranslated_condition(node.test)
-        elif isinstance(node, ast.List):
+        elif isinstance(node, (ast.List, ast.Tuple)):
             # Lista Python → array JSON em runtime (iterável com `for x in xs:`).
             # Passa pelo mesmo conversor do dict para que uma lista de objetos
             # continue a ser uma lista de objetos: o `asList(String.valueOf(...))`
             # que aqui estava punha cada `{...}` entre aspas, como texto.
+            # Um tuplo e' o mesmo aqui: `return total, count` devolvia vazio,
+            # e stats()[0] lia de nada.
             return _json_node_to_java(
                 node, _val_to_java, _json_struct_vars) + ".toString()"
         elif isinstance(node, ast.Dict):
@@ -8659,15 +11989,7 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
                 # com indices negativos; o substring do Java rebenta. O helper
                 # tem as regras do Python, para os dois lados responderem o
                 # mesmo em vez de um devolver texto e o outro fechar a app.
-                if slice_node.step is not None:
-                    unsupported.raise_unsupported(node)
-                _lo = (_val_to_java(slice_node.lower)
-                       if slice_node.lower is not None else '""')
-                _hi = (_val_to_java(slice_node.upper)
-                       if slice_node.upper is not None else '""')
-                return ("_apkpySlice(String.valueOf(%s), String.valueOf(%s), "
-                        "String.valueOf(%s))"
-                        % (_val_to_java(node.value), _lo, _hi))
+                return _slice_java(node, _val_to_java)
             if isinstance(slice_node, ast.Index):  # Python 3.8 compat
                 slice_node = slice_node.value
             if isinstance(slice_node, ast.Constant) and isinstance(slice_node.value, str):
@@ -8693,9 +12015,7 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
             # lista[0] saia daqui como `(x)[Integer.parseInt(...)]`, que nao e
             # Java: nao se indexa uma String com parentesis retos. E uma lista
             # aqui e texto JSON, por isso quem sabe le-la e o helper.
-            base = _val_to_java(node.value)
-            index = _val_to_java(node.slice)
-            return f"_apkpyListGet(String.valueOf({base}), String.valueOf({index}))"
+            return _index_java(node, _val_to_java)
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
                 and isinstance(node.func.value, ast.Name) \
                 and node.func.value.id in reactive_states \
@@ -8777,6 +12097,33 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
                     json.dumps([tag for tag in _tags if tag]))
             return ('_apkpyStorageGet("__apkpy_language", '
                     'java.util.Locale.getDefault().toLanguageTag())')
+        # d.get(k, padrao), d.keys(), d.values(), d.items(), x.copy(): after
+        # storage.get(), state.get() and the rest, which are the app's calls.
+        elif _dict_method_java(node, _val_to_java) is not None:
+            return _dict_method_java(node, _val_to_java)
+        elif _text_method_java(node, _val_to_java) is not None:
+            return _text_method_java(node, _val_to_java)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                and node.func.attr == 'format' and isinstance(node.func.value, ast.Constant) \
+                and isinstance(node.func.value.value, str) \
+                and _str_format_java(node, _val_to_java) is not None:
+            return _str_format_java(node, _val_to_java)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == 'format' and 1 <= len(node.args) <= 2 and not node.keywords:
+            # format(x, spec): the f-string's {x:spec}.
+            _spec = node.args[1] if len(node.args) > 1 else ast.Constant(value='')
+            if isinstance(_spec, ast.Constant):
+                _spec = ast.JoinedStr(values=[_spec] if _spec.value else [])
+            else:
+                _spec = ast.JoinedStr(values=[ast.FormattedValue(value=_spec, conversion=-1, format_spec=None)])
+            return _formatted_java(_val_to_java(node.args[0]), _format_kind(node.args[0], _val_to_java),
+                                   _spec, -1, node, _val_to_java)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == 'chr' and len(node.args) == 1:
+            return "_apkpyChr(Long.parseLong(String.valueOf(%s).trim()))" % _val_to_java(node.args[0])
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == 'ord' and len(node.args) == 1:
+            return "String.valueOf(_apkpyOrd(String.valueOf(%s)))" % _val_to_java(node.args[0])
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == 'split':
             # Uma lista, que aqui e texto JSON. O String[] do Java nao era:
             # String.valueOf dele e um endereco, e um for sobre isso nao corria.
@@ -8796,6 +12143,8 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
             if m == 'find':
                 return f"String.valueOf(String.valueOf({base}).indexOf({_a0}))"
             if m == 'count':
+                if _kind_from(_val_to_java, node.func.value) == 'list':
+                    return f"_apkpyListCount(String.valueOf({base}), {_a0})"
                 return f"_apkpyCount(String.valueOf({base}), {_a0})"
             if m == 'join':
                 return f"_apkpyJoin(String.valueOf({base}), {_a0})"
@@ -8804,8 +12153,7 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
                 # String.valueOf(boolean) do Java da "true". Mostrar um ao
                 # lado do outro seria divergencia visivel numa etiqueta.
                 _j = 'startsWith' if m == 'startswith' else 'endsWith'
-                return (f'(String.valueOf({base}).{_j}({_a0}) '
-                        f'? "True" : "False")')
+                return f'_apkpyBool(String.valueOf({base}).{_j}({_a0}))'
             if m == 'upper':
                 # Locale.ROOT: sem ele um telemovel turco transforma "I" num
                 # i sem ponto e deixa de bater certo com o Python.
@@ -8821,8 +12169,32 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
         # len(x): nº de itens se x for lista/JSON, senão nº de caracteres.
         # Devolvido como String (modelo "tudo é String"); _apkpyLen decide em runtime.
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'len':
-            inner = _val_to_java(node.args[0]) if node.args else '""'
-            return f"String.valueOf(_apkpyLen(String.valueOf({inner})))"
+            return _len_java(node, _val_to_java)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == unpacking_feature.UNPACK:
+            return _unpack_java(node, _val_to_java)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == item_feature.LISTOP:
+            return _listop_java(node, _val_to_java)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id in ('sorted', 'reversed') and len(node.args) == 1 \
+                and not isinstance(node.args[0], ast.Starred):
+            return _sorted_java(node, _val_to_java)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                and node.func.attr == 'index' and len(node.args) == 1 and not node.keywords:
+            # lista.index(x) or texto.index(sub): where it is, or the ValueError.
+            _ik = 3 if _kind_from(_val_to_java, node.func.value) == 'text' else 0
+            return "_apkpyIndexOf(String.valueOf(%s), %s, %d)" % (
+                _val_to_java(node.func.value), _json_value_java(node.args[0], _val_to_java), _ik)
+        elif isinstance(node, (ast.Compare, ast.BoolOp)) or (
+                isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not)):
+            return _logic_value_java(node, _val_to_java)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == item_feature.SETITEM:
+            return _setitem_java(node, _val_to_java)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == item_feature.DELITEM:
+            return _delitem_java(node, _val_to_java)
         # list(x) — em Python isto tira uma copia para quem recebe nao ficar
         # com a mesma lista. Aqui o valor E texto JSON, que ja e imutavel: a
         # copia acontece por si, e a traducao honesta e o proprio valor.
@@ -8869,8 +12241,18 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
                 and isinstance(node.func.value, ast.Name) and node.func.value.id == 'auth' \
                 and node.func.attr == 'token':
-            return ('getApplicationContext().getSharedPreferences("apkpy_auth", android.content.Context.MODE_PRIVATE)'
-                    '.getString("token", "")')
+            # Renewed in the background a few minutes before it expires.
+            return 'ApkpyAuth.token(getApplicationContext())'
+        # auth.claims() -> the id_token's payload, as a JSON object.
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                and isinstance(node.func.value, ast.Name) and node.func.value.id == 'auth' \
+                and node.func.attr == 'claims':
+            return 'ApkpyAuth.claims(getApplicationContext())'
+        # auth.is_logged_in() as a value, not only in an if.
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                and isinstance(node.func.value, ast.Name) and node.func.value.id == 'auth' \
+                and node.func.attr == 'is_logged_in':
+            return '(ApkpyAuth.loggedIn(getApplicationContext()) ? ApkpyValues.TRUE : ApkpyValues.FALSE)'
 
         # crypto.hash_password(pw, algo="sha256", iterations=200000) →
         # _apkpyHashPassword(...). Funciona em qualquer expressão (storage.set,
@@ -8981,18 +12363,36 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
         # int(x) → faz parsing numérico (devolvido como String para encaixar no
         # modelo "tudo é String" do resto do código gerado)
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'int':
-            inner = _val_to_java(node.args[0]) if node.args else '"0"'
-            return f"String.valueOf(Integer.parseInt(String.valueOf({inner})))"
+            return f"String.valueOf({_int_call_java(node, _numeric_java_expr, _val_to_java)})"
 
         # float(x) → parsing numérico decimal (String, como o int())
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'float':
-            inner = _val_to_java(node.args[0]) if node.args else '"0"'
-            return f"String.valueOf(Double.parseDouble(String.valueOf({inner})))"
+            # _apkpyFloat: float("12345678") is 12345678.0 in Python and
+            # was 1.2345678E7 here.
+            return f"_apkpyFloat({_float_call_java(node, _numeric_java_expr, _val_to_java)})"
 
         # str(x) → String.valueOf(x)
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'str':
+            if node.args and isinstance(node.args[0], ast.Constant) \
+                    and (node.args[0].value is None or isinstance(node.args[0].value, bool)):
+                return '"%s"' % node.args[0].value      # str(False) is "False", not "false"
             inner = _val_to_java(node.args[0]) if node.args else '""'
+            if node.args and tuples_feature.is_tuple(node.args[0]):
+                # str((1, 2)) is (1, 2), and str((1,)) is (1,).
+                return f"_apkpyShowTuple(String.valueOf({inner}))"
+            if node.args and _kind_from(_val_to_java, node.args[0]) in ('list', 'dict'):
+                # str([1, "a", None]) is [1, 'a', None], not the JSON it is kept as.
+                return f"_apkpyShow(String.valueOf({inner}))"
             return f"String.valueOf({inner})"
+        # isinstance(x, T): True / False of the app.
+        elif _is_isinstance(node):
+            return f"({_isinstance_java(node, _val_to_java)} ? ApkpyValues.TRUE : ApkpyValues.FALSE)"
+        # bool(x): Python's truth of x, as the True / False of the app.
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'bool' \
+                and len(node.args) <= 1 and not node.keywords:
+            if not node.args:
+                return "ApkpyValues.FALSE"
+            return f"({_truthy_java(node.args[0], _val_to_java)} ? ApkpyValues.TRUE : ApkpyValues.FALSE)"
 
         # t("chave") dentro de uma funcao: em runtime e o getString que
         # escolhe a lingua, exactamente como o layout faz com @string/.
@@ -9007,6 +12407,20 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
         elif (isinstance(node, (ast.Call, ast.Attribute))
                 and _math_java(node, _val_to_java) is not None):
             return "String.valueOf(%s)" % _math_java(node, _val_to_java)
+
+        # pow(a, b, m): a whole number, exact (see _numeric_call_java).
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == 'pow' and len(node.args) == 3 and not node.keywords:
+            _pm = _numeric_call_java(node, _numeric_java_expr, _val_to_java)
+            if _pm is None:
+                unsupported.raise_unsupported(
+                    node,
+                    cause=('pow() with a modulus works on whole numbers, and ApkPy '
+                           'cannot tell that these are.'),
+                    suggestions=['Say which kind of number each one is: '
+                                 'pow(int(a), int(b), 7).'],
+                )
+            return f"String.valueOf({_pm[0]})"
 
         # abs / min / max / sum. Passam por helpers em vez de irem diretos ao
         # Math porque o Python distingue inteiro de decimal (abs(-3) e 3, nao
@@ -9036,13 +12450,8 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
         # divisao" — e' o contrario: dividir uma conta ao meio e' o caminho
         # mais curto para um .5 exato. O Math.rint tem a regra do Python.
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'round':
-            inner = _val_to_java(node.args[0]) if node.args else '"0"'
-            if len(node.args) > 1 and isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, int):
-                factor = 10 ** int(node.args[1].value)
-                return f"_apkpyFloat(Math.rint(Double.parseDouble(String.valueOf({inner})) * {factor}.0) / {factor}.0)"
-            # round(x) devolve um int em Python; o rint devolve double, e sem
-            # o cast sairia "2.0" onde o Previewer mostra "2".
-            return f"String.valueOf((long) Math.rint(Double.parseDouble(String.valueOf({inner}))))"
+            # round(x) devolve um int em Python, e round(um int, n) tambem.
+            return _round_java(node, _val_to_java, _numeric_java_expr)
 
         # f-strings: f"...{var}..." → "..." + String.valueOf(var) + "..."
         # (suporta format spec :.Nf p/ casas decimais; ver _fstring_node_to_java)
@@ -9052,7 +12461,11 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
         # Operandos têm de ser numéricos (int()/float()/literais). Se não forem,
         # o '+' vira concatenação de strings; os outros operadores não se aplicam
         # a strings (devolvem "" — erro silencioso, igual ao resto do modelo).
-        elif isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod)):
+        elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mod) \
+                and isinstance(node.left, ast.Constant) and isinstance(node.left.value, str):
+            # "%.2f" % x: text formatting, not the remainder of a division.
+            return _percent_java(node, _val_to_java)
+        elif isinstance(node, ast.BinOp) and isinstance(node.op, _ARITH_OPS):
             _ne = _numeric_java_expr(node)
             if _ne is not None:
                 # O sinalizador is_float diz quando o resultado e um decimal:
@@ -9061,7 +12474,9 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
                     return f"_apkpyFloat({_ne[0]})"
                 return f"String.valueOf({_ne[0]})"
             if isinstance(node.op, ast.Add):
-                return f'{_val_to_java(node.left)} + {_val_to_java(node.right)}'
+                return _add_java(node, _val_to_java, _numeric_java_expr)
+            if _repeat_java(node, _val_to_java, _numeric_java_expr) is not None:
+                return _repeat_java(node, _val_to_java, _numeric_java_expr)
             if unsupported.reaches_other_runtime(node):
                 # job.attempt() e vazio na copia da Activity, e de proposito.
                 return '""'
@@ -9122,6 +12537,23 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
     # A comparison between two values that are not written out asks this
     # whether either is a number (_compare_node_to_java).
     _val_to_java.numeric = _numeric_java_expr
+
+    def _kind_of(node):
+        """What *node* holds, read from the source: see _static_kind."""
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                and node.func.attr == 'get_value' and isinstance(node.func.value, ast.Name):
+            comp = next((cc for cc in all_comps_flat
+                         if cc.get('_py_var') == node.func.value.id), None)
+            if comp is None:
+                return None
+            # chips(multiple=True) answers with a list; every other
+            # component with text.
+            if comp.get('comp_type') in choice_feature.COMPONENTS and comp.get('multiple'):
+                return 'list'
+            return 'text'
+        return _static_kind(node, _struct_kinds)
+
+    _val_to_java.kind_of = _kind_of
 
     def _dict_node_to_java(node, var_name, indent):
         """Converte um ast.Dict Python num bloco Java de inicialização de HashMap."""
@@ -10239,6 +13671,11 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
         if _num_name in (string_constants or {}):
             continue
         lines.append(f'    private static final String {_num_name} = "{_num_val}";')
+    # Uma lista, um tuplo ou um dict escrito no modulo e' um campo tambem,
+    # com o seu texto JSON: sem ele, len(ITEMS) ou PRICES["tea"] numa funcao
+    # nomeavam um simbolo que nenhuma classe declarava.
+    lines.extend(_module_struct_fields(string_constants))
+    lines.extend(_singleton_fields())
     if declared_permissions or string_constants:
         lines.append("")
 
@@ -12816,6 +16253,7 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
         if declared is None:
             declared = set()
             _numeric_vars.clear()  # novo corpo top-level → esquece numéricos anteriores
+            _struct_kinds.clear()
             _numeric_vars.update(_NUMERIC_CONSTS[0])
         for c in cmds_list:
             _hoist_branch_assignments(c, lines, indent, declared)
@@ -13041,7 +16479,7 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
             elif c['type'] == 'auth_login':
                 lines.append(f"{indent}_authStartLogin();")
             elif c['type'] == 'auth_logout':
-                lines.append(f'{indent}getApplicationContext().getSharedPreferences("apkpy_auth", android.content.Context.MODE_PRIVATE).edit().remove("token").apply();')
+                lines.append(f'{indent}ApkpyAuth.clear(getApplicationContext());')
             elif c['type'] == 'auth_user':
                 cb = c.get('callback')
                 if cb:
@@ -13126,13 +16564,17 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
                 _gen_cmds(c['false_body'], indent + "    ", declared)
                 lines.append(f"{indent}}}")
             elif c['type'] == 'if_var':
-                lines.append(f"{indent}if {_gen_if_var_condition(c['var'], _cur_bool_args[0])} {{")
+                lines.append(f"{indent}if {_parenthesized(_cond_to_java(ast.Name(id=c['var'], ctx=ast.Load()), _val_to_java, _cur_bool_args[0]))} {{")
                 _gen_cmds(c['true_body'], indent + "    ", declared)
                 lines.append(f"{indent}}} else {{")
                 _gen_cmds(c['false_body'], indent + "    ", declared)
                 lines.append(f"{indent}}}")
             elif c['type'] == 'list_append':
                 _emit_list_append(lines, indent, c, _val_to_java, _json_iter_vars)
+            elif c['type'] == 'raise':
+                _emit_raise(lines, indent, c, _val_to_java, _numeric_java_expr)
+            elif c['type'] == 'print':
+                _emit_print(lines, indent, c, _val_to_java)
             elif c['type'] == 'try_block':
                 _emit_try_block(lines, indent, c,
                                 lambda b, ind: _gen_cmds(b, ind, declared),
@@ -13153,9 +16595,9 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
                 lines.append(f"{indent}continue;")
             elif c['type'] == 'return':
                 if c.get('value_node') is not None:
-                    lines.append(f"{indent}return String.valueOf({_val_to_java(c['value_node'])});")
+                    lines.append(f"{indent}return {_text_value_java(c['value_node'], _val_to_java)};")
                 else:
-                    lines.append(f"{indent}return;")
+                    lines.append(f"{indent}return ApkpyValues.NONE;" if _RETURNS_VALUE[0] else f"{indent}return;")
             elif c['type'] == 'if_compare':
                 cond = _if_compare_cond(c, _val_to_java)
                 lines.append(f"{indent}if ({cond}) {{")
@@ -13264,12 +16706,14 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
                 _decl = "" if c['var'] in declared else "String "
                 declared.add(c['var'])
                 lines.append(f"{indent}{_decl}{c['var']} = _sqliteQuery(String.valueOf({_val_to_java(c['sql_node'])}){_args});")
+            elif c['type'] == 'global_sync':
+                lines.append(f"{indent}{_global_sync_java(c['name'])}")
             elif c['type'] == 'local_string_assign':
                 val_java = _assign_rhs_java(c['val_node'], _val_to_java)
                 _decl = "" if c['var'] in declared else "String "
                 declared.add(c['var'])
                 lines.append(f"{indent}{_decl}{c['var']} = {val_java};")
-                _track_json_struct(c['var'], c['val_node'], _json_struct_vars)
+                _track_json_struct(c['var'], c['val_node'], _json_struct_vars, _struct_kinds, _kind_of)
                 _ne_t = _numeric_java_expr(c['val_node'])
                 if _ne_t is not None:
                     _numeric_vars[c['var']] = _ne_t[1]
@@ -13373,6 +16817,10 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
                 comp_dict = next((cc for cc in all_comps_flat if cc.get('_py_var') == c['py_var']), None)
                 _decl = "" if c['var'] in declared else "String "
                 declared.add(c['var'])
+                # o nome passa a guardar texto (ou a lista do chips(multiple=True)):
+                # nome[0], len(nome) e for ch in nome contam-no como o Python.
+                _struct_kinds[c['var']] = ('list' if comp_dict and comp_dict.get('comp_type') in choice_feature.COMPONENTS
+                                           and comp_dict.get('multiple') else 'text')
                 if jv and comp_dict:
                     ctype = comp_dict.get('comp_type', '')
                     itype = comp_dict.get('input_type', 'text') if ctype in ('inputs', 'input_field') else ''
@@ -13623,9 +17071,22 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
         if (nav_info or cmds or popup_overlay in active_overlays) and btn_java_var:
             lines.append(f"        {btn_java_var}.setOnClickListener(new View.OnClickListener() {{")
             lines.append(f"            @Override")
-            lines.append(f"            public void onClick(View v) {{")
-            
-            _gen_cmds(cmds, "                ")
+            # The function's body is written in here, so the parameter takes a
+            # name nobody writes: `v` clashed with `for k, v in d.items()`.
+            lines.append(f"            public void onClick(View _apkpyTapped) {{")
+
+            _click_args = (func_info or {}).get('args') or []
+            _click_defaults = (func_info or {}).get('defaults') or {}
+            if _click_args and all(a in _click_defaults for a in _click_args):
+                # command=refresh with def refresh(force=False): Python calls
+                # refresh() and force is False. Copying the body here left
+                # force undeclared, and javac stopped the build.
+                _call = _callback_call_args(
+                    cmd, [_click_defaults[a] for a in _click_args], _val_to_java,
+                    functions_map, boolean_first_arg_callbacks)
+                lines.append(f"                pythonCallback_{cmd}({_call});")
+            else:
+                _gen_cmds(cmds, "                ")
 
             if popup_overlay in active_overlays:
                 lines.append(f"                {_overlay_method_name(popup_overlay)}();")
@@ -14100,6 +17561,7 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
             if declared_vars is None:
                 declared_vars = set()
                 _numeric_vars.clear()  # novo corpo top-level → esquece numéricos anteriores
+                _struct_kinds.clear()
                 _numeric_vars.update(_NUMERIC_CONSTS[0])
                 _numeric_vars.update(_num_args)
             for c in cmds_list:
@@ -14287,7 +17749,7 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
                 elif c['type'] == 'auth_login':
                     lines.append(f"{indent}_authStartLogin();")
                 elif c['type'] == 'auth_logout':
-                    lines.append(f'{indent}getApplicationContext().getSharedPreferences("apkpy_auth", android.content.Context.MODE_PRIVATE).edit().remove("token").apply();')
+                    lines.append(f'{indent}ApkpyAuth.clear(getApplicationContext());')
                 elif c['type'] == 'auth_user':
                     cb = c.get('callback')
                     if cb:
@@ -14411,13 +17873,17 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
                     _gen_cmds_local(c['false_body'], indent + "    ", declared_vars)
                     lines.append(f"{indent}}}")
                 elif c['type'] == 'if_var':
-                    lines.append(f"{indent}if {_gen_if_var_condition(c['var'], _cur_bool_args[0])} {{")
+                    lines.append(f"{indent}if {_parenthesized(_cond_to_java(ast.Name(id=c['var'], ctx=ast.Load()), _val_to_java, _cur_bool_args[0]))} {{")
                     _gen_cmds_local(c['true_body'], indent + "    ", declared_vars)
                     lines.append(f"{indent}}} else {{")
                     _gen_cmds_local(c['false_body'], indent + "    ", declared_vars)
                     lines.append(f"{indent}}}")
                 elif c['type'] == 'list_append':
                     _emit_list_append(lines, indent, c, _val_to_java, _json_iter_vars)
+                elif c['type'] == 'raise':
+                    _emit_raise(lines, indent, c, _val_to_java, _numeric_java_expr)
+                elif c['type'] == 'print':
+                    _emit_print(lines, indent, c, _val_to_java)
                 elif c['type'] == 'try_block':
                     _emit_try_block(lines, indent, c,
                                     lambda b, ind: _gen_cmds_local(b, ind, declared_vars),
@@ -14439,9 +17905,9 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
                     lines.append(f"{indent}continue;")
                 elif c['type'] == 'return':
                     if c.get('value_node') is not None:
-                        lines.append(f"{indent}return String.valueOf({_val_to_java(c['value_node'])});")
+                        lines.append(f"{indent}return {_text_value_java(c['value_node'], _val_to_java)};")
                     else:
-                        lines.append(f"{indent}return;")
+                        lines.append(f"{indent}return ApkpyValues.NONE;" if _RETURNS_VALUE[0] else f"{indent}return;")
                 elif c['type'] == 'if_compare':
                     cond = _if_compare_cond(c, _val_to_java)
                     lines.append(f"{indent}if ({cond}) {{")
@@ -14558,6 +18024,8 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
                     else:
                         lines.append(f"{indent}String {c['var']} = _sqliteQuery(String.valueOf({_val_to_java(c['sql_node'])}){_args});")
                         declared_vars.add(c['var'])
+                elif c['type'] == 'global_sync':
+                    lines.append(f"{indent}{_global_sync_java(c['name'])}")
                 elif c['type'] == 'local_string_assign':
                     val_java = _assign_rhs_java(c['val_node'], _val_to_java)
                     if c['var'] in declared_vars:
@@ -14565,7 +18033,7 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
                     else:
                         lines.append(f"{indent}String {c['var']} = {val_java};")
                         declared_vars.add(c['var'])
-                    _track_json_struct(c['var'], c['val_node'], _json_struct_vars)
+                    _track_json_struct(c['var'], c['val_node'], _json_struct_vars, _struct_kinds, _kind_of)
                     _ne_t = _numeric_java_expr(c['val_node'])
                     if _ne_t is not None:
                         _numeric_vars[c['var']] = _ne_t[1]
@@ -14628,6 +18096,10 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
                     comp_dict = next((cc for cc in all_comps_flat if cc.get('_py_var') == c['py_var']), None)
                     _decl = "" if c['var'] in declared_vars else "String "
                     declared_vars.add(c['var'])
+                    # o nome passa a guardar texto (ou a lista do chips(multiple=True)):
+                    # nome[0], len(nome) e for ch in nome contam-no como o Python.
+                    _struct_kinds[c['var']] = ('list' if comp_dict and comp_dict.get('comp_type') in choice_feature.COMPONENTS
+                                               and comp_dict.get('multiple') else 'text')
                     if jv and comp_dict:
                         ctype = comp_dict.get('comp_type', '')
                         itype = comp_dict.get('input_type', 'text') if ctype in ('inputs', 'input_field') else ''
@@ -14752,11 +18224,14 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
         if f_name in json_item_callbacks and f_info.get('args'):
             _added_json_var = f_info['args'][0]
             _json_iter_vars.add(_added_json_var)
+        _RETURNS_VALUE[0] = bool(f_info.get('returns_value'))
         _gen_cmds_local(f_info['cmds'], "        ")
+        _RETURNS_VALUE[0] = False
         if _added_json_var is not None:
             _json_iter_vars.discard(_added_json_var)
         if f_info.get('returns_value') and not _cmds_definitely_return(f_info['cmds']):
-            lines.append('        return "";')
+            # Python returns None when it falls off the end.
+            lines.append('        return ApkpyValues.NONE;')
         lines.append("    }")
 
     # Values other screens wrote to this one's components while it was not in
@@ -15351,14 +18826,28 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
     lines.append("            }")
     lines.append("            for (String part : parts) {")
     lines.append("                if (current instanceof org.json.JSONArray) {")
-    lines.append("                    current = ((org.json.JSONArray) current).get(Integer.parseInt(part));")
+    lines.append("                    org.json.JSONArray arr = (org.json.JSONArray) current;")
+    lines.append("                    int i = Integer.parseInt(part.trim());")
+    lines.append("                    if (i < 0) i += arr.length();")
+    lines.append("                    if (i < 0 || i >= arr.length()) {")
+    lines.append("                        if (ApkpyValues.strict()) throw new ApkpyValues.Raised(\"IndexError\", \"list index out of range\");")
+    lines.append("                        return \"\";")
+    lines.append("                    }")
+    lines.append("                    current = arr.opt(i);")
     lines.append("                } else if (current instanceof org.json.JSONObject) {")
-    lines.append("                    current = ((org.json.JSONObject) current).get(part);")
+    lines.append("                    org.json.JSONObject obj = (org.json.JSONObject) current;")
+    lines.append("                    if (!obj.has(part)) {")
+    lines.append("                        if (ApkpyValues.strict()) throw new ApkpyValues.Raised(\"KeyError\", _apkpyRepr(part));")
+    lines.append("                        return \"\";")
+    lines.append("                    }")
+    lines.append("                    current = obj.opt(part);")
     lines.append("                } else {")
     lines.append("                    return \"\";")
     lines.append("                }")
     lines.append("            }")
-    lines.append("            return current != null ? current.toString() : \"\";")
+    lines.append("            return current != null ? _apkpyFromJson(current) : \"\";")
+    lines.append("        } catch (ApkpyValues.Raised r) {")
+    lines.append("            throw r;")
     lines.append("        } catch (Exception e) {")
     lines.append("            return \"\";")
     lines.append("        }")
@@ -15385,13 +18874,21 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
 
     # len(x): comprimento de uma lista/JSON-array ou de uma string
     lines.append("")
+    # len() of a value whose kind the source does not say: a JSON list counts
+    # items, a JSON object keys (it counted the letters of its text), and text
+    # its characters as Python counts them -- an emoji is one, not two.
     lines.append("    private int _apkpyLen(String s) {")
     lines.append("        if (s == null) return 0;")
-    lines.append("        String t = s.trim();")
-    lines.append("        if (t.startsWith(\"[\") && t.endsWith(\"]\")) {")
-    lines.append("            try { return new org.json.JSONArray(s).length(); } catch (Exception e) { }")
-    lines.append("        }")
-    lines.append("        return s.length();")
+    lines.append("        int shape = _apkpyJsonShape(s);")
+    lines.append("        try {")
+    lines.append("            if (shape == 91) return new org.json.JSONArray(s.trim()).length();")
+    lines.append("            if (shape == 123) return new org.json.JSONObject(s.trim()).length();")
+    lines.append("        } catch (Exception e) { }")
+    lines.append("        return _apkpyTextLen(s);")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    private int _apkpyTextLen(String s) {")
+    lines.append("        return s == null ? 0 : s.codePointCount(0, s.length());")
     lines.append("    }")
     lines.append("")
     # random.randint(a, b) → inteiro aleatório no intervalo [a, b]
@@ -15522,45 +19019,15 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
         lines.append("    }")
 
     if has_auth_login:
-        _au = auth or {}
-        def _aulit(v):
-            return '"' + _escape_java_literal(str(v)) + '"'
         lines.append("")
-        lines.append("    // ── Login OAuth (auth.login): abre o browser no ecrã de consentimento ──")
-        lines.append("    // com PKCE (S256). O redirect volta à ApkpyAuthActivity (deep-link).")
+        lines.append("    // auth.login(): ApkpyAuth opens the sign-in (PKCE, a checked state,")
+        lines.append("    // the issuer's discovery); the redirect comes back to ApkpyAuthActivity.")
         lines.append("    private void _authStartLogin() {")
-        lines.append("        try {")
-        lines.append("            String _verifier = _authRandom(64);")
-        lines.append("            getApplicationContext().getSharedPreferences(\"apkpy_auth\", android.content.Context.MODE_PRIVATE)")
-        lines.append("                .edit().putString(\"verifier\", _verifier).apply();")
-        lines.append("            String _challenge = _authChallenge(_verifier);")
-        lines.append(f"            String _url = {_aulit(_au.get('auth_url',''))}")
-        lines.append("                + \"?response_type=code\"")
-        lines.append(f"                + \"&client_id=\" + java.net.URLEncoder.encode({_aulit(_au.get('client_id',''))}, \"UTF-8\")")
-        lines.append(f"                + \"&redirect_uri=\" + java.net.URLEncoder.encode({_aulit(_au.get('redirect',''))}, \"UTF-8\")")
-        lines.append(f"                + \"&scope=\" + java.net.URLEncoder.encode({_aulit(_au.get('scopes',''))}, \"UTF-8\")")
-        lines.append("                + \"&code_challenge=\" + _challenge")
-        lines.append("                + \"&code_challenge_method=S256\"")
-        lines.append("                + \"&state=apkpy\";")
-        lines.append("            startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(_url)));")
-        lines.append("        } catch (Exception e) {}")
-        lines.append("    }")
-        lines.append("")
-        lines.append("    private String _authRandom(int n) {")
-        lines.append("        byte[] b = new byte[n];")
-        lines.append("        new java.security.SecureRandom().nextBytes(b);")
-        lines.append("        return android.util.Base64.encodeToString(b, android.util.Base64.URL_SAFE | android.util.Base64.NO_WRAP | android.util.Base64.NO_PADDING);")
-        lines.append("    }")
-        lines.append("")
-        lines.append("    private String _authChallenge(String verifier) throws Exception {")
-        lines.append("        java.security.MessageDigest md = java.security.MessageDigest.getInstance(\"SHA-256\");")
-        lines.append("        byte[] d = md.digest(verifier.getBytes(\"US-ASCII\"));")
-        lines.append("        return android.util.Base64.encodeToString(d, android.util.Base64.URL_SAFE | android.util.Base64.NO_WRAP | android.util.Base64.NO_PADDING);")
+        lines.append("        ApkpyAuth.start(this);")
         lines.append("    }")
 
     if has_auth_user:
         _au = auth or {}
-        _ui_url = _escape_java_literal(str(_au.get('userinfo_url', '')))
         _ui_name = _escape_java_literal(str(_au.get('ui_name', 'name')))
         _ui_email = _escape_java_literal(str(_au.get('ui_email', 'email')))
         _ui_pic = str(_au.get('ui_picture', 'picture'))
@@ -15568,12 +19035,13 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
         lines.append("    // ── Perfil do utilizador (auth.user): GET ao userinfo c/ Bearer token ──")
         lines.append("    // numa thread; normaliza p/ {name,email,picture} e chama o callback na UI.")
         lines.append("    private void _authFetchUser(final java.util.function.Consumer<String> _cb) {")
-        lines.append("        final String _tok = getApplicationContext().getSharedPreferences(\"apkpy_auth\", android.content.Context.MODE_PRIVATE).getString(\"token\", \"\");")
+        lines.append("        final String _tok = ApkpyAuth.token(getApplicationContext());")
+        lines.append("        final String _url = ApkpyAuth.userinfoUrl(getApplicationContext());")
         lines.append("        new Thread(new Runnable() {")
         lines.append("            public void run() {")
         lines.append("                String _name = \"\", _email = \"\", _picture = \"\";")
         lines.append("                try {")
-        lines.append(f"                    java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(\"{_ui_url}\").openConnection();")
+        lines.append("                    java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL(_url).openConnection();")
         lines.append("                    conn.setRequestProperty(\"Authorization\", \"Bearer \" + _tok);")
         lines.append("                    conn.setRequestProperty(\"Accept\", \"application/json\");")
         lines.append("                    conn.setRequestProperty(\"User-Agent\", \"apkpy\");")
@@ -16595,7 +20063,7 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
         lines.append("    }")
 
     lines.append("}")
-    return "\n".join(lines)
+    return "\n".join(_drop_unused_struct_fields(lines))
 
 
 # ─── Background Services (service.every → androidx.work.Worker) ──────────────
@@ -16692,6 +20160,11 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
         if _num_name in (string_constants or {}):
             continue
         lines.append(f'    private static final String {_num_name} = "{_num_val}";')
+    # Uma lista, um tuplo ou um dict escrito no modulo e' um campo tambem,
+    # com o seu texto JSON: sem ele, len(ITEMS) ou PRICES["tea"] numa funcao
+    # nomeavam um simbolo que nenhuma classe declarava.
+    lines.extend(_module_struct_fields(string_constants))
+    lines.extend(_singleton_fields())
     if string_constants:
         lines.append("")
 
@@ -16710,15 +20183,17 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
         Devolve (expressão Java, is_float) ou None."""
         if isinstance(node, ast.Name) and node.id in _numeric_vars:
             # variável local já conhecida como número (preserva int vs float)
+            _ref = _global_read(node.id) if node.id in _GLOBALS[0] else node.id
             if _numeric_vars[node.id]:
-                return (f"Double.parseDouble(String.valueOf({node.id}))", True)
-            return (f"Integer.parseInt(String.valueOf({node.id}))", False)
+                return (f"Double.parseDouble(String.valueOf({_ref}))", True)
+            return (f"Long.parseLong(String.valueOf({_ref}))", False)
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'int':
-            inner = _val_to_java(node.args[0]) if node.args else '"0"'
-            return (f"Integer.parseInt(String.valueOf({inner}))", False)
+            return (_int_call_java(node, _numeric_java_expr, _val_to_java), False)
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'float':
-            inner = _val_to_java(node.args[0]) if node.args else '"0"'
-            return (f"Double.parseDouble(String.valueOf({inner}))", True)
+            return (_float_call_java(node, _numeric_java_expr, _val_to_java), True)
+        _nc = _numeric_call_java(node, _numeric_java_expr, _val_to_java)
+        if _nc is not None:
+            return _nc
         if isinstance(node, ast.Constant) and isinstance(node.value, bool):
             return None
         if isinstance(node, ast.Constant) and isinstance(node.value, int):
@@ -16730,19 +20205,29 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
             inner = _numeric_java_expr(node.operand)
             if inner is None:
                 return None
+            if isinstance(node.op, ast.USub) and not inner[1]                     and _int_literal(node.operand) is None:
+                # -n de um int: o menor long trocado de sinal dava-se a si
+                # proprio; os ints do Python nao tem esse fundo.
+                return (f"Math.negateExact((long)({inner[0]}))", False)
             sign = '-' if isinstance(node.op, ast.USub) else '+'
             return (f"({sign}{inner[0]})", inner[1])
-        if isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod)):
+        if isinstance(node, ast.BinOp) and isinstance(node.op, _ARITH_OPS):
             left = _numeric_java_expr(node.left)
             right = _numeric_java_expr(node.right)
             if left is None or right is None:
                 return None
-            le, lf = left
-            re_, rf = right
-            if isinstance(node.op, ast.Div):
-                return (f"((double)({le}) / (double)({re_}))", True)
-            op_map = {ast.Add: '+', ast.Sub: '-', ast.Mult: '*', ast.Mod: '%'}
-            return (f"({le} {op_map[type(node.op)]} {re_})", lf or rf)
+            return _arith_java(node.op, left, right, node.right)
+        if isinstance(node, ast.IfExp):
+            # Both sides the same kind of number (see _numeric_arg_kind).
+            yes = _numeric_java_expr(node.body)
+            no = _numeric_java_expr(node.orelse)
+            if yes is None or no is None or yes[1] != no[1] \
+                    or not _cond_shape_supported(node.test):
+                return None
+            cond = _cond_to_java(node.test, _val_to_java, _cur_bool_args[0])
+            if not cond:
+                return None
+            return (f"({cond} ? {yes[0]} : {no[0]})", yes[1])
         return None
 
     # Variáveis de `for row in rows:` (JSON): row["k"] compila p/ _jsonGet
@@ -16753,6 +20238,10 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
     # repor como estrutura — senão `{"messages": msgs}` sai com o array inteiro
     # entre aspas, que é uma coisa que nenhuma API aceita.
     _json_struct_vars = set()
+
+    # O que cada nome local guarda, quando o codigo o diz: 'list', 'dict',
+    # 'text', ou 'other' depois de ser reatribuido a outra coisa.
+    _struct_kinds = {}
 
     # Variáveis locais que guardam um número (assign de int()/float()/aritmética).
     # Mapeia nome -> is_float, para que `valor = float(x)` continue numérico em
@@ -16772,6 +20261,8 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
                 return f'"{_escape_java_literal(node.value)}"'
             elif isinstance(node.value, bool):
                 return 'true' if node.value else 'false'
+            elif node.value is None:
+                return "ApkpyValues.NONE"
             if isinstance(node.value, int):
                 return _java_int_literal(node.value, node)
             return str(node.value)
@@ -16796,14 +20287,18 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
             # origem, por muito que ela tivesse crescido.
             if node.id in _MUTATED_LISTS[0]:
                 return _mutated_list_read(node.id)
+            if node.id in _GLOBALS[0]:
+                return _global_read(node.id)
             return node.id
         elif isinstance(node, ast.IfExp):
             return _ternary_to_java(node, _val_to_java, _cur_bool_args[0]) or unsupported.raise_untranslated_condition(node.test)
-        elif isinstance(node, ast.List):
+        elif isinstance(node, (ast.List, ast.Tuple)):
             # Lista Python → array JSON em runtime (iterável com `for x in xs:`).
             # Passa pelo mesmo conversor do dict para que uma lista de objetos
             # continue a ser uma lista de objetos: o `asList(String.valueOf(...))`
             # que aqui estava punha cada `{...}` entre aspas, como texto.
+            # Um tuplo e' o mesmo aqui: `return total, count` devolvia vazio,
+            # e stats()[0] lia de nada.
             return _json_node_to_java(
                 node, _val_to_java, _json_struct_vars) + ".toString()"
         elif isinstance(node, ast.Dict):
@@ -16822,15 +20317,7 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
                 # com indices negativos; o substring do Java rebenta. O helper
                 # tem as regras do Python, para os dois lados responderem o
                 # mesmo em vez de um devolver texto e o outro fechar a app.
-                if slice_node.step is not None:
-                    unsupported.raise_unsupported(node)
-                _lo = (_val_to_java(slice_node.lower)
-                       if slice_node.lower is not None else '""')
-                _hi = (_val_to_java(slice_node.upper)
-                       if slice_node.upper is not None else '""')
-                return ("_apkpySlice(String.valueOf(%s), String.valueOf(%s), "
-                        "String.valueOf(%s))"
-                        % (_val_to_java(node.value), _lo, _hi))
+                return _slice_java(node, _val_to_java)
             if isinstance(slice_node, ast.Index):  # Python 3.8 compat
                 slice_node = slice_node.value
             if isinstance(slice_node, ast.Constant) and isinstance(slice_node.value, str) \
@@ -16848,9 +20335,7 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
             # lista[0] saia daqui como `(x)[Integer.parseInt(...)]`, que nao e
             # Java: nao se indexa uma String com parentesis retos. E uma lista
             # aqui e texto JSON, por isso quem sabe le-la e o helper.
-            base = _val_to_java(node.value)
-            index = _val_to_java(node.slice)
-            return f"_apkpyListGet(String.valueOf({base}), String.valueOf({index}))"
+            return _index_java(node, _val_to_java)
         elif (isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)
                 and node.func.attr == 'get'
@@ -16921,6 +20406,33 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
                     json.dumps([tag for tag in _tags if tag]))
             return ('_apkpyStorageGet("__apkpy_language", '
                     'java.util.Locale.getDefault().toLanguageTag())')
+        # d.get(k, padrao), d.keys(), d.values(), d.items(), x.copy(): after
+        # storage.get(), state.get() and the rest, which are the app's calls.
+        elif _dict_method_java(node, _val_to_java) is not None:
+            return _dict_method_java(node, _val_to_java)
+        elif _text_method_java(node, _val_to_java) is not None:
+            return _text_method_java(node, _val_to_java)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                and node.func.attr == 'format' and isinstance(node.func.value, ast.Constant) \
+                and isinstance(node.func.value.value, str) \
+                and _str_format_java(node, _val_to_java) is not None:
+            return _str_format_java(node, _val_to_java)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == 'format' and 1 <= len(node.args) <= 2 and not node.keywords:
+            # format(x, spec): the f-string's {x:spec}.
+            _spec = node.args[1] if len(node.args) > 1 else ast.Constant(value='')
+            if isinstance(_spec, ast.Constant):
+                _spec = ast.JoinedStr(values=[_spec] if _spec.value else [])
+            else:
+                _spec = ast.JoinedStr(values=[ast.FormattedValue(value=_spec, conversion=-1, format_spec=None)])
+            return _formatted_java(_val_to_java(node.args[0]), _format_kind(node.args[0], _val_to_java),
+                                   _spec, -1, node, _val_to_java)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == 'chr' and len(node.args) == 1:
+            return "_apkpyChr(Long.parseLong(String.valueOf(%s).trim()))" % _val_to_java(node.args[0])
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == 'ord' and len(node.args) == 1:
+            return "String.valueOf(_apkpyOrd(String.valueOf(%s)))" % _val_to_java(node.args[0])
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == 'split':
             # Uma lista, que aqui e texto JSON. O String[] do Java nao era:
             # String.valueOf dele e um endereco, e um for sobre isso nao corria.
@@ -16940,6 +20452,8 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
             if m == 'find':
                 return f"String.valueOf(String.valueOf({base}).indexOf({_a0}))"
             if m == 'count':
+                if _kind_from(_val_to_java, node.func.value) == 'list':
+                    return f"_apkpyListCount(String.valueOf({base}), {_a0})"
                 return f"_apkpyCount(String.valueOf({base}), {_a0})"
             if m == 'join':
                 return f"_apkpyJoin(String.valueOf({base}), {_a0})"
@@ -16948,8 +20462,7 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
                 # String.valueOf(boolean) do Java da "true". Mostrar um ao
                 # lado do outro seria divergencia visivel numa etiqueta.
                 _j = 'startsWith' if m == 'startswith' else 'endsWith'
-                return (f'(String.valueOf({base}).{_j}({_a0}) '
-                        f'? "True" : "False")')
+                return f'_apkpyBool(String.valueOf({base}).{_j}({_a0}))'
             if m == 'upper':
                 # Locale.ROOT: sem ele um telemovel turco transforma "I" num
                 # i sem ponto e deixa de bater certo com o Python.
@@ -16965,8 +20478,32 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
         # len(x): nº de itens se x for lista/JSON, senão nº de caracteres.
         # Devolvido como String (modelo "tudo é String"); _apkpyLen decide em runtime.
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'len':
-            inner = _val_to_java(node.args[0]) if node.args else '""'
-            return f"String.valueOf(_apkpyLen(String.valueOf({inner})))"
+            return _len_java(node, _val_to_java)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == unpacking_feature.UNPACK:
+            return _unpack_java(node, _val_to_java)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == item_feature.LISTOP:
+            return _listop_java(node, _val_to_java)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id in ('sorted', 'reversed') and len(node.args) == 1 \
+                and not isinstance(node.args[0], ast.Starred):
+            return _sorted_java(node, _val_to_java)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                and node.func.attr == 'index' and len(node.args) == 1 and not node.keywords:
+            # lista.index(x) or texto.index(sub): where it is, or the ValueError.
+            _ik = 3 if _kind_from(_val_to_java, node.func.value) == 'text' else 0
+            return "_apkpyIndexOf(String.valueOf(%s), %s, %d)" % (
+                _val_to_java(node.func.value), _json_value_java(node.args[0], _val_to_java), _ik)
+        elif isinstance(node, (ast.Compare, ast.BoolOp)) or (
+                isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not)):
+            return _logic_value_java(node, _val_to_java)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == item_feature.SETITEM:
+            return _setitem_java(node, _val_to_java)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == item_feature.DELITEM:
+            return _delitem_java(node, _val_to_java)
         # list(x) — em Python isto tira uma copia para quem recebe nao ficar
         # com a mesma lista. Aqui o valor E texto JSON, que ja e imutavel: a
         # copia acontece por si, e a traducao honesta e o proprio valor.
@@ -17022,8 +20559,18 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
                 and isinstance(node.func.value, ast.Name) and node.func.value.id == 'auth' \
                 and node.func.attr == 'token':
-            return ('getApplicationContext().getSharedPreferences("apkpy_auth", android.content.Context.MODE_PRIVATE)'
-                    '.getString("token", "")')
+            # Renewed in the background a few minutes before it expires.
+            return 'ApkpyAuth.token(getApplicationContext())'
+        # auth.claims() -> the id_token's payload, as a JSON object.
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                and isinstance(node.func.value, ast.Name) and node.func.value.id == 'auth' \
+                and node.func.attr == 'claims':
+            return 'ApkpyAuth.claims(getApplicationContext())'
+        # auth.is_logged_in() as a value, not only in an if.
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                and isinstance(node.func.value, ast.Name) and node.func.value.id == 'auth' \
+                and node.func.attr == 'is_logged_in':
+            return '(ApkpyAuth.loggedIn(getApplicationContext()) ? ApkpyValues.TRUE : ApkpyValues.FALSE)'
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
                 and isinstance(node.func.value, ast.Name) and node.func.value.id == 'crypto' \
                 and node.func.attr == 'hash_password':
@@ -17103,16 +20650,34 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
             helper = '_apkpySha256' if node.func.attr == 'hash' else '_apkpySha256File'
             return f'{helper}(String.valueOf({arg}))'
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'int':
-            inner = _val_to_java(node.args[0]) if node.args else '"0"'
-            return f"String.valueOf(Integer.parseInt(String.valueOf({inner})))"
+            return f"String.valueOf({_int_call_java(node, _numeric_java_expr, _val_to_java)})"
 
         # float(x) → parsing numérico decimal (String, como o int())
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'float':
-            inner = _val_to_java(node.args[0]) if node.args else '"0"'
-            return f"String.valueOf(Double.parseDouble(String.valueOf({inner})))"
+            # _apkpyFloat: float("12345678") is 12345678.0 in Python and
+            # was 1.2345678E7 here.
+            return f"_apkpyFloat({_float_call_java(node, _numeric_java_expr, _val_to_java)})"
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'str':
+            if node.args and isinstance(node.args[0], ast.Constant) \
+                    and (node.args[0].value is None or isinstance(node.args[0].value, bool)):
+                return '"%s"' % node.args[0].value      # str(False) is "False", not "false"
             inner = _val_to_java(node.args[0]) if node.args else '""'
+            if node.args and tuples_feature.is_tuple(node.args[0]):
+                # str((1, 2)) is (1, 2), and str((1,)) is (1,).
+                return f"_apkpyShowTuple(String.valueOf({inner}))"
+            if node.args and _kind_from(_val_to_java, node.args[0]) in ('list', 'dict'):
+                # str([1, "a", None]) is [1, 'a', None], not the JSON it is kept as.
+                return f"_apkpyShow(String.valueOf({inner}))"
             return f"String.valueOf({inner})"
+        # isinstance(x, T): True / False of the app.
+        elif _is_isinstance(node):
+            return f"({_isinstance_java(node, _val_to_java)} ? ApkpyValues.TRUE : ApkpyValues.FALSE)"
+        # bool(x): Python's truth of x, as the True / False of the app.
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'bool' \
+                and len(node.args) <= 1 and not node.keywords:
+            if not node.args:
+                return "ApkpyValues.FALSE"
+            return f"({_truthy_java(node.args[0], _val_to_java)} ? ApkpyValues.TRUE : ApkpyValues.FALSE)"
 
         # t("chave") dentro de uma funcao: em runtime e o getString que
         # escolhe a lingua, exactamente como o layout faz com @string/.
@@ -17127,6 +20692,20 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
         elif (isinstance(node, (ast.Call, ast.Attribute))
                 and _math_java(node, _val_to_java) is not None):
             return "String.valueOf(%s)" % _math_java(node, _val_to_java)
+
+        # pow(a, b, m): a whole number, exact (see _numeric_call_java).
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
+                and node.func.id == 'pow' and len(node.args) == 3 and not node.keywords:
+            _pm = _numeric_call_java(node, _numeric_java_expr, _val_to_java)
+            if _pm is None:
+                unsupported.raise_unsupported(
+                    node,
+                    cause=('pow() with a modulus works on whole numbers, and ApkPy '
+                           'cannot tell that these are.'),
+                    suggestions=['Say which kind of number each one is: '
+                                 'pow(int(a), int(b), 7).'],
+                )
+            return f"String.valueOf({_pm[0]})"
 
         # abs / min / max / sum. Passam por helpers em vez de irem diretos ao
         # Math porque o Python distingue inteiro de decimal (abs(-3) e 3, nao
@@ -17156,16 +20735,15 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
         # divisao" — e' o contrario: dividir uma conta ao meio e' o caminho
         # mais curto para um .5 exato. O Math.rint tem a regra do Python.
         elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'round':
-            inner = _val_to_java(node.args[0]) if node.args else '"0"'
-            if len(node.args) > 1 and isinstance(node.args[1], ast.Constant) and isinstance(node.args[1].value, int):
-                factor = 10 ** int(node.args[1].value)
-                return f"_apkpyFloat(Math.rint(Double.parseDouble(String.valueOf({inner})) * {factor}.0) / {factor}.0)"
-            # round(x) devolve um int em Python; o rint devolve double, e sem
-            # o cast sairia "2.0" onde o Previewer mostra "2".
-            return f"String.valueOf((long) Math.rint(Double.parseDouble(String.valueOf({inner}))))"
+            # round(x) devolve um int em Python, e round(um int, n) tambem.
+            return _round_java(node, _val_to_java, _numeric_java_expr)
         elif isinstance(node, ast.JoinedStr):
             return _fstring_node_to_java(node, _val_to_java)
-        elif isinstance(node, ast.BinOp) and isinstance(node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Mod)):
+        elif isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mod) \
+                and isinstance(node.left, ast.Constant) and isinstance(node.left.value, str):
+            # "%.2f" % x: text formatting, not the remainder of a division.
+            return _percent_java(node, _val_to_java)
+        elif isinstance(node, ast.BinOp) and isinstance(node.op, _ARITH_OPS):
             _ne = _numeric_java_expr(node)
             if _ne is not None:
                 # O sinalizador is_float diz quando o resultado e um decimal:
@@ -17174,7 +20752,9 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
                     return f"_apkpyFloat({_ne[0]})"
                 return f"String.valueOf({_ne[0]})"
             if isinstance(node.op, ast.Add):
-                return f'{_val_to_java(node.left)} + {_val_to_java(node.right)}'
+                return _add_java(node, _val_to_java, _numeric_java_expr)
+            if _repeat_java(node, _val_to_java, _numeric_java_expr) is not None:
+                return _repeat_java(node, _val_to_java, _numeric_java_expr)
             if unsupported.reaches_other_runtime(node):
                 # job.attempt() e vazio na copia da Activity, e de proposito.
                 return '""'
@@ -17197,6 +20777,8 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
     # whether either is a number (_compare_node_to_java).
     _val_to_java.numeric = _numeric_java_expr
 
+    _val_to_java.kind_of = lambda node: _static_kind(node, _struct_kinds)
+
     def _dict_node_to_java(node, var_name, indent):
         result = [f"{indent}java.util.Map<String, String> {var_name} = new java.util.HashMap<>();"]
         if isinstance(node, ast.Dict):
@@ -17204,7 +20786,7 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
                 result.append(f"{indent}{var_name}.put({_val_to_java(k_node)}, {_val_to_java(v_node)});")
         return result
 
-    # Variáveis declaradas como boolean no Worker (p/ _gen_if_var_condition)
+    # Variáveis declaradas como boolean no Worker (p/ _cond_to_java)
     _worker_bool_vars = set()
 
     def _gen_lambda_body(cmds_list, indent, declared):
@@ -17223,6 +20805,7 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
         if declared is None:
             declared = set()
             _numeric_vars.clear()  # novo corpo top-level → esquece numéricos anteriores
+            _struct_kinds.clear()
             _numeric_vars.update(_NUMERIC_CONSTS[0])
         for c in cmds_list:
             ctype = c['type'] if isinstance(c, dict) else None
@@ -17343,11 +20926,13 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
                 _decl = "" if c['var'] in declared else "String "
                 declared.add(c['var'])
                 lines.append(f"{indent}{_decl}{c['var']} = _sqliteQuery(String.valueOf({_val_to_java(c['sql_node'])}){_args});")
+            elif ctype == 'global_sync':
+                lines.append(f"{indent}{_global_sync_java(c['name'])}")
             elif ctype == 'local_string_assign':
                 _decl = "" if c['var'] in declared else "String "
                 declared.add(c['var'])
                 lines.append(f"{indent}{_decl}{c['var']} = {_assign_rhs_java(c['val_node'], _val_to_java)};")
-                _track_json_struct(c['var'], c['val_node'], _json_struct_vars)
+                _track_json_struct(c['var'], c['val_node'], _json_struct_vars, _struct_kinds, _val_to_java.kind_of)
                 _ne_t = _numeric_java_expr(c['val_node'])
                 if _ne_t is not None:
                     _numeric_vars[c['var']] = _ne_t[1]
@@ -17393,13 +20978,17 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
             elif ctype == 'if_var':
                 # Tambem os argumentos booleanos do callback em curso (o `ok` de
                 # um on_response/on_result), como a Activity ja fazia.
-                lines.append(f"{indent}if {_gen_if_var_condition(c['var'], _worker_bool_vars | _cur_bool_args[0])} {{")
+                lines.append(f"{indent}if {_parenthesized(_cond_to_java(ast.Name(id=c['var'], ctx=ast.Load()), _val_to_java, _worker_bool_vars | _cur_bool_args[0]))} {{")
                 _gen_cmds(c['true_body'], indent + "    ", declared)
                 lines.append(f"{indent}}} else {{")
                 _gen_cmds(c['false_body'], indent + "    ", declared)
                 lines.append(f"{indent}}}")
             elif ctype == 'list_append':
                 _emit_list_append(lines, indent, c, _val_to_java, _json_iter_vars)
+            elif ctype == 'raise':
+                _emit_raise(lines, indent, c, _val_to_java, _numeric_java_expr)
+            elif ctype == 'print':
+                _emit_print(lines, indent, c, _val_to_java)
             elif ctype == 'try_block':
                 _emit_try_block(lines, indent, c,
                                 lambda b, ind: _gen_cmds(b, ind, declared),
@@ -17434,9 +21023,9 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
                     else:
                         lines.append(f"{indent}return Result.success();")
                 elif c.get('value_node') is not None:
-                    lines.append(f"{indent}return String.valueOf({_val_to_java(c['value_node'])});")
+                    lines.append(f"{indent}return {_text_value_java(c['value_node'], _val_to_java)};")
                 else:
-                    lines.append(f"{indent}return;")
+                    lines.append(f"{indent}return ApkpyValues.NONE;" if _RETURNS_VALUE[0] else f"{indent}return;")
             else:
                 # Tudo o que o Worker nao sabe escrever era deitado fora aqui,
                 # e o doWork() compilava vazio. Agora para o build a dizer o
@@ -17635,14 +21224,28 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
     lines.append("            }")
     lines.append("            for (String part : parts) {")
     lines.append("                if (current instanceof org.json.JSONArray) {")
-    lines.append("                    current = ((org.json.JSONArray) current).get(Integer.parseInt(part));")
+    lines.append("                    org.json.JSONArray arr = (org.json.JSONArray) current;")
+    lines.append("                    int i = Integer.parseInt(part.trim());")
+    lines.append("                    if (i < 0) i += arr.length();")
+    lines.append("                    if (i < 0 || i >= arr.length()) {")
+    lines.append("                        if (ApkpyValues.strict()) throw new ApkpyValues.Raised(\"IndexError\", \"list index out of range\");")
+    lines.append("                        return \"\";")
+    lines.append("                    }")
+    lines.append("                    current = arr.opt(i);")
     lines.append("                } else if (current instanceof org.json.JSONObject) {")
-    lines.append("                    current = ((org.json.JSONObject) current).get(part);")
+    lines.append("                    org.json.JSONObject obj = (org.json.JSONObject) current;")
+    lines.append("                    if (!obj.has(part)) {")
+    lines.append("                        if (ApkpyValues.strict()) throw new ApkpyValues.Raised(\"KeyError\", _apkpyRepr(part));")
+    lines.append("                        return \"\";")
+    lines.append("                    }")
+    lines.append("                    current = obj.opt(part);")
     lines.append("                } else {")
     lines.append("                    return \"\";")
     lines.append("                }")
     lines.append("            }")
-    lines.append("            return current != null ? current.toString() : \"\";")
+    lines.append("            return current != null ? _apkpyFromJson(current) : \"\";")
+    lines.append("        } catch (ApkpyValues.Raised r) {")
+    lines.append("            throw r;")
     lines.append("        } catch (Exception e) {")
     lines.append("            return \"\";")
     lines.append("        }")
@@ -17651,13 +21254,21 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
 
     # len(x): comprimento de uma lista/JSON-array ou de uma string
     lines.append("")
+    # len() of a value whose kind the source does not say: a JSON list counts
+    # items, a JSON object keys (it counted the letters of its text), and text
+    # its characters as Python counts them -- an emoji is one, not two.
     lines.append("    private int _apkpyLen(String s) {")
     lines.append("        if (s == null) return 0;")
-    lines.append("        String t = s.trim();")
-    lines.append("        if (t.startsWith(\"[\") && t.endsWith(\"]\")) {")
-    lines.append("            try { return new org.json.JSONArray(s).length(); } catch (Exception e) { }")
-    lines.append("        }")
-    lines.append("        return s.length();")
+    lines.append("        int shape = _apkpyJsonShape(s);")
+    lines.append("        try {")
+    lines.append("            if (shape == 91) return new org.json.JSONArray(s.trim()).length();")
+    lines.append("            if (shape == 123) return new org.json.JSONObject(s.trim()).length();")
+    lines.append("        } catch (Exception e) { }")
+    lines.append("        return _apkpyTextLen(s);")
+    lines.append("    }")
+    lines.append("")
+    lines.append("    private int _apkpyTextLen(String s) {")
+    lines.append("        return s == null ? 0 : s.codePointCount(0, s.length());")
     lines.append("    }")
     lines.append("")
     # random.randint(a, b) → inteiro aleatório no intervalo [a, b]
@@ -17733,10 +21344,13 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
         _ret_type = "String" if f_info.get('returns_value') else "void"
         lines.append(f"    private {_ret_type} pythonCallback_{f_name}({args_str}) {{")
         _in_do_work[0] = False
+        _RETURNS_VALUE[0] = bool(f_info.get('returns_value'))
         _gen_cmds(f_info['cmds'], "        ")
+        _RETURNS_VALUE[0] = False
         _in_do_work[0] = True
         if f_info.get('returns_value') and not _cmds_definitely_return(f_info['cmds']):
-            lines.append('        return "";')
+            # Python returns None when it falls off the end.
+            lines.append('        return ApkpyValues.NONE;')
         lines.append("    }")
 
         nested = set()
@@ -17757,7 +21371,7 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
         lines.extend(_files_download_now_java())
 
     lines.append("}")
-    return "\n".join(lines)
+    return "\n".join(_drop_unused_struct_fields(lines))
 
 
 def _generate_apkpy_layout_java(package="com.apkpy.app"):
@@ -20760,75 +24374,11 @@ def _generate_media_service_java(package="com.apkpy.app"):
 
 
 def _generate_auth_activity_java(package, auth, then_class):
-    """Gera ApkpyAuthActivity.java — recebe o redirect OAuth (deep-link), troca o
-    `code` por um access token (authorization-code + PKCE, numa thread), guarda-o
-    em SharedPreferences ("apkpy_auth"/"token") e navega para o ecrã `then`.
-    Sem dependências: HttpURLConnection + org.json. Emitida quando há auth.login()."""
-    token_url = _escape_java_literal(str(auth.get('token_url', '')))
-    client_id = _escape_java_literal(str(auth.get('client_id', '')))
-    redirect = _escape_java_literal(str(auth.get('redirect', '')))
-    return f'''package {package};
-
-import android.app.Activity;
-import android.os.Bundle;
-
-// Recetor do redirect OAuth (auth.login). Declarado no manifesto com um
-// intent-filter para o scheme/host do redirect_uri.
-public class ApkpyAuthActivity extends Activity {{
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {{
-        super.onCreate(savedInstanceState);
-        android.net.Uri data = getIntent() != null ? getIntent().getData() : null;
-        final String code = data != null ? data.getQueryParameter("code") : null;
-        if (code == null || code.isEmpty()) {{ goNext(); finish(); return; }}
-        final String verifier = getSharedPreferences("apkpy_auth", MODE_PRIVATE).getString("verifier", "");
-        new Thread(new Runnable() {{
-            public void run() {{
-                String token = "";
-                try {{
-                    java.net.HttpURLConnection conn = (java.net.HttpURLConnection) new java.net.URL("{token_url}").openConnection();
-                    conn.setRequestMethod("POST");
-                    conn.setDoOutput(true);
-                    conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-                    conn.setRequestProperty("Accept", "application/json");
-                    String body = "grant_type=authorization_code"
-                        + "&code=" + java.net.URLEncoder.encode(code, "UTF-8")
-                        + "&redirect_uri=" + java.net.URLEncoder.encode("{redirect}", "UTF-8")
-                        + "&client_id=" + java.net.URLEncoder.encode("{client_id}", "UTF-8")
-                        + "&code_verifier=" + java.net.URLEncoder.encode(verifier, "UTF-8");
-                    java.io.OutputStream os = conn.getOutputStream();
-                    os.write(body.getBytes("UTF-8"));
-                    os.close();
-                    int rc = conn.getResponseCode();
-                    java.io.InputStream is = rc < 400 ? conn.getInputStream() : conn.getErrorStream();
-                    java.io.BufferedReader r = new java.io.BufferedReader(new java.io.InputStreamReader(is, "UTF-8"));
-                    StringBuilder sb = new StringBuilder();
-                    String ln;
-                    while ((ln = r.readLine()) != null) sb.append(ln);
-                    r.close();
-                    conn.disconnect();
-                    org.json.JSONObject jo = new org.json.JSONObject(sb.toString());
-                    token = jo.optString("access_token", "");
-                }} catch (Exception e) {{}}
-                final String _tok = token;
-                getSharedPreferences("apkpy_auth", MODE_PRIVATE).edit().putString("token", _tok).apply();
-                runOnUiThread(new Runnable() {{
-                    public void run() {{ goNext(); finish(); }}
-                }});
-            }}
-        }}).start();
-    }}
-
-    private void goNext() {{
-        try {{
-            android.content.Intent i = new android.content.Intent(this, {then_class}.class);
-            i.addFlags(android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP | android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(i);
-        }} catch (Exception e) {{}}
-    }}
-}}
-'''
+    """ApkpyAuthActivity.java -- receives the OAuth redirect (deep link) and
+    hands it to ApkpyAuth (features/auth_oidc.py), which checks the state,
+    trades the code for tokens and keeps them; then the app goes on to the
+    ``then`` screen."""
+    return auth_oidc_feature.generate_auth_activity_java(package, then_class)
 
 
 def _permission_symbol(entry):
@@ -21099,6 +24649,28 @@ def _generate_anim_xml(frames_dict):
 
 # ─── Public multi-screen entry point ─────────────────────────────────────────
 
+def _generate_values_java(package):
+    """None, True and False as the app keeps them: text that reads like
+    Python's, and objects of their own, so the words a person typed are not
+    mistaken for them."""
+    return f'''package {package};
+
+/** None, True and False as values of the app. new String() keeps each one an
+ *  object of its own: "False" typed into a field is not ApkpyValues.FALSE.
+ *  ZERO is a 0 read from JSON: false in an if, where the "0" a person typed
+ *  is true, as in Python. */
+public final class ApkpyValues {{
+    public static final String NONE = new String("None");
+    public static final String TRUE = new String("True");
+    public static final String FALSE = new String("False");
+    public static final String ZERO = new String("0");
+    public static final String ZERO_FLOAT = new String("0.0");
+{_VALUES_ERRORS_JAVA}{_VALUES_PRINT_JAVA}{_VALUES_TYPES_JAVA}
+    private ApkpyValues() {{ }}
+}}
+'''
+
+
 def _generate_reactive_state_java(package):
     """Process-wide, thread-safe state store used by generated Activities."""
     return f'''package {package};
@@ -21250,6 +24822,35 @@ def _prepare_android_analysis(python_code, source_name="writehere.py",
     # `lambda t=target: ...` keeps each turn's value, as in Python: the
     # default is written into the body now that the loop has been unrolled.
     tree = lambda_defaults_feature.bind(tree)
+    # def inner(): inside a function, and name = lambda ...: moved out to the
+    # module, with the outer names they read as arguments. Before the
+    # defaults below, which then fill the moved functions' calls too.
+    tree = nested_feature.desugar(tree)
+    # try ... else becomes a flag, raise X from Y raises X.
+    tree = errors_feature.desugar(tree)
+    # for ... else / while ... else: a flag that each break of the loop
+    # clears. Before the unpacking, which rewrites loops of its own.
+    tree = loop_else_feature.desugar(tree)
+    # q, r = divmod(a, b) as a // b and a % b; pow(a, b) as a ** b; assert
+    # as an if that raises AssertionError. Before the unpacking, which would
+    # otherwise read q and r out of a pair, as text.
+    tree = basics_feature.desugar(tree)
+    # greet("Ana") for def greet(name, greeting="Hello"): Java has no default
+    # values, so each call is written out in full, keywords in their places.
+    tree = call_defaults_feature.fill(tree)
+    # [x.upper() for x in xs if x], {k: v for ...}, any(...), all(...): the
+    # loops they stand for, before the unpacking below (for k, v in ...).
+    tree = comprehensions_feature.desugar(tree)
+    # pair = (1, 2): read as the list it is kept as, shown as (1, 2) by
+    # str(), and refused where CPython refuses a change to it. Before the
+    # unpacking, which reads the same names.
+    tree = tuples_feature.mark(tree)
+    # a, b = parts / for k, v in d.items() / enumerate / zip / a, b = b, a:
+    # rewritten as the assignments and loops below already translate.
+    tree = unpacking_feature.desugar(tree)
+    # d["k"] = v, lista[i] = v, d["k"] += 1, del lista[0]: the name gets the
+    # changed JSON; a list or dict of the module is read as `global`.
+    tree = item_feature.desugar(tree)
     tree, regex_plan = regex_feature.prepare(tree)
     wallpaper_feature.validate_and_assets(tree, asset_base_dir)
     camera_feature.validate_callbacks(tree)
@@ -21275,6 +24876,13 @@ def _prepare_android_analysis(python_code, source_name="writehere.py",
     _PENDING_TARGETS[0] = {}
     _VIEW_COMPS[0] = {}
     _MODULE_LISTS[0] = {}
+    _MODULE_STRUCT_TEXT[0] = {}
+    _MODULE_KINDS[0] = {}
+    _GLOBALS[0] = {}
+    _SINGLETON_CONSTS[0] = _module_singletons(tree)
+    _IMPORTED_NAMES[0] = _imported_names(tree)
+    _BOUND_NAMES[0] = _bound_names(tree)
+    _STATE_NAMES[0] = set()
     _ELSEWHERE_EMPTY[0] = set()
     _I18N[0] = {'table': {}, 'default': ''}
     _USES_CRASH[0] = crash_feature.uses_crash(tree)
@@ -21292,7 +24900,15 @@ def _prepare_android_analysis(python_code, source_name="writehere.py",
     transpiler.uses_zoom = zoom_feature.uses(tree)
     _NUMERIC_CONSTS[0] = dict(transpiler.numeric_constants)
     _NUMERIC_CONST_TEXT[0] = dict(transpiler.numeric_constant_text)
+    _NUMERIC_RETURNS[0] = dict(getattr(transpiler, 'numeric_returns', {}) or {})
+    _GLOBALS[0] = _prescan_globals(
+        tree, _numeric_body_names(tree), _NUMERIC_RETURNS[0],
+        getattr(transpiler, 'numeric_params', {}))
+    _NUMERIC_CONSTS[0].update(
+        {name: kind for name, (_, kind) in _GLOBALS[0].items() if kind is not None})
+    transpiler.value_called = _functions_used_as_values(tree)
     transpiler.visit(tree)
+    _STATE_NAMES[0] = set(getattr(transpiler, 'reactive_states', {}) or {})
     gestures_feature.mark_reorder_positions(transpiler)
     choice_feature.mark_list_params(transpiler)
     sheet_feature.apply_default_styles(transpiler.overlays, styles)
@@ -21320,6 +24936,11 @@ def _prepare_android_analysis(python_code, source_name="writehere.py",
     _line_up_keywords(transpiler)
     _spread_boolean_first(transpiler)
     _MODULE_LISTS[0] = dict(getattr(transpiler, 'list_assignments', {}) or {})
+    _MODULE_KINDS[0] = _module_kinds(transpiler, tree)
+    _MODULE_STRUCT_TEXT[0] = _module_struct_text(
+        tree,
+        skip=(set(transpiler.mutated_lists) | set(transpiler.string_constants)
+              | set(transpiler.numeric_constant_text)))
     _validate_font_registry(transpiler.fonts, asset_base_dir)
     _TRANSPILE_FONTS[0] = transpiler.fonts
 
@@ -21427,10 +25048,11 @@ def translate_python_to_android(python_code, package="com.apkpy.app",
             output_files["java/ApkpyCrashHandler.java"] = (
                 crash_feature.shared_class_java(package)
             )
-        if transpiler.reactive_states or _MUTATED_LISTS[0]:
+        if transpiler.reactive_states or _MUTATED_LISTS[0] or _GLOBALS[0]:
             output_files["java/ApkpyReactiveState.java"] = (
                 _generate_reactive_state_java(package)
             )
+        output_files["java/ApkpyValues.java"] = _generate_values_java(package)
         # The Bluetooth link belongs to the app, not to a screen: a field on
         # one Activity dies with it, and a static would be per-class.
         if bluetooth_feature.commands_use_bluetooth(
@@ -22641,6 +26263,13 @@ def translate_python_to_android(python_code, package="com.apkpy.app",
                     docs=i18n_feature.DOCS,
                 )
             output_files[name] = body
+
+        # ApkpyAuth.java whenever a file calls it: auth.login(), and also an
+        # app that only reads auth.token() or auth.is_logged_in().
+        if any(name.endswith('.java') and 'ApkpyAuth.' in body
+               for name, body in output_files.items()):
+            output_files['java/ApkpyAuth.java'] = auth_oidc_feature.generate_auth_java(
+                package, transpiler.auth)
 
         # O que o native.gradle()/keep() pediu, para o CLI juntar ao projeto.
         _native_gradle = native_feature.gradle_text()

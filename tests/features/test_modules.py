@@ -175,7 +175,7 @@ class TheRefusalTests(_OnDisk):
     def test_untranslatable_python_names_the_helper_file(self):
         self.write("helpers.py",
                    "def shout(text):\n"
-                   "    return [c for c in text if c]\n")
+                   "    return {c for c in text if c}\n")
         error = self.error("import helpers\n" + APP +
                            "def go():\n    out.set_value(helpers.shout('hi'))\n" + TAIL)
         self.assertIn("helpers.py", error)
@@ -192,7 +192,7 @@ class TheNumbersStayNumbersTests(_OnDisk):
         java = self.java_for(
             "def half(cents):\n    return str(cents / 2)\n",
             "helpers.half(10)")
-        self.assertIn("Integer.parseInt(String.valueOf(cents))", java)
+        self.assertIn("Long.parseLong(String.valueOf(cents))", java)
         self.assertIn("(double)", java)
 
     def test_a_parameter_that_is_given_text_stays_text(self):
@@ -200,7 +200,7 @@ class TheNumbersStayNumbersTests(_OnDisk):
             "def shout(text):\n    return text.upper()\n",
             "helpers.shout('hi')")
         self.assertIn("private String pythonCallback_shout(String text)", java)
-        self.assertNotIn("Integer.parseInt(String.valueOf(text))", java)
+        self.assertNotIn("Long.parseLong(String.valueOf(text))", java)
 
     def test_one_text_call_site_is_enough_to_keep_it_text(self):
         source = ("import helpers\n" + APP +
@@ -210,7 +210,7 @@ class TheNumbersStayNumbersTests(_OnDisk):
         self.write("helpers.py", "def label_for(value):\n    return str(value)\n")
         files = self.files(source)
         java = "\n".join(v for k, v in files.items() if k.endswith(".java"))
-        self.assertNotIn("Integer.parseInt(String.valueOf(value))", java)
+        self.assertNotIn("Long.parseLong(String.valueOf(value))", java)
 
     def test_a_float_call_site_makes_it_a_float(self):
         java = self.java_for(
@@ -222,14 +222,14 @@ class TheNumbersStayNumbersTests(_OnDisk):
         java = self.java_for(
             "def half(cents):\n    return str(cents / 2)\n",
             "helpers.half(int('10'))")
-        self.assertIn("Integer.parseInt(String.valueOf(cents))", java)
+        self.assertIn("Long.parseLong(String.valueOf(cents))", java)
 
     def test_a_name_the_app_only_ever_assigns_numbers_counts(self):
         self.write("helpers.py", "def half(cents):\n    return str(cents / 2)\n")
         java = self.java("import helpers\n" + APP +
                          "total = 250\n"
                          "def go():\n    out.set_value(helpers.half(total))\n" + TAIL)
-        self.assertIn("Integer.parseInt(String.valueOf(cents))", java)
+        self.assertIn("Long.parseLong(String.valueOf(cents))", java)
 
     def test_a_name_that_is_sometimes_text_does_not_count(self):
         self.write("helpers.py", "def half(cents):\n    return str(cents / 2)\n")
@@ -240,7 +240,7 @@ class TheNumbersStayNumbersTests(_OnDisk):
                   "    out.set_value(helpers.half(total))\n" + TAIL)
         files = self.files(source)
         java = "\n".join(v for k, v in files.items() if k.endswith(".java"))
-        self.assertNotIn("Integer.parseInt(String.valueOf(cents))", java)
+        self.assertNotIn("Long.parseLong(String.valueOf(cents))", java)
 
     def test_a_function_nobody_calls_keeps_text_parameters(self):
         java = self.java_for(
@@ -255,7 +255,7 @@ class TheNumbersStayNumbersTests(_OnDisk):
         java = self.java("import helpers\n" + APP +
                          "def go():\n"
                          "    out.set_value(helpers.shown(helpers.double(250)))\n" + TAIL)
-        self.assertIn("Integer.parseInt(String.valueOf(cents))", java)
+        self.assertIn("Long.parseLong(String.valueOf(cents))", java)
         self.assertIn("pythonCallback_shown", java)
 
     def test_a_parameter_passed_straight_through(self):
@@ -264,7 +264,7 @@ class TheNumbersStayNumbersTests(_OnDisk):
                    "\n\ndef row(name, cents):\n    return name + half(cents)\n")
         java = self.java("import helpers\n" + APP +
                          "def go():\n    out.set_value(helpers.row('mug', 250))\n" + TAIL)
-        self.assertIn("Integer.parseInt(String.valueOf(cents))", java)
+        self.assertIn("Long.parseLong(String.valueOf(cents))", java)
 
     def test_a_number_written_at_module_level_is_a_field(self):
         self.write("helpers.py",
@@ -273,7 +273,7 @@ class TheNumbersStayNumbersTests(_OnDisk):
         java = self.java("import helpers\n" + APP +
                          "def go():\n    out.set_value(helpers.with_vat(100))\n" + TAIL)
         self.assertIn('private static final String VAT = "23";', java)
-        self.assertIn("Integer.parseInt(String.valueOf(VAT))", java)
+        self.assertIn("Long.parseLong(String.valueOf(VAT))", java)
 
     def test_a_boolean_callback_argument_is_still_boolean(self):
         source = (

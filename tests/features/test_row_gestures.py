@@ -131,7 +131,8 @@ class ThePhone(unittest.TestCase):
         java = _java(self._build('on_reorder=moved'))
         self.assertIn('pythonCallback_moved(vc1_items.get(to), String.valueOf(to));', java)
         body = java[java.index('void pythonCallback_moved'):]
-        self.assertIn('Integer.parseInt(String.valueOf(index)) + 1', body[:600])
+        self.assertIn('Math.addExact((long)(Long.parseLong(String.valueOf(index))), (long)(1))',
+                      body[:600])
 
     def test_a_swipe_kept_in_a_variable(self):
         files = _build(PHONE + 'right = swipe("archive", "Archive", on_swipe=archive)\n'

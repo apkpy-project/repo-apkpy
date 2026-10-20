@@ -97,7 +97,7 @@ class TextAgainstText(unittest.TestCase):
 class NumbersAgainstNumbers(unittest.TestCase):
     """A side ApkPy knows is a number makes it a comparison of numbers."""
 
-    NUMBER = "(Integer.parseInt(String.valueOf(%s)))"
+    NUMBER = "(Long.parseLong(String.valueOf(%s)))"
 
     def test_two_names(self):
         for op in ("==", "!=", "<", ">", "<=", ">="):
@@ -120,20 +120,20 @@ class NumbersAgainstNumbers(unittest.TestCase):
 
     def test_sums(self):
         line = _if('n = 3\nm = 4\nif n + 1 > m * 2:\n    toast("hit")')
-        self.assertIn("(Integer.parseInt(String.valueOf(n)) + 1)", line)
-        self.assertIn("(Integer.parseInt(String.valueOf(m)) * 2)", line)
+        self.assertIn("Math.addExact((long)(Long.parseLong(String.valueOf(n))), (long)(1))", line)
+        self.assertIn("Math.multiplyExact((long)(Long.parseLong(String.valueOf(m))), (long)(2))", line)
         self.assertNotIn("compareTo", line)
 
     def test_text_made_a_number_on_both_sides(self):
         line = _if('if int(first.get_value()) > int(second.get_value()):\n    toast("hit")')
-        self.assertEqual(line.count("Integer.parseInt("), 2)
+        self.assertEqual(line.count("Long.parseLong("), 2)
         self.assertNotIn("compareTo", line)
 
     def test_one_side_known_is_enough(self):
         # len() and a name that is a number; text from a field and a number.
         line = _if('m = 4\nif len(first.get_value()) >= m:\n    toast("hit")')
         self.assertIn(">= %s" % (self.NUMBER % "m"), line)
-        self.assertIn("Double.parseDouble(", line)
+        self.assertIn("_apkpyTextLen(", line)
         line = _if('total = 2.5\nif total == float(first.get_value()):\n    toast("hit")')
         self.assertEqual(line.count("Double.parseDouble("), 2)
 

@@ -196,7 +196,7 @@ class WhatIsBuilt(unittest.TestCase):
         files = _built('network.on_change(changed)', CHANGED)
         self.assertEqual(sorted(name for name in files if name.startswith("java/Apkpy")),
                          ["java/ApkpyKit.java", "java/ApkpyKitRules.java",
-                          "java/ApkpyNetwork.java", "java/ApkpyWeight.java"])
+                          "java/ApkpyNetwork.java", "java/ApkpyValues.java", "java/ApkpyWeight.java"])
         manifest = files["AndroidManifest.xml"]
         # The one permission, a normal one: nobody is asked for it.
         self.assertEqual([line.strip() for line in manifest.splitlines() if "uses-permission" in line],

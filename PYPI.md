@@ -12,6 +12,35 @@ You write the whole app in Python with a CSS-style design system, see it on your
 
 ---
 
+## ApkPy 1.14.0 — the Python you write every day
+
+Most of the Python an app is written with now reaches the phone: unpacking,
+changing items, `None` and `a or b`, list and dict methods, comprehensions,
+default values, more than one `except`, `for ... else`, tuples and
+`isinstance()`. Python that compiled in 1.13.1 but answered wrong on the
+phone (`n // 2`, `len(x) + 1`, a `for` over a dict, `range()` with a step,
+`text[0]`) now answers what CPython answers. An app can sign in with
+Microsoft Entra ID or any OpenID Connect provider. And the Previewer checks
+HTTPS certificates, as the phone does.
+
+```python
+def receipt(items):
+    total = 0
+    for name, price in items.items():
+        total += price
+    lines = [f"{name:<10}{price:>6.2f}" for name, price in items.items()]
+    return "\n".join(lines), total
+
+
+def show():
+    text, total = receipt({"tea": 2.5, "cake": 3})
+    note = "free delivery" if total > 5 else None
+    out.set_value(text + "\n" + (note or ""))
+```
+
+Upgrade with `python -m pip install --upgrade apkpy==1.14.0`. See the
+[1.14.0 notes](https://repo-apkpy.pages.dev/version-1.14.0/).
+
 ## ApkPy 1.13.1 — every Python from 3.8
 
 Fixes, and nothing new. On Python 3.8 to 3.11 the `apkpy` command of 1.13.0

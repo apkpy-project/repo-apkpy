@@ -23,8 +23,11 @@ import glob
 import shutil
 import socket
 import platform
+import json
+import hashlib
 import zipfile
 import tarfile
+import urllib.parse
 import urllib.request
 import subprocess
 import http.server
@@ -391,14 +394,27 @@ def print_qr(url):
     return True
 
 
-def make_apk_server(apk_path, port=8000, tries=20):
-    """Serve the folder containing *apk_path* over HTTP. Returns ``(httpd, url)``."""
+def make_apk_server(apk_path, port=8000, tries=20, host="0.0.0.0"):
+    """Serve *apk_path*, and nothing else, over HTTP. Returns ``(httpd, url)``.
+
+    The phone has to reach it, so the server listens on every interface; what
+    it answers is the one file. It used to serve the APK's whole folder --
+    usually the project, with a listing -- to anyone on the network while the
+    QR was up. Every other path is a 404."""
     directory = os.path.dirname(os.path.abspath(apk_path))
     filename = os.path.basename(apk_path)
 
     class Handler(http.server.SimpleHTTPRequestHandler):
         def __init__(self, *a, **k):
             super().__init__(*a, directory=directory, **k)
+
+        def send_head(self):
+            # GET and HEAD both come through here, before any file is opened.
+            path = urllib.parse.unquote(urllib.parse.urlsplit(self.path).path)
+            if path != "/" + filename:
+                self.send_error(404)
+                return None
+            return super().send_head()
 
         def log_message(self, *a):
             pass  # keep the console clean
@@ -412,8 +428,8 @@ def make_apk_server(apk_path, port=8000, tries=20):
     last_err = None
     for p in range(port, port + tries):
         try:
-            httpd = Server(("0.0.0.0", p), Handler)
-            return httpd, f"http://{lan_ip()}:{p}/{filename}"
+            httpd = Server((host, p), Handler)
+            return httpd, f"http://{lan_ip()}:{p}/{urllib.parse.quote(filename)}"
         except OSError as e:
             last_err = e
     raise last_err
@@ -446,11 +462,17 @@ def adb_install(sdk_path, apk_path):
 #  the SDK uses Google's command-line tools + sdkmanager.
 # ──────────────────────────────────────────────────────────────────────────
 # Google publishes no "latest" alias for the command-line tools, so the build
-# number is pinned here and may need bumping over time.
+# number is pinned here and may need bumping over time. The sha1 and the size
+# are the ones Google's own package list (repository2-3.xml) gives for these
+# archives -- what sdkmanager checks its own downloads against. Bumping the
+# build means copying the new three from that list.
 _CMDLINE_TOOLS = {
-    "win":   "https://dl.google.com/android/repository/commandlinetools-win-11076708_latest.zip",
-    "mac":   "https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip",
-    "linux": "https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip",
+    "win":   ("https://dl.google.com/android/repository/commandlinetools-win-11076708_latest.zip",
+              "3d2917302740f476999a091bc5558837c7a863c5", 153583359),
+    "mac":   ("https://dl.google.com/android/repository/commandlinetools-mac-11076708_latest.zip",
+              "37fb7dd41005b3b4ca6ea48ac27074b6fc4e3236", 153607488),
+    "linux": ("https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip",
+              "d313adb7aedccf6cf0cfca51ec180f0059f5f8f8", 153607504),
 }
 _SDK_PACKAGES = ["platform-tools", "platforms;android-%d" % COMPILE_SDK, "build-tools;34.0.0"]
 
@@ -499,20 +521,89 @@ def _os_token():
     return "mac" if sys.platform == "darwin" else "linux"
 
 
-def _download(url, dest, log=print):
-    log(f"   downloading {url.split('/')[-1]} ...")
+def _fetch_text(url):
+    """A small text file from *url*: a checksum or an API answer."""
+    req = urllib.request.Request(url, headers={"User-Agent": "apkpy"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return r.read().decode("utf-8")
+
+
+def _download(url, dest, log=print, sha256=None, sha1=None, size=None):
+    """Download *url* into *dest* and check it against the checksum its
+    publisher gives before anything is unpacked. A toolchain is code that
+    runs on this machine: a file that does not match is deleted and the
+    install stops. There is no unchecked download."""
+    algorithm, wanted = ("sha256", sha256) if sha256 else ("sha1", sha1)
+    if not wanted:
+        raise ValueError(f"no checksum to check {url} against")
+    name = urllib.parse.unquote(url.split("/")[-1].split("?")[0])
+    log(f"   downloading {name} ...")
+    digest = hashlib.new(algorithm)
+    received = 0
     req = urllib.request.Request(url, headers={"User-Agent": "apkpy"})
     with urllib.request.urlopen(req) as r, open(dest, "wb") as f:
-        shutil.copyfileobj(r, f)
+        while True:
+            chunk = r.read(1 << 20)
+            if not chunk:
+                break
+            digest.update(chunk)
+            f.write(chunk)
+            received += len(chunk)
+    got = digest.hexdigest()
+    if got != wanted.lower() or (size is not None and received != size):
+        os.remove(dest)
+        raise RuntimeError(
+            f"{name} does not match the checksum its publisher gives "
+            f"({algorithm} {got[:12]}..., expected {wanted.lower()[:12]}...), so it was deleted. "
+            f"Run apkpy setup again; if it happens again, the download is being changed on the way.")
+    log(f"   {algorithm} checked.")
+
+
+def _inside(dest, name):
+    """Where *name* lands under *dest*, or None when it lands outside it."""
+    root = os.path.realpath(dest)
+    target = os.path.realpath(os.path.join(root, name))
+    return target if target == root or target.startswith(root + os.sep) else None
 
 
 def _extract(archive, dest):
+    """Unpack *archive* into *dest*. An entry that would land outside *dest*
+    -- an absolute path, a ``..``, a link that points out -- stops the
+    install before anything is written."""
+    label = os.path.basename(archive)
     if archive.endswith(".zip"):
         with zipfile.ZipFile(archive) as z:
+            for name in z.namelist():
+                if _inside(dest, name) is None:
+                    raise RuntimeError(f"{label}: {name} would be written outside {dest}; not unpacked.")
             z.extractall(dest)
-    else:
-        with tarfile.open(archive) as t:
-            t.extractall(dest)
+        return
+    with tarfile.open(archive) as t:
+        members = t.getmembers()
+        for m in members:
+            if _inside(dest, m.name) is None:
+                raise RuntimeError(f"{label}: {m.name} would be written outside {dest}; not unpacked.")
+            if m.issym() or m.islnk():
+                # A hard link names a path in the archive; a symbolic link,
+                # a path from the folder it sits in.
+                target = m.linkname if m.islnk() else os.path.join(os.path.dirname(m.name), m.linkname)
+                if os.path.isabs(m.linkname) or _inside(dest, target) is None:
+                    raise RuntimeError(f"{label}: {m.name} links outside {dest}; not unpacked.")
+            elif not (m.isfile() or m.isdir()):
+                raise RuntimeError(f"{label}: {m.name} is a device or a pipe; not unpacked.")
+        if hasattr(tarfile, "data_filter"):
+            t.extractall(dest, members=members, filter="data")
+        else:
+            t.extractall(dest, members=members)
+
+
+def _jdk_asset(listing):
+    """(link, sha256, file name) of the JDK in Adoptium's answer."""
+    for entry in listing:
+        package = (entry.get("binary") or {}).get("package") or {}
+        if package.get("link") and package.get("checksum"):
+            return package["link"], package["checksum"], package.get("name") or ""
+    raise RuntimeError("Adoptium listed no JDK 17 for this system.")
 
 
 def bootstrap_jdk(log=print):
@@ -522,13 +613,22 @@ def bootstrap_jdk(log=print):
     if existing:
         return existing
     os.makedirs(home, exist_ok=True)
-    url = (f"https://api.adoptium.net/v3/binary/latest/17/ga/"
-           f"{_os_token()}/{_arch()}/jdk/hotspot/normal/eclipse")
-    ext = ".zip" if IS_WIN else ".tar.gz"
-    tmp = os.path.join(home, "jdk" + ext)
-    _download(url, tmp, log)
-    _extract(tmp, home)
-    os.remove(tmp)
+    # The assets query gives the download link with its sha256; the binary
+    # redirect used before gave the file alone.
+    query = (f"https://api.adoptium.net/v3/assets/latest/17/hotspot?os={_os_token()}"
+             f"&architecture={_arch()}&image_type=jdk&vendor=eclipse")
+    tmp = None
+    try:
+        link, sha256, name = _jdk_asset(json.loads(_fetch_text(query)))
+        tmp = os.path.join(home, "jdk" + (".zip" if name.endswith(".zip") else ".tar.gz"))
+        _download(link, tmp, log, sha256=sha256)
+        _extract(tmp, home)
+    except Exception as e:
+        log(f"   JDK download failed: {e}")
+        return None
+    finally:
+        if tmp and os.path.isfile(tmp):
+            os.remove(tmp)
     return _normalize_jdk_home(home)
 
 
@@ -540,11 +640,21 @@ def bootstrap_gradle(log=print):
     if os.path.isfile(launcher):
         return launcher
     os.makedirs(base, exist_ok=True)
+    url = f"https://services.gradle.org/distributions/gradle-{GRADLE_VERSION}-bin.zip"
     tmp = os.path.join(base, "gradle.zip")
-    _download(f"https://services.gradle.org/distributions/gradle-{GRADLE_VERSION}-bin.zip",
-              tmp, log)
-    _extract(tmp, base)
-    os.remove(tmp)
+    try:
+        # Gradle publishes the sha256 beside every distribution.
+        sha256 = _fetch_text(url + ".sha256").split()[0]
+        if not re.fullmatch(r"[0-9a-fA-F]{64}", sha256):
+            raise RuntimeError(f"no sha256 at {url}.sha256")
+        _download(url, tmp, log, sha256=sha256)
+        _extract(tmp, base)
+    except Exception as e:
+        log(f"   Gradle download failed: {e}")
+        return None
+    finally:
+        if os.path.isfile(tmp):
+            os.remove(tmp)
     return launcher if os.path.isfile(launcher) else None
 
 
@@ -566,7 +676,8 @@ def bootstrap_sdk(jdk_home, log=print):
             if os.path.isdir(staging):
                 shutil.rmtree(staging)
             tmp = os.path.join(sdk, "clt.zip")
-            _download(_CMDLINE_TOOLS[token], tmp, log)
+            url, sha1, size = _CMDLINE_TOOLS[token]
+            _download(url, tmp, log, sha1=sha1, size=size)
             _extract(tmp, staging)
             os.remove(tmp)
             os.makedirs(os.path.dirname(latest), exist_ok=True)

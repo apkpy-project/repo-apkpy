@@ -2,7 +2,7 @@ from setuptools import setup, find_namespace_packages
 
 setup(
     name='apkpy',
-    version='1.13.1',
+    version='1.14.0',
     author='Martim',
     # Apache 2.0, with an exception at the end of LICENSE for what ApkPy
     # writes into the apps it builds.
@@ -40,6 +40,10 @@ setup(
         # Before it, without this, the file was skipped with a warning and
         # the app was built under the default name and application id.
         'tomli>=2.0.1; python_version < "3.11"',
+        # The Previewer checks HTTPS certificates, as the phone does. A Python
+        # from python.org on macOS has no root certificates of its own; these
+        # are the ones it checks against there.
+        'certifi',
     ],
     entry_points={
         'console_scripts': [

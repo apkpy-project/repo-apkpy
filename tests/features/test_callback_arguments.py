@@ -104,7 +104,8 @@ class AKeywordArgumentReachesTheJava(unittest.TestCase):
     by hand.
     """
 
-    CALL = 'pythonCallback_result(String.valueOf(false), String.valueOf("denied"))'
+    # False reaches a parameter that travels as text as Python writes it.
+    CALL = 'pythonCallback_result(ApkpyValues.FALSE, String.valueOf("denied"))'
 
     def test_every_argument_by_name(self):
         self.assertIn(self.CALL, _java(PLAIN, 'result(ok=False, value="denied")'))

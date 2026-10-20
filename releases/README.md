@@ -7,6 +7,7 @@ the same notes, formatted, are on the site under
 
 | Version | Notes |
 | --- | --- |
+| 1.14.0 | [The Python you write every day](1.14.0.md) |
 | 1.13.1 | [Every Python from 3.8](1.13.1.md) |
 | 1.13.0 | [Open source, and the rest of the phone](1.13.0.md) |
 | 1.12.1 | [A comparison between two values](1.12.1.md) |

@@ -1671,7 +1671,7 @@ class AudioAPI:
                     ext = os.path.splitext(src.split("?")[0])[1] or ".mp3"
                     fd, tmp = tempfile.mkstemp(suffix=ext, prefix="apkpy_audio_")
                     os.close(fd)
-                    ctx = ssl._create_unverified_context()
+                    ctx = _tls_context()
                     with urllib.request.urlopen(src, timeout=15, context=ctx) as r, open(tmp, "wb") as f:
                         f.write(r.read())
                     self._tmpfiles.append(tmp)
@@ -2437,7 +2437,7 @@ class FilesAPI:
         try:
             import urllib.request, ssl
             p = self.path(name)
-            ctx = ssl._create_unverified_context()
+            ctx = _tls_context()
             req = urllib.request.Request(str(url), headers={'User-Agent': 'ApkPyPreviewer'})
             with urllib.request.urlopen(req, timeout=20, context=ctx) as r, open(p, "wb") as f:
                 f.write(r.read())
@@ -2819,6 +2819,11 @@ _OAUTH_PROVIDERS = {
     'github':  ('https://github.com/login/oauth/authorize', 'https://github.com/login/oauth/access_token', 'read:user'),
 }
 
+# Microsoft (Entra ID) e um issuer OIDC qualquer -- espelha features/auth_oidc.py.
+_MICROSOFT_SCOPES = 'openid profile email offline_access User.Read'
+_OIDC_SCOPES = 'openid profile email offline_access'
+_MICROSOFT_USERINFO = 'https://graph.microsoft.com/oidc/userinfo'
+
 # Perfil do utilizador (auth.user) por provider — espelha _OAUTH_USERINFO do compilador.
 _OAUTH_USERINFO = {
     'google':  {'url': 'https://www.googleapis.com/oauth2/v3/userinfo', 'name': 'name', 'email': 'email', 'picture': 'picture'},
@@ -2828,65 +2833,182 @@ _OAUTH_USERINFO = {
 
 
 class AuthAPI:
-    """Login OAuth2 (authorization-code + PKCE) — `from apkpy_lib import auth`.
+    """Login OAuth2 / OpenID Connect (authorization-code + PKCE) — `from apkpy_lib import auth`.
 
     No Android, auth.login() abre o browser no ecrã de consentimento; o redirect
-    (deep-link) volta à ApkpyAuthActivity, que troca o code por um access token,
-    guarda-o e navega para o ecrã `then`.
+    (deep-link) volta à ApkpyAuthActivity, que troca o code por tokens (ApkpyAuth),
+    guarda-os cifrados e navega para o ecrã `then`.
 
-        auth.login(provider="google", client_id="...", scopes=["email"], then=home)
+        auth.login("google", client_id="...", scopes=["email"], then=home)
+        auth.login("microsoft", client_id="...", tenant="contoso.onmicrosoft.com", then=home)
+        auth.login(issuer="https://login.empresa.com", client_id="...", then=home)
         auth.is_logged_in()   # há token?
-        auth.token()          # o access token (p/ pôr nos pedidos https)
-        auth.logout()         # apaga o token
+        auth.token()          # o access token, renovado antes de expirar
+        auth.claims()         # o que vem no id_token: name, email, ...
+        auth.logout()         # apaga os tokens
 
     No PREVIEW (desktop) o scheme custom apkpy:// não é entregável a um browser, por
     isso fazemos o login REAL via loopback: redirect http://127.0.0.1:8888/callback
-    + um mini-servidor local que apanha o `code` e troca por token (PKCE). Regista
-    esse URL nas Redirect URIs do provider (além do apkpy://auth do Android)."""
+    (http://localhost:8888/callback para a Microsoft, que só aceita esse no portal)
+    + um mini-servidor local que apanha o `code` e troca por tokens (PKCE)."""
 
     _main_queue = None      # fila de callables p/ correr na main thread do Tk
     _main_polling = False
     _last_provider = ""     # último provider usado (auth.user deriva o endpoint)
+    # Renovado este tempo antes de expirar, como no telemóvel (ApkpyAuth.EARLY).
+    _EARLY = 300
 
-    def _token_file(self):
+    def _dir(self):
         d = os.path.join(os.path.expanduser("~"), ".apkpy")
         try:
             os.makedirs(d, exist_ok=True)
         except Exception:
             pass
-        return os.path.join(d, "auth_token.txt")
+        return d
 
-    def token(self):
+    def _token_file(self):
+        """The token of an app run before 1.14: read once, then auth.json."""
+        return os.path.join(self._dir(), "auth_token.txt")
+
+    def _state_file(self):
+        return os.path.join(self._dir(), "auth.json")
+
+    def _load(self):
+        import json as _json
+        try:
+            with open(self._state_file(), encoding="utf-8") as f:
+                state = _json.load(f)
+            if isinstance(state, dict):
+                return state
+        except Exception:
+            pass
         try:
             with open(self._token_file(), encoding="utf-8") as f:
-                return f.read().strip()
+                old = f.read().strip()
+            if old:
+                return {"access_token": old}
         except Exception:
-            return ""
+            pass
+        return {}
+
+    def _store(self, state):
+        import json as _json
+        try:
+            with open(self._state_file(), "w", encoding="utf-8") as f:
+                _json.dump(state, f)
+        except Exception:
+            pass
+        try:
+            os.remove(self._token_file())
+        except Exception:
+            pass
+
+    def token(self):
+        """The access token. Close to expiring, renewed with the refresh token
+        first -- on the desktop that can wait for the answer; the phone renews
+        in the background (ApkpyAuth)."""
+        import time
+        state = self._load()
+        token = state.get("access_token", "")
+        expires = state.get("expires_at") or 0
+        if token and state.get("refresh_token") and expires and time.time() > expires - self._EARLY:
+            state = self._renew(state)
+            token = state.get("access_token", "")
+        return token
 
     def is_logged_in(self):
         return bool(self.token())
 
     def _set_token(self, t):
-        try:
-            with open(self._token_file(), "w", encoding="utf-8") as f:
-                f.write(str(t or ""))
-        except Exception:
-            pass
+        self._store({"access_token": str(t or "")})
 
     def logout(self):
-        """Apaga o token guardado (volta ao estado deslogado)."""
+        """Apaga os tokens guardados (volta ao estado deslogado)."""
+        for path in (self._state_file(), self._token_file()):
+            try:
+                os.remove(path)
+            except Exception:
+                pass
+
+    def claims(self):
+        """O que vem no id_token (name, email, preferred_username, oid, tid...),
+        como dict. Veio direto do token endpoint, por TLS: é o que o OIDC pede
+        antes de confiar nele. {} sem id_token."""
+        import base64, json as _json
+        state = self._load()
+        if state.get("access_token") == "preview-token":
+            return {"name": "Preview User", "email": "preview@apkpy.local",
+                    "preferred_username": "preview@apkpy.local"}
+        parts = str(state.get("id_token", "")).split(".")
+        if len(parts) < 2:
+            return {}
         try:
-            os.remove(self._token_file())
+            payload = parts[1] + "=" * (-len(parts[1]) % 4)
+            value = _json.loads(base64.urlsafe_b64decode(payload.encode("ascii")).decode("utf-8"))
+            return value if isinstance(value, dict) else {}
         except Exception:
-            self._set_token("")
+            return {}
+
+    def _renew(self, state):
+        """refresh_token -> tokens novos. Recusado (invalid_grant): sessão acabou."""
+        import urllib.parse, urllib.request, urllib.error, json as _json
+        data = urllib.parse.urlencode({
+            "grant_type": "refresh_token", "refresh_token": state.get("refresh_token", ""),
+            "client_id": state.get("client_id", ""),
+        }).encode("utf-8")
+        try:
+            req = urllib.request.Request(state.get("token_url", ""), data=data,
+                                         headers={"Accept": "application/json"})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                answer = _json.loads(r.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            try:
+                answer = _json.loads(e.read().decode("utf-8"))
+            except Exception:
+                answer = {}
+        except Exception as e:
+            print("[auth] renewal failed (offline?):", e)
+            return state
+        if answer.get("access_token"):
+            return self._keep(answer, state)
+        if answer.get("error") == "invalid_grant":
+            print("[auth] the session ended:", answer.get("error_description", "")[:200])
+            self.logout()
+            return {}
+        print("[auth] renewal refused:", answer.get("error", "?"))
+        return state
+
+    def _keep(self, answer, base):
+        """Guarda uma resposta do token endpoint; sem refresh novo, fica o antigo."""
+        import time
+        state = dict(base or {})
+        state["access_token"] = answer.get("access_token", "")
+        if answer.get("refresh_token"):
+            state["refresh_token"] = answer["refresh_token"]
+        if answer.get("id_token"):
+            state["id_token"] = answer["id_token"]
+        try:
+            seconds = int(answer.get("expires_in") or 0)
+        except (TypeError, ValueError):
+            seconds = 0
+        state["expires_at"] = time.time() + seconds if seconds > 0 else 0
+        self._store(state)
+        return state
 
     def login(self, provider=None, client_id=None, scopes=None, then=None,
               redirect="apkpy://auth", auth_url=None, token_url=None, on_error=None,
-              preview_port=8888):
+              preview_port=8888, tenant=None, issuer=None, userinfo_url=None):
         prov = (provider or "").lower()
         self._last_provider = prov
         self._start_main_pump()   # main thread aqui → seguro arrancar o pump
-        d_auth, d_token, d_scopes = _OAUTH_PROVIDERS.get(prov, ("", "", ""))
+        if prov == "microsoft":
+            base = "https://login.microsoftonline.com/%s/oauth2/v2.0" % (
+                str(tenant or "common").strip().strip("/") or "common")
+            d_auth, d_token, d_scopes = base + "/authorize", base + "/token", _MICROSOFT_SCOPES
+        elif issuer:
+            d_auth, d_token, d_scopes = "", "", _OIDC_SCOPES
+        else:
+            d_auth, d_token, d_scopes = _OAUTH_PROVIDERS.get(prov, ("", "", ""))
         auth_url = auth_url or d_auth
         token_url = token_url or d_token
         if isinstance(scopes, (list, tuple)):
@@ -2895,7 +3017,7 @@ class AuthAPI:
             scope_str = str(scopes)
         else:
             scope_str = d_scopes
-        if not auth_url or not client_id:
+        if not (auth_url or issuer) or not client_id:
             print("[auth] login: missing provider/auth_url or client_id")
             if on_error:
                 on_error("invalid config")
@@ -2904,17 +3026,22 @@ class AuthAPI:
         # separador partido no browser; só explica e simula, p/ testar o fluxo da UI.
         cid_low = str(client_id).lower()
         is_placeholder = any(m in cid_low for m in ("o-teu-client-id", "teu-client-id", "your-client-id", "your_client_id", "client-id-aqui"))
+        host = "localhost" if prov == "microsoft" else "127.0.0.1"
         if is_placeholder:
             print("[auth] WARNING: client_id is still a placeholder — browser NOT opened.")
             print("[auth]    Set your real client_id and register", redirect, "(Android) +")
-            print("[auth]    http://127.0.0.1:%d/callback (preview) in the provider." % preview_port)
+            print("[auth]    http://%s:%d/callback (preview) in the provider." % (host, preview_port))
             print("[auth] (preview) simulating a successful login — preview token")
             self._set_token("preview-token")
             self._nav(then)
             return
         # client_id REAL → login a sério no desktop via loopback (o scheme custom
         # apkpy:// não é entregável a um browser de desktop; no Android é).
-        self._preview_real_login(auth_url, token_url, client_id, scope_str, then, preview_port, on_error)
+        settings = {"auth_url": auth_url, "token_url": token_url, "client_id": client_id,
+                    "scopes": scope_str, "issuer": issuer or "", "host": host,
+                    "userinfo_url": userinfo_url or (_MICROSOFT_USERINFO if prov == "microsoft" else ""),
+                    "provider": prov}
+        self._preview_real_login(settings, then, preview_port, on_error)
 
     # ─── Dispatch para a main thread do Tk (workers só enfileiram; o pump corre
     #     na main thread). Evita chamar Tk de outras threads (não é thread-safe). ──
@@ -2947,13 +3074,23 @@ class AuthAPI:
         if then is not None:
             self._on_main(lambda t=then: _app.render_screen(t) if (_app and _app.root) else None)
 
-    def _preview_real_login(self, auth_url, token_url, client_id, scope_str, then, port, on_error):
-        import urllib.parse, urllib.request, webbrowser, threading, secrets, hashlib, base64, json as _json
+    @staticmethod
+    def _discover(issuer):
+        """O documento de descoberta do issuer: os três endpoints."""
+        import urllib.request, json as _json
+        url = str(issuer).rstrip("/") + "/.well-known/openid-configuration"
+        with urllib.request.urlopen(urllib.request.Request(url, headers={"Accept": "application/json"}),
+                                    timeout=15) as r:
+            doc = _json.loads(r.read().decode("utf-8"))
+        return doc["authorization_endpoint"], doc["token_endpoint"], doc.get("userinfo_endpoint", "")
+
+    def _preview_real_login(self, settings, then, port, on_error):
+        import urllib.parse, urllib.request, urllib.error, webbrowser, threading, secrets, hashlib, base64, json as _json
         import http.server, time
         verifier = base64.urlsafe_b64encode(secrets.token_bytes(64)).rstrip(b"=").decode("ascii")
         challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode("ascii")).digest()).rstrip(b"=").decode("ascii")
-        redirect = f"http://127.0.0.1:{port}/callback"
-        state = secrets.token_urlsafe(8)
+        redirect = "http://%s:%d/callback" % (settings["host"], port)
+        state = secrets.token_urlsafe(16)
         result = {}
 
         class _H(http.server.BaseHTTPRequestHandler):
@@ -2967,8 +3104,13 @@ class AuthAPI:
                     self.end_headers()
                     return
                 q = urllib.parse.parse_qs(parsed.query)
-                result["code"] = q.get("code", [""])[0]
-                result["error"] = q.get("error", [""])[0]
+                if q.get("state", [""])[0] != state:
+                    # Uma resposta a um login que esta app não começou.
+                    result["error"] = "state mismatch"
+                else:
+                    result["code"] = q.get("code", [""])[0]
+                    result["error"] = q.get("error", [""])[0]
+                    result["why"] = q.get("error_description", [""])[0]
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.end_headers()
@@ -2983,17 +3125,29 @@ class AuthAPI:
             self._nav(then)
             return
         server.timeout = 1
-        params = urllib.parse.urlencode({
-            "response_type": "code", "client_id": client_id, "redirect_uri": redirect,
-            "scope": scope_str, "code_challenge_method": "S256", "code_challenge": challenge,
-            "state": state,
-        })
-        full = f"{auth_url}?{params}"
-        print("[auth] preview: redirect =", redirect)
-        print("[auth] WARNING: register that URL in the provider's Redirect URIs (besides apkpy://auth for Android).")
-        print("[auth] opening consent:", full)
 
         def _run():
+            auth_url, token_url = settings["auth_url"], settings["token_url"]
+            userinfo = settings["userinfo_url"]
+            if settings["issuer"]:
+                try:
+                    auth_url, token_url, found = self._discover(settings["issuer"])
+                    userinfo = userinfo or found
+                except Exception as e:
+                    print("[auth] could not read the issuer's discovery document:", e)
+                    server.server_close()
+                    if on_error:
+                        self._on_main(lambda: on_error("discovery failed"))
+                    return
+            params = urllib.parse.urlencode({
+                "response_type": "code", "client_id": settings["client_id"], "redirect_uri": redirect,
+                "scope": settings["scopes"], "code_challenge_method": "S256", "code_challenge": challenge,
+                "state": state,
+            })
+            full = "%s%s%s" % (auth_url, "&" if "?" in auth_url else "?", params)
+            print("[auth] preview: redirect =", redirect)
+            print("[auth] WARNING: register that URL in the provider's Redirect URIs (besides apkpy://auth for Android).")
+            print("[auth] opening consent:", full)
             try:
                 webbrowser.open(full)
             except Exception:
@@ -3011,30 +3165,37 @@ class AuthAPI:
             code = result.get("code", "")
             if not code:
                 msg = result.get("error", "") or "no response (timeout)"
-                print("[auth] login not completed:", msg)
+                print("[auth] login not completed:", msg, result.get("why", "")[:200])
                 if on_error:
-                    on_error(msg)
+                    self._on_main(lambda: on_error(msg))
                 return
-            # trocar o code por um access token (PKCE, sem client secret)
-            token = ""
+            # trocar o code por tokens (PKCE, sem client secret)
+            answer = {}
             try:
                 data = urllib.parse.urlencode({
                     "grant_type": "authorization_code", "code": code,
-                    "redirect_uri": redirect, "client_id": client_id, "code_verifier": verifier,
+                    "redirect_uri": redirect, "client_id": settings["client_id"], "code_verifier": verifier,
                 }).encode("utf-8")
                 req = urllib.request.Request(token_url, data=data, headers={"Accept": "application/json"})
                 with urllib.request.urlopen(req, timeout=15) as r:
-                    token = _json.loads(r.read().decode("utf-8")).get("access_token", "")
+                    answer = _json.loads(r.read().decode("utf-8"))
+            except urllib.error.HTTPError as e:
+                try:
+                    answer = _json.loads(e.read().decode("utf-8"))
+                except Exception:
+                    answer = {}
+                print("[auth] token exchange failed: HTTP", e.code, answer.get("error_description", answer.get("error", ""))[:300])
             except Exception as e:
                 print("[auth] token exchange failed:", e)
-            if token:
-                self._set_token(token)
-                print("[auth] OK real login complete — token saved")
+            if answer.get("access_token"):
+                self._keep(answer, {"token_url": token_url, "client_id": settings["client_id"],
+                                    "userinfo_url": userinfo, "provider": settings["provider"]})
+                print("[auth] OK real login complete — tokens saved")
                 self._nav(then)
             else:
                 print("[auth] no access_token (check scopes/registered redirect)")
                 if on_error:
-                    on_error("no access_token")
+                    self._on_main(lambda: on_error("no access_token"))
 
         threading.Thread(target=_run, daemon=True).start()
 
@@ -3053,8 +3214,10 @@ class AuthAPI:
     def _fetch_user(self, cb, url):
         import urllib.request, urllib.error, json as _json
         tok = self.token()
-        info = _OAUTH_USERINFO.get(self._last_provider, {})
-        endpoint = url or info.get("url", "")
+        state = self._load()
+        provider = self._last_provider or state.get("provider", "")
+        info = _OAUTH_USERINFO.get(provider, {})
+        endpoint = url or state.get("userinfo_url") or info.get("url", "")
         if tok and tok != "preview-token" and endpoint:
             profile = {"name": "", "email": "", "picture": ""}
             try:
@@ -3062,7 +3225,7 @@ class AuthAPI:
                     "Authorization": "Bearer " + tok, "Accept": "application/json", "User-Agent": "apkpy"})
                 with urllib.request.urlopen(req, timeout=15) as r:
                     raw = _json.loads(r.read().decode("utf-8"))
-                profile = self._normalize_profile(self._last_provider, raw)
+                profile = self._normalize_profile(provider, raw)
             except urllib.error.HTTPError as e:
                 body = ""
                 try:
@@ -3070,7 +3233,7 @@ class AuthAPI:
                 except Exception:
                     pass
                 print("[auth] user fetch failed: HTTP", e.code, "-", body[:300])
-                if e.code == 403 and self._last_provider == "spotify":
+                if e.code == 403 and provider == "spotify":
                     print("[auth]    Spotify 403: a app está em Development Mode. Vai ao Dashboard")
                     print("[auth]    → a tua app → User Management → adiciona o teu nome + email Spotify.")
                 profile["name"] = "(erro " + str(e.code) + ")"
@@ -3090,6 +3253,9 @@ class AuthAPI:
             return {"name": raw.get("display_name", ""), "email": raw.get("email", ""), "picture": pic}
         if provider == "github":
             return {"name": raw.get("name") or raw.get("login", ""), "email": raw.get("email", ""), "picture": raw.get("avatar_url", "")}
+        if provider == "microsoft":
+            # A foto do Graph só abre com o token: fica sem foto, como no telemóvel.
+            return {"name": raw.get("name", ""), "email": raw.get("email", ""), "picture": ""}
         return {"name": raw.get("name", ""), "email": raw.get("email", ""), "picture": raw.get("picture", "")}
 
 
@@ -7430,7 +7596,7 @@ class AppPreview:
                                 request = urllib.request.Request(
                                     src, headers={'User-Agent': 'ApkPyPreviewer'},
                                 )
-                                context = ssl._create_unverified_context()
+                                context = _tls_context()
                                 with urllib.request.urlopen(request, timeout=10, context=context) as response:
                                     loaded = Image.open(io.BytesIO(response.read())).copy()
                                 self.root.after(0, lambda: (raw_image.update(value=loaded), _draw_cover()))
@@ -9397,7 +9563,7 @@ class AppPreview:
                         import urllib.request, ssl, io
                         from PIL import Image
                         req = urllib.request.Request(_s, headers={'User-Agent': 'ApkPyPreviewer'})
-                        ctx = ssl._create_unverified_context()
+                        ctx = _tls_context()
                         with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
                             data = resp.read()
                         img = Image.open(io.BytesIO(data))
@@ -9763,7 +9929,7 @@ class AppPreview:
                     )
                     with urllib.request.urlopen(
                         request_obj, timeout=10,
-                        context=ssl._create_unverified_context(),
+                        context=_tls_context(),
                     ) as response:
                         payload = response.read()
                     with Image.open(io.BytesIO(payload)) as opened:
@@ -10602,7 +10768,7 @@ class AppPreview:
                     )
                     with urllib.request.urlopen(
                             request, timeout=10,
-                            context=ssl._create_unverified_context()) as response:
+                            context=_tls_context()) as response:
                         image_value = Image.open(
                             io.BytesIO(response.read())
                         ).convert('RGB')
@@ -11067,7 +11233,7 @@ class AppPreview:
                     import urllib.request, ssl, io
                     from PIL import Image
                     req = urllib.request.Request(src, headers={'User-Agent': 'ApkPyPreviewer'})
-                    ctx = ssl._create_unverified_context()
+                    ctx = _tls_context()
                     with urllib.request.urlopen(req, timeout=10, context=ctx) as r:
                         data = r.read()
                     img = Image.open(io.BytesIO(data))
@@ -14153,7 +14319,7 @@ class LocationAPI(ContinuousLocationMixin):
                     f"?format=json&lat={lat}&lon={lng}&zoom=10"
                 )
                 req = urllib.request.Request(url, headers={"User-Agent": "ApkPyPreviewer"})
-                ctx = ssl._create_unverified_context()
+                ctx = _tls_context()
                 with urllib.request.urlopen(req, timeout=8, context=ctx) as resp:
                     data = json.loads(resp.read().decode("utf-8"))
                     addr = data.get("address", {}) if isinstance(data, dict) else {}
@@ -14178,7 +14344,27 @@ HTTPS_TIMEOUT = 60
 linguagem não cabe em 10: o pedido morria antes de chegar, sempre. O valor
 espelha o `_HTTPS_READ_TIMEOUT_MS` do compilador — se um mudar, muda o outro."""
 
-_HTTPS_TLS_WARNED = set()
+_TLS_CONTEXT = []
+
+
+def _tls_context():
+    """The certificate check the phone makes, for every HTTPS request of the
+    Previewer. Android refuses a server it cannot verify; the Previewer used
+    to switch the check off for audio, images, downloads and the city lookup,
+    and https fell back to no check when the check failed -- so a key could
+    leave through a connection nobody had verified, and the app worked here
+    and not on the phone. The roots are the system's plus certifi's: a Python
+    from python.org on macOS comes with none of its own."""
+    if not _TLS_CONTEXT:
+        import ssl
+        context = ssl.create_default_context()
+        try:
+            import certifi
+            context.load_verify_locations(certifi.where())
+        except Exception:
+            pass
+        _TLS_CONTEXT.append(context)
+    return _TLS_CONTEXT[0]
 
 
 def _https_encode_body(data):
@@ -14370,23 +14556,21 @@ class HttpsAPI:
                     merged_headers['Content-Type'] = 'application/json; charset=utf-8'
 
                 req = urllib.request.Request(url, data=encoded_data, headers=merged_headers, method=method)
-                # Verificar o certificado é o comportamento normal. O contexto
-                # sem verificação só entra se o sistema não tiver CAs (Windows
-                # sem store) e avisa uma vez: uma chave de API não devia sair
-                # por um túnel que ninguém validou, em silêncio.
+                # The certificate is checked, and a failed check fails the
+                # request, as on the phone (it used to carry on unchecked).
                 try:
-                    ctx = ssl.create_default_context()
-                    response_cm = urllib.request.urlopen(req, timeout=wait, context=ctx)
-                except ssl.SSLCertVerificationError as tls_error:
+                    response_cm = urllib.request.urlopen(req, timeout=wait, context=_tls_context())
+                except (ssl.SSLCertVerificationError, urllib.error.URLError) as failure:
+                    # urlopen hands the TLS error over inside a URLError.
+                    tls_error = (failure if isinstance(failure, ssl.SSLCertVerificationError)
+                                 else getattr(failure, 'reason', None))
+                    if not isinstance(tls_error, ssl.SSLCertVerificationError):
+                        raise
                     host = urllib.parse.urlparse(url).hostname or url
-                    if host not in _HTTPS_TLS_WARNED:
-                        _HTTPS_TLS_WARNED.add(host)
-                        print('[apkpy] Certificado de %s nao verificado (%s). O '
-                              'Previewer continua sem verificar; o Android NAO '
-                              'faz isto e vai recusar a ligacao.'
-                              % (host, tls_error.reason if hasattr(tls_error, 'reason') else tls_error))
-                    response_cm = urllib.request.urlopen(
-                        req, timeout=wait, context=ssl._create_unverified_context())
+                    reason = getattr(tls_error, 'verify_message', None) or tls_error.reason
+                    raise RuntimeError(
+                        'The certificate of %s could not be verified (%s). The phone '
+                        'refuses this connection too.' % (host, reason)) from None
                 with response_cm as response:
                     # JsonRows: a resposta é str normal mas `for x in resp:`
                     # itera as linhas se for um array JSON (paridade c/ Android)

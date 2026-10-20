@@ -10,6 +10,114 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.14.0] - 2026-10-20
+
+The Python you write every day reaches the phone, Python that answered wrong
+there now answers what CPython answers, an app can sign in with Microsoft or
+any OpenID Connect provider, and the Previewer checks HTTPS certificates.
+Notes: [releases/1.14.0.md](releases/1.14.0.md).
+
+### Added
+
+- **Python that stopped the build now translates.** Unpacking (`a, b =
+  parts`, `a, b = b, a`, `for key, value in d.items()`, `enumerate()`,
+  `zip()`, `first, *rest = items`, `a = b = 0`); changing an item
+  (`row["k"] = v`, `items[i] = v`, `row["k"] += 1`, `del items[0]`); `None`
+  and `is None`; `a or b`, `not x` and a comparison kept in a name; chained
+  comparisons (`0 < x < 10`); the list methods `pop`, `insert`, `remove`,
+  `sort`, `reverse`, `index`, `extend`, `clear`, and `sorted()` and
+  `reversed()`; the dict methods `get` with a default, `keys`, `values`,
+  `items` and `pop`; list and dict comprehensions inside a function, with
+  `any()` and `all()`; `lstrip`, `rstrip`, `zfill`, `capitalize`,
+  `swapcase`, `isalpha`, `isalnum`, `isnumeric`, `ljust`, `rjust`,
+  `center`, `splitlines`, `chr`, `ord`, slices with a step and text
+  repeated with `*`; f-string widths, alignment and percentages, `{x!r}`,
+  `.format()` and `%` formatting; default values, `*args`, `**kwargs`, a
+  function inside a function, recursion and a `lambda` kept in a name;
+  `raise`, `try ... else`, more than one `except` (with CPython's family of
+  error types) and `assert`; `print()`, to Logcat; `bool()`, `divmod()` and
+  `pow()`.
+- **`for ... else` and `while ... else`** inside a function: the `else` runs
+  when the loop ends without its own `break`.
+- **Tuples as values.** A tuple is read like a list and shows like a tuple,
+  `(1, 2)` and `(1,)`, in `str()` and in an f-string. Changing one stops the
+  build with CPython's words.
+- **`isinstance(value, type)`**, with a tuple of types and `type(None)`.
+  Answered when the app is built where the source says what the value is,
+  and by the type the app reads it as otherwise; `bool` counts as `int`.
+- **Sign-in with Microsoft and any OpenID Connect provider.**
+  `auth.login("microsoft", client_id, tenant=...)` and
+  `auth.login(issuer=..., client_id=...)`, which reads the provider's
+  `/.well-known/openid-configuration`. `auth.claims()` gives the ID token as
+  a dict. A token close to expiring is renewed on its own, and a revoked
+  session signs the app out. On the phone the tokens are encrypted with a
+  Keystore key and kept out of backups.
+
+### Fixed
+
+These compiled in 1.13.1 and, on the phone, did something the Previewer did
+not:
+
+- `n // 2` and `n ** 2` gave nothing, and `return a, b` returned nothing.
+- `len(x) + 1`, `abs(n) + 1` and `twice(n) + 1` joined text: `"abc"` gave
+  `31`.
+- A `for` over a dict held in a name, or over text, ran no times, and
+  `range(0, 10, 2)` ignored its step.
+- `items[1:]` and `items + ["d"]` cut and joined the JSON as text, and
+  `"x" in d` and `items.count("a")` searched it.
+- `text[0]` gave nothing, and slices of text could cut an emoji in half.
+- `-7 % 3`, a division by zero (`Infinity`), a whole number past 2^31 (it
+  wrapped round), `int(2.5)` (it failed), `round(-0.025, 2)` and
+  `round(1234, -2)` (invalid Java) disagreed with CPython.
+- `while ... else` left its `else` out without a word.
+- `f"{items}"` showed the JSON, `["a","b"]`, where CPython shows
+  `['a', 'b']`.
+- A number worked out inside a tuple or a dict written out
+  (`{"likes": n - 1}`) went in as text, so a count of 0 was true.
+- `greet("Ana")`, with `def greet(name, greeting="Hello")`, and
+  `global COUNT` with `COUNT += 1` passed ApkPy and failed in `javac`.
+- `flag = False` gave Java that did not compile, and `f(False)` reached
+  the function as `"false"`, which is true.
+
+### Security
+
+- **The Previewer checks HTTPS certificates, as the phone does.** Audio,
+  pictures, downloads and the city lookup switched the check off. A
+  certificate that cannot be verified now fails the request: "The
+  certificate of api.example.com could not be verified (self-signed
+  certificate). The phone refuses this connection too."
+- **`apkpy run --qr` serves the APK and nothing else.** It served the APK's
+  whole folder, usually the project, with a listing, to the network while
+  the QR was up. Every other path is now a 404.
+- **`apkpy setup` checks what it downloads before it unpacks it**: the JDK
+  against the sha256 Adoptium gives with it, Gradle against the sha256
+  published beside it, and Google's command-line tools against the sha1 and
+  size in Google's own package list. A file that does not match is deleted
+  and the install stops, and so does an archive entry that would land
+  outside its folder. A failed download says so in one line, where it
+  showed a traceback.
+
+Socket's review of 1.13.1 raised these three.
+
+### Changed
+
+- `certifi` is a new dependency, so that a Python from python.org on macOS,
+  which has no root certificates of its own, can check HTTPS in the
+  Previewer.
+- The Previewer keeps sign-in tokens in `~/.apkpy/auth.json`, read once
+  from the `auth_token.txt` of earlier versions.
+
+### Tests
+
+- 2,416 unit tests and 258 transpile checks. The generated Java of every
+  new construct was compiled
+  and run against CPython on the same inputs, emoji and accents included,
+  and the test apps were run on a phone: every label and every `print()`
+  line the same. The sign-in was run on a phone against a test provider; a
+  real Entra tenant was not used.
+
+---
+
 ## [1.13.1] - 2026-10-17
 
 Fixes, and nothing new. ApkPy runs on every Python `setup.py` names, 3.8 and

@@ -151,7 +151,7 @@ class TheGeneratedAppTests(unittest.TestCase):
         # They are alternatives: onClick must not also call the method, or the
         # prompt would open twice on one tap.
         java = _java(APP_WITH_PROMPT)
-        click = java.index("public void onClick(View v) {")
+        click = java.index("public void onClick(View _apkpyTapped) {")
         end = java.index("}", java.index("_biometricUnlock(", click))
         self.assertNotIn("pythonCallback_ask()", java[click:end])
 

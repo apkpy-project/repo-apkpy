@@ -519,9 +519,13 @@ def activity_runtime_java(_package=None):
         "        };",
         "    }",
         "",
-        "    /** A block that answers null would put the word null on a screen. */",
+        "    /** A block that answers null would put the word null on a screen.",
+        "     *  True and False come back as the app's own, so `if ok:` reads them. */",
         "    private String _apkpyNativeText(String value) {",
-        "        return value == null ? \"\" : value;",
+        "        if (value == null) return \"\";",
+        "        if (value.equals(\"True\")) return ApkpyValues.TRUE;",
+        "        if (value.equals(\"False\")) return ApkpyValues.FALSE;",
+        "        return value;",
         "    }",
     ]
     if native_python.uses_python_blocks():

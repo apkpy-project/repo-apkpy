@@ -173,7 +173,9 @@ class StructTrackingTests(unittest.TestCase):
         self.assertNotIn('x', seen)
 
     def test_an_untracked_name_is_quoted_like_any_other_text(self):
-        self.assertEqual(_to_java('{"a": b}'), '_apkpyJsonObj("a", String.valueOf(b))')
+        # _apkpyJsonOut leaves text as it is; only the app's True, False and
+        # None become JSON true, false and null.
+        self.assertEqual(_to_java('{"a": b}'), '_apkpyJsonObj("a", _apkpyJsonOut(String.valueOf(b)))')
 
     def test_a_tracked_name_is_reparsed(self):
         self.assertEqual(_to_java('{"a": b}', {'b'}),
