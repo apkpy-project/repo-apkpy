@@ -8,7 +8,7 @@ Your Python is read at build time and turned into ordinary Android source — `A
 
 You write the whole app in Python with a CSS-style design system, see it on your desktop in a live Previewer, and then either `apkpy run` for an installable `.apk` or `apkpy build` for a project you can open in Android Studio. No Java, no Kotlin.
 
-**Compiled, not embedded.** ApkPy compiles your Python to Java when you build, and no interpreter ships in the APK. That is why a small app is about 1.5 MB and starts with nothing to boot, and it is also why ApkPy covers the Python you write apps with ([the list](https://repo-apkpy.pages.dev/compatibility/)) rather than the whole language: `pip` packages such as `requests`, `numpy` or `pandas` do not come along. ApkPy has its own APIs for the same jobs (`https`, `db`, `files`, `background_job`), and anything outside the list stops the build at its line, with a form that compiles. ApkPy is open source under the Apache License 2.0.
+**Compiled, not embedded.** ApkPy compiles your Python to Java when you build, and no interpreter ships in the APK. That is why a small app is about 1.5 MB and starts with nothing to boot. It translates the Python you write apps with ([the list](https://repo-apkpy.pages.dev/compatibility/)), and in place of `pip` packages it brings its own APIs for the same jobs (`https`, `db`, `files`, `background_job`); anything outside the list stops the build at its line, with a form that compiles. ApkPy is open source under the Apache License 2.0.
 
 ---
 
