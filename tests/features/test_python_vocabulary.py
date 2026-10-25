@@ -1305,6 +1305,17 @@ class TheBasicsThatAnsweredWrongTests(unittest.TestCase):
         self.assertIn('U2033', text)
         self.assertIn('starting value', text)
 
+    def test_a_list_a_function_rebinds_is_walked_from_the_store(self):
+        # Up to 1.14.0, `for` and `in` read the literal written at the top --
+        # the list before the function ran -- while NAMES[0] read the new one.
+        java = _java('    global NAMES\n    NAMES = ["a", "b"]\n'
+                     '    out.set_value("-".join([n for n in NAMES]) + str("a" in NAMES))',
+                     module_lines='NAMES = []\n')
+        go = java[java.index("private void pythonCallback_go()"):]
+        go = go[:go.index("\n    }\n")]
+        self.assertNotIn("_apkpyItems(String.valueOf(_apkpyJsonArr().toString()))", go)
+        self.assertEqual(go.count('ApkpyReactiveState.get("__apkpy_global_NAMES", "[]")'), 2)
+
     # True and False -------------------------------------------------------
 
     def test_false_kept_in_a_name_is_the_apps_false(self):
@@ -1983,7 +1994,8 @@ class TheErrorTests(unittest.TestCase):
                      '    try:\n        out.set_value("a")\n    except BadInput:\n        toast("b")'):
             text = _flat(_error(body))
             self.assertIn('U2033', text)
-            self.assertIn("not one of Python's built-in errors", text)
+            self.assertIn("not an error ApkPy knows", text)
+            self.assertIn("class BadInput(Exception): pass", text)
 
     def test_two_values_in_one_error_say_why(self):
         text = _flat(_error('    raise ValueError("a", 1)'))

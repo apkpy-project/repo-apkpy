@@ -298,9 +298,9 @@ STATEMENT_ADVICE = {
         ['Use an if, and show the problem with toast().'],
     ),
     'ClassDef': (
-        'ApkPy writes one Java class per screen, so a Python class inside your '
-        'module has nowhere to go.',
-        ['Use functions, and keep values in storage or state().'],
+        'A class inside a function is not translated: ApkPy translates the '
+        'classes written at the top of the file.',
+        ['Move the class to the top of the file, next to the functions.'],
     ),
     'Delete': (
         'del is not translated.',

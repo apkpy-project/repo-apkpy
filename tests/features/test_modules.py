@@ -119,6 +119,39 @@ class TheMergeTests(_OnDisk):
         self.assertIn("pythonCallback_go", java)
 
 
+class TheClassesInAHelperTests(_OnDisk):
+    """1.14.1: a helper may hold classes; helpers.Task(...) is Task(...)."""
+
+    HELPER = ("class Product:\n"
+              "    def __init__(self, name, price):\n"
+              "        self.name = name\n"
+              "        self.price = price\n\n"
+              "    def with_tax(self):\n"
+              "        return self.price * 1.25\n")
+
+    def test_a_class_of_a_helper_is_translated(self):
+        self.write("shop.py", self.HELPER)
+        java = self.java("import shop\n" + APP +
+                         "def go():\n    p = shop.Product('tea', 2.0)\n"
+                         "    out.set_value(str(p.with_tax()))\n" + TAIL)
+        self.assertIn('ApkpyObjects.create("Product")', java)
+        self.assertIn("pythonCallback__apkpy_Product_with_tax(", java)
+
+    def test_isinstance_with_the_helper_name(self):
+        self.write("shop.py", self.HELPER)
+        java = self.java("import shop\n" + APP +
+                         "def go():\n    p = shop.Product('tea', 2.0)\n"
+                         "    out.set_value(str(isinstance(p, shop.Product)))\n" + TAIL)
+        self.assertIn('ApkpyObjects.isInstance(String.valueOf(p), "Product")', java)
+
+    def test_a_class_named_like_one_of_the_app_is_defined_twice(self):
+        self.write("shop.py", self.HELPER)
+        error = self.error("import shop\n" + APP + "class Product:\n    pass\n\n"
+                           "def go():\n    out.set_value('hi')\n" + TAIL)
+        self.assertIn("U2036", error)
+        self.assertIn("defined twice", error)
+
+
 class TheRefusalTests(_OnDisk):
 
     def test_from_import_names_the_supported_form(self):

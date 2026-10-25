@@ -52,6 +52,7 @@ from .features import errors as errors_feature
 from .features import basics as basics_feature
 from .features import auth_oidc as auth_oidc_feature
 from .features import item_assignment as item_feature
+from .features import classes as classes_feature
 from .features import notifications as notifications_feature
 from .features import camera as camera_feature
 from .features import camera_view as camera_view_feature
@@ -1554,6 +1555,16 @@ def _text_value_java(node, val_to_java):
     return "String.valueOf(%s)" % val_to_java(node)
 
 
+def _may_be_singleton(node):
+    """True when *node* can hold the app's True, False, None or JSON 0."""
+    if isinstance(node, (ast.Name, ast.Subscript, ast.Compare, ast.BoolOp, ast.IfExp,
+                         ast.Attribute)):
+        return True
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.Not):
+        return True
+    return isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+
+
 def _truthy_java(node, val_to_java):
     """Python's `if x:` for a value, as a Java condition.
 
@@ -1780,7 +1791,7 @@ def _membership_java(needle, haystack, val_to_java):
             return "_apkpyListHas(String.valueOf(%s), %s)" % (
                 _mutated_list_read(haystack.id), want)
         module_list = _MODULE_LISTS[0].get(haystack.id)
-        if isinstance(module_list, ast.List):
+        if isinstance(module_list, ast.List) and haystack.id not in _GLOBALS[0]:
             return literal(module_list.elts)
     if _is_split_call(haystack):
         return "_apkpyListHas(%s, %s)" % (val_to_java(haystack), want)
@@ -3646,7 +3657,10 @@ def _emit_for_loop(lines, indent, c, val_to_java, gen_body, json_iter_vars,
         # A list written at the top of the file and never changed has no
         # Java field: its name alone was a cannot-find-symbol inside any
         # function. The loop walks its literal, as `x in NAMES` already does.
+        # One a function rebinds with `global` lives in the shared store, and
+        # its literal is only what it held before that function ran.
         if (isinstance(it, ast.Name) and it.id not in _MUTATED_LISTS[0]
+                and it.id not in _GLOBALS[0]
                 and isinstance(_MODULE_LISTS[0].get(it.id), ast.List)):
             it = _MODULE_LISTS[0][it.id]
         # What Python walks depends on what the value is: a list its items, a
@@ -3728,10 +3742,11 @@ _LOOKUP_CATCHERS = frozenset(('KeyError', 'IndexError', 'LookupError',
 
 
 def _error_name(node):
-    """The built-in error *node* names (IOError is OSError), or None."""
+    """The error *node* names -- one of Python's (IOError is OSError) or an error
+    class the app writes at the top of the file -- or None."""
     if isinstance(node, ast.Name):
         name = _ERROR_ALIASES.get(node.id, node.id)
-        if name in _PY_ERRORS:
+        if name in _PY_ERRORS or classes_feature.error_parent(name):
             return name
     return None
 
@@ -3739,12 +3754,15 @@ def _error_name(node):
 def _refuse_error_name(node, where):
     unsupported.raise_unsupported(
         node,
-        cause=('This %s names %s, which is not one of Python\'s built-in errors. '
-               'ApkPy knows those by name -- ValueError, KeyError, IndexError, '
-               'TypeError, ZeroDivisionError, OSError, Exception and the rest -- '
-               'and an error of your own would need a class, which is not '
-               'translated.' % (where, unsupported.describe(node))),
-        suggestions=['Use the built-in error closest to it: raise ValueError("...").'],
+        cause=('This %s names %s, which is not an error ApkPy knows. It knows '
+               'Python\'s built-in errors by name -- ValueError, KeyError, '
+               'IndexError, TypeError, ZeroDivisionError, OSError, Exception and the '
+               'rest -- and the error classes written at the top of the file.'
+               % (where, unsupported.describe(node))),
+        suggestions=['Write the error at the top of the file: class %s(Exception): pass'
+                     % (unsupported.describe(node) if isinstance(node, ast.Name)
+                        else 'MyError'),
+                     'Or use the built-in error closest to it: raise ValueError("...").'],
     )
 
 
@@ -3795,8 +3813,11 @@ def _raise_command(stmt, handlers):
                    'tuple, and ApkPy keeps one text per error.'),
             suggestions=['Put it in one text: raise ValueError(f"{name}: {value}").'],
         )
-    return {'type': 'raise', 'kind': name,
-            'msg_node': call.args[0] if call is not None and call.args else None}
+    message = call.args[0] if call is not None and call.args else None
+    if message is None and classes_feature.error_default(name) is not None:
+        # raise NotFound() of a class whose __init__ has message="Not found".
+        message = ast.copy_location(ast.Constant(value=classes_feature.error_default(name)), stmt)
+    return {'type': 'raise', 'kind': name, 'msg_node': message}
 
 
 def _emit_raise(lines, indent, c, val_to_java, numeric):
@@ -3808,8 +3829,9 @@ def _emit_raise(lines, indent, c, val_to_java, numeric):
         return
     node = c.get('msg_node')
     message = '""' if node is None else _text_value_java(node, val_to_java)
-    if c['kind'] == 'KeyError' and node is not None and numeric(node) is None:
-        # str(KeyError("k")) is 'k', quotes and all.
+    if 'KeyError' in classes_feature.error_chain(c['kind']) and node is not None \
+            and numeric(node) is None:
+        # str(KeyError("k")) is 'k', quotes and all -- and a KeyError of the app's own.
         message = f"_apkpyRepr({message})"
     lines.append(f'{indent}if (true) throw new ApkpyValues.Raised("{c["kind"]}", {message});')
 
@@ -5140,6 +5162,7 @@ def _emit_json_build_helpers(lines, ctx=""):
     lines.append('     *  houver simples dentro, e os escapes. */')
     lines.append('    private String _apkpyRepr(String s) {')
     lines.append('        String t = s == null ? "" : s;')
+    lines.append('        if (ApkpyValues.isObjectText(t)) return t;')
     lines.append('        char quote = t.indexOf(\'\\\'\') >= 0 && t.indexOf(\'"\') < 0 ? \'"\' : \'\\\'\';')
     lines.append('        StringBuilder out = new StringBuilder().append(quote);')
     lines.append('        for (int c : t.codePoints().toArray()) {')
@@ -7148,6 +7171,7 @@ _VALUES_TYPES_JAVA = r'''
     public static String pyType(String v) {
         if (v == TRUE || v == FALSE) return "bool";
         if (v == null || v == NONE) return "NoneType";
+        if (isObjectText(v)) return v.substring(10, v.indexOf(" object at 0x"));
         if (v == ZERO) return "int";
         if (v == ZERO_FLOAT) return "float";
         // 91 and 123 are [ and the opening brace: one loose in a string would
@@ -7164,6 +7188,22 @@ _VALUES_TYPES_JAVA = r'''
         if (v.matches("-?[0-9]+[.][0-9]+([eE][-+]?[0-9]+)?") || v.matches("-?[0-9]+[eE][-+]?[0-9]+"))
             return "float";
         return "str";
+    }
+
+    /** str(v): the words of True, False, None and a 0 read from JSON, as text
+     *  of its own -- not the app's value, which a list or JSON would read back. */
+    public static String text(String v) {
+        if (v == TRUE || v == FALSE || v == NONE || v == ZERO || v == ZERO_FLOAT) {
+            return new String(v);
+        }
+        return v;
+    }
+
+    /** An object of one of the app's classes: the text CPython shows for it,
+     *  <__main__.Task object at 0x...>, which is how ApkpyObjects keeps it. */
+    public static boolean isObjectText(String v) {
+        return v != null && v.startsWith("<__main__.") && v.endsWith(">")
+                && v.indexOf(" object at 0x") > 10;
     }
 
     /** isinstance(v, (a, b)): bool counts as int, as in Python. */
@@ -11922,6 +11962,8 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
             return notifications_feature.value_java(node)
         if regex_feature.internal(node):
             return regex_feature.java_value(node, _val_to_java)
+        if classes_feature.is_intrinsic(node):
+            return classes_feature.value_java(node, _val_to_java, _assign_rhs_java)
         if node is None:
             return '""'
         if isinstance(node, ast.Constant):
@@ -12383,6 +12425,12 @@ def _generate_activity_java(screen_id, components, navigations, start_screen_id,
             if node.args and _kind_from(_val_to_java, node.args[0]) in ('list', 'dict'):
                 # str([1, "a", None]) is [1, 'a', None], not the JSON it is kept as.
                 return f"_apkpyShow(String.valueOf({inner}))"
+            # str(flag) is the text "True", not the True of the app: in a
+            # list it went in as JSON true and came out "true". Only what can
+            # hold one of them is wrapped: text written out, a sum, an
+            # f-string are text already.
+            if node.args and _may_be_singleton(node.args[0]):
+                return f"ApkpyValues.text(String.valueOf({inner}))"
             return f"String.valueOf({inner})"
         # isinstance(x, T): True / False of the app.
         elif _is_isinstance(node):
@@ -20254,6 +20302,8 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
             return notifications_feature.value_java(node)
         if regex_feature.internal(node):
             return regex_feature.java_value(node, _val_to_java)
+        if classes_feature.is_intrinsic(node):
+            return classes_feature.value_java(node, _val_to_java, _assign_rhs_java)
         if node is None:
             return '""'
         if isinstance(node, ast.Constant):
@@ -20668,6 +20718,12 @@ def _generate_worker_java(worker_class_name, cmds, package="com.apkpy.app", stri
             if node.args and _kind_from(_val_to_java, node.args[0]) in ('list', 'dict'):
                 # str([1, "a", None]) is [1, 'a', None], not the JSON it is kept as.
                 return f"_apkpyShow(String.valueOf({inner}))"
+            # str(flag) is the text "True", not the True of the app: in a
+            # list it went in as JSON true and came out "true". Only what can
+            # hold one of them is wrapped: text written out, a sum, an
+            # f-string are text already.
+            if node.args and _may_be_singleton(node.args[0]):
+                return f"ApkpyValues.text(String.valueOf({inner}))"
             return f"String.valueOf({inner})"
         # isinstance(x, T): True / False of the app.
         elif _is_isinstance(node):
@@ -24649,6 +24705,19 @@ def _generate_anim_xml(frames_dict):
 
 # ─── Public multi-screen entry point ─────────────────────────────────────────
 
+def _values_errors_java():
+    """The errors part of ApkpyValues, with the app's own error classes in the
+    family tree: except ValueError catches class TooLong(ValueError)."""
+    errors = classes_feature.STATE.get('errors') or {}
+    if not errors:
+        return _VALUES_ERRORS_JAVA
+    marker = '            default:\n                return "Exception";'
+    assert marker in _VALUES_ERRORS_JAVA
+    cases = "".join('            case "%s":\n                return "%s";\n' % (name, parent)
+                    for name, parent in sorted(errors.items()))
+    return _VALUES_ERRORS_JAVA.replace(marker, cases + marker)
+
+
 def _generate_values_java(package):
     """None, True and False as the app keeps them: text that reads like
     Python's, and objects of their own, so the words a person typed are not
@@ -24665,7 +24734,7 @@ public final class ApkpyValues {{
     public static final String FALSE = new String("False");
     public static final String ZERO = new String("0");
     public static final String ZERO_FLOAT = new String("0.0");
-{_VALUES_ERRORS_JAVA}{_VALUES_PRINT_JAVA}{_VALUES_TYPES_JAVA}
+{_values_errors_java()}{_VALUES_PRINT_JAVA}{_VALUES_TYPES_JAVA}
     private ApkpyValues() {{ }}
 }}
 '''
@@ -24814,6 +24883,10 @@ def _prepare_android_analysis(python_code, source_name="writehere.py",
     # that reach the phone: each becomes a call to a native block declared
     # here, so everything below reads them as it reads an app's own blocks.
     tree = kit_feature.rewrite(tree)
+    # class Task: ... -- methods as functions of the module, objects in the
+    # app's object store (ApkpyObjects), obj.x as reads and writes of it.
+    # Before the passes below, which then read plain functions.
+    tree = classes_feature.desugar(tree)
     # A function that builds UI is a template: each module-level call is
     # replaced by its body, so the passes below read the module the
     # person would have written by hand -- what Python does when the
@@ -25053,6 +25126,8 @@ def translate_python_to_android(python_code, package="com.apkpy.app",
                 _generate_reactive_state_java(package)
             )
         output_files["java/ApkpyValues.java"] = _generate_values_java(package)
+        if classes_feature.STATE['used']:
+            output_files["java/ApkpyObjects.java"] = classes_feature.objects_java(package)
         # The Bluetooth link belongs to the app, not to a screen: a field on
         # one Activity dies with it, and a static would be per-class.
         if bluetooth_feature.commands_use_bluetooth(

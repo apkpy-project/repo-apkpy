@@ -1,10 +1,9 @@
 """More than one file, so an app can be taken apart.
 
-ApkPy reads one ``writehere.py`` and does not translate Python classes, so an
-application that grows has nowhere to put anything: every screen, every
-callback and every helper lands in the same file. This lets that file import
-plain Python modules sitting next to it and share their functions and
-constants across screens.
+ApkPy reads one ``writehere.py``, so an application that grows had nowhere to
+put anything: every screen, every callback and every helper landed in the same
+file. This lets that file import plain Python modules sitting next to it and
+share their functions, classes and constants across screens.
 
 The merge happens on the AST, before any prescan runs: everything downstream
 keeps seeing a single module, so the parser, the generators and the two copies
@@ -22,8 +21,10 @@ definition in the file into one namespace, so the ``from`` form would import
 names the Previewer's real Python would not -- the kind of quiet difference
 between the desktop and the phone this project keeps removing.
 
-A helper module holds **functions and constants**. Screens, themes, widgets and
-CSS stay in ``writehere.py``, where the compiler can see them in order.
+A helper module holds **functions, classes and constants**. Screens, themes,
+widgets and CSS stay in ``writehere.py``, where the compiler can see them in
+order. A class is merged like a function; features/classes.py translates it
+after the merge, with the classes of ``writehere.py``.
 """
 import ast
 import os
@@ -58,7 +59,7 @@ def _fail(message, *, node=None, cause="", suggestions=(), received="",
         title="This module could not be merged",
         cause=cause,
         expected="import <file>, where <file>.py sits next to writehere.py "
-                 "and holds functions and constants",
+                 "and holds functions, classes and constants",
         received=received,
         suggestions=list(suggestions),
         docs=DOCS,
@@ -83,7 +84,7 @@ def _module_level_names(body):
     """Names a module body binds at the top level."""
     names = set()
     for node in body:
-        if isinstance(node, ast.FunctionDef):
+        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
             names.add(node.name)
         elif isinstance(node, ast.Assign):
             for target in node.targets:
@@ -129,9 +130,9 @@ def _local_import(node, base_dir):
 
 
 def _check_helper_body(body, file_name):
-    """A helper holds functions and constants -- nothing that builds a screen."""
+    """A helper holds functions, classes and constants -- nothing that builds a screen."""
     for node in body:
-        if isinstance(node, (ast.FunctionDef, ast.Import, ast.ImportFrom)):
+        if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.Import, ast.ImportFrom)):
             continue
         if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant):
             continue                                    # docstring
@@ -163,8 +164,8 @@ def _check_helper_body(body, file_name):
             "ApkPy cannot merge %s from %s." % (
                 type(node).__name__.lower(), file_name),
             node=node,
-            cause="A helper module holds functions and constants, and this is "
-                  "neither.",
+            cause="A helper module holds functions, classes and constants, and "
+                  "this is none of them.",
             received=type(node).__name__,
             suggestions=["Move it to writehere.py, or turn it into a "
                          "function that writehere.py calls."],
@@ -191,8 +192,8 @@ class _Dotted(ast.NodeTransformer):
                 _fail(
                     "%s has no %s." % (self.file_name, node.attr),
                     node=node,
-                    cause="ApkPy merged %s and did not find a function or "
-                          "constant with that name in it." % self.file_name,
+                    cause="ApkPy merged %s and did not find a function, "
+                          "class or constant with that name in it." % self.file_name,
                     received="%s.%s" % (self.alias, node.attr),
                     suggestions=[
                         "Check the spelling, or define %s in %s."

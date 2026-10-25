@@ -48,8 +48,8 @@ for the app to use at run time.
 - `writehere.py` -- the whole app: screens, components, `style`, callbacks,
   and one `run()` at the end.
 - `apkpy.toml` -- app name, `application_id`, version and icon.
-- Plain Python modules beside it, imported with `import helpers`: functions
-  and constants only. Screens, themes and CSS stay in `writehere.py`.
+- Plain Python modules beside it, imported with `import helpers`: functions,
+  classes and constants. Screens, themes and CSS stay in `writehere.py`.
 - The generated Android project is output (`~/.apkpy/build/<name>`). Never
   edit it: change `writehere.py` and build again.
 
@@ -184,26 +184,41 @@ then misbehaves without a word.
 
 ## The Python that is translated
 
-- `if` / `elif` / `else`, `while`, `break`, `continue`, `return`,
-  `try` / `except` / `finally` (one `except`), functions with arguments.
-- `for` over `range()`, over a list written in the source, over a list held
-  in a name, and over `split()`.
-- Assignment to one name; `+=`, `-=`, `*=`, `/=`, `%=`; list and dict
-  literals; `items[0]`, `row["key"]`; text slices `text[0:2]`;
-  `a if test else b`.
-- `len`, `int`, `float`, `str`, `round`, `list`, `abs`, `min`, `max`, `sum`;
-  `upper`, `lower`, `strip`, `replace`, `split`, `title`, `find`, `count`,
-  `join`, `startswith`, `endswith`, and `isdigit` in a condition;
-  `items.append(x)`; `import math`; `import re` with constant patterns
-  (`match`, `search`, `sub`, `findall`).
+- `if` / `elif` / `else`, `while`, `for`, `break`, `continue`, `return`,
+  `pass`; `for ... else` inside a function; `try` / `except` (several, with
+  types and `as error`) / `else` / `finally`; `raise ValueError("...")`;
+  `assert`.
+- Conditions with `==`, `!=`, `<`, `>`, `<=`, `>=`, chained (`0 < x < 10`),
+  `in`, `is None`, `isinstance(x, (int, float))`, `and`, `or`, `not`.
+- Functions with positional and keyword arguments, defaults, `*args` and
+  `**kwargs`; a function inside a function, recursion, `lambda`, `global`.
+- Assignment, `a = b = 0`, unpacking (`a, b = parts`), every augmented
+  operator; `row["k"] = v`, `items[i] += 1`, `del items[0]`; lists, dicts
+  and tuples; indexes and slices with a step; `a if test else b`; list and
+  dict comprehensions inside a function.
+- `for` over `range()`, a list, a tuple, a dict, text, `split()`,
+  `d.items()`, `enumerate()`, `zip()`, `reversed()` and `sorted()`.
+- `len`, `int`, `float`, `str`, `bool`, `round`, `list`, `tuple`, `abs`,
+  `min`, `max`, `sum`, `sorted(reverse=)`, `any`, `all`, `divmod`, `pow`,
+  `chr`, `ord`; `print` writes to Logcat. Text methods, f-strings with format
+  specs (`{{x:.2f}}`), `.format()` and `%`; list and dict methods;
+  `import math`, `import random`; `import re` with constant patterns.
+- Classes: `__init__`, methods, one parent class and `super()`, class
+  attributes, `@staticmethod`, `@property`, `__str__`, `__repr__` and
+  `__eq__`. Objects are shared as in Python: every name for an object sees
+  its changes. `@dataclass` with `field(default=..., default_factory=list)`
+  and `__post_init__`. Errors of your own for `raise` and `except`:
+  `class TooLong(ValueError): pass`.
 
 These stop the build with `U2033`, which names the line and a form that works:
-`sorted`, `zfill`, `lstrip`, `rstrip`, step slices, `is`, chained comparisons
-(`0 < x < 10`), comprehensions (except inside a search callback), unpacking
-(`a, b = parts`), `a = b = 0`, `for ... else`, assigning to an item or an
-attribute (`row["k"] = v`), `not x` or `a or b` used as a value, tuples and
-sets as values, `print`, `json.dumps`, the `datetime` module (use ApkPy's
-`datetime`), and more than one `except`.
+sets, generators and `yield`, `match`, `nonlocal`, `:=`, `with` and `open()`
+(use `files`), `sorted(key=...)`, a comprehension at the top of the file,
+setting an attribute of a component (use `set_value()`), and, in a class,
+more than one parent, `@classmethod` or other special methods,
+`@dataclass(frozen=True)` or `order=True`, and fields or methods on an error
+class (put the detail in its message).
+`json`, `uuid` and Python's `datetime` are not translated: use ApkPy's
+`datetime` and its APIs.
 
 Never available on the phone: `requests`, `numpy`, `pandas`, `os`,
 `pathlib`, `threading`, `sqlite3` or any other package. Use ApkPy's APIs.

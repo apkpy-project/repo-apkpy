@@ -10,6 +10,73 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.14.1] - 2026-10-25
+
+Classes reach the phone: a `class` in `writehere.py` or in a helper module is
+translated, and an object behaves as it does in CPython.
+Notes: [releases/1.14.1.md](releases/1.14.1.md).
+
+### Added
+
+- **Classes.** `__init__`, methods, one parent class and `super()`, class
+  attributes (`Shape.count += 1`), `@staticmethod`, `@property`, and
+  `__str__`, `__repr__` and `__eq__`. Every name that holds an object sees
+  the same changes, so `tasks[0].done = True` is seen through the list and
+  through any other name. `is` asks whether two names hold the same object,
+  `isinstance()` and `type(x).__name__` follow the family tree, and the
+  method that runs is the one of the object's own class. Reading a field
+  that was never set raises `AttributeError`. A field that is always given
+  the same kind is read as that kind, so `self.price * self.qty` is
+  arithmetic. A method can be handed over as a value, `command=cart.clear`.
+  An object made at the top of the file is made once, when the app starts.
+- **`@dataclass`.** The `__init__`, `__repr__` and `__eq__` CPython writes
+  from the fields, unless the class writes its own: `field(default=...)`,
+  `field(default_factory=list)`, `init=`, `repr=`, `compare=`, a dataclass
+  parent, `ClassVar` and `__post_init__`. `frozen=True`, `order=True` and
+  `InitVar` stop the build with a line that says what to write instead.
+- **Errors of your own.** `class TooLong(ValueError): pass` is raised and
+  caught like Python's own errors: `except ValueError` catches it,
+  `except TooLong` catches its subclasses, and `str(e)` is its message. An
+  `__init__` that hands the message on with `super().__init__(message)` can
+  give it a default, used by `raise NotFound()`.
+- **Classes in a helper module.** `import shop` and then
+  `shop.Product("tea", 2.0)`, translated with the classes of
+  `writehere.py` -- dataclasses and error classes too
+  (`except shop.SoldOut`).
+- Example `examples/44_classes.py`: a month's budget with `Entry`,
+  `Expense`, `Income` and `Budget`.
+- Example `examples/45_dataclasses_and_errors.py`: a pantry list where each
+  line is a dataclass and wrong input raises an error of the app's own,
+  whose message the screen shows.
+
+### Fixed
+
+- A module-level list that a function gives a new value with `global`
+  (`ITEMS = [...]` inside a function) was walked by `for` and searched by
+  `in` as the list written at the top of the file, before the function ran.
+  `ITEMS[0]` already read the new one. Present in 1.14.0.
+- `str()` of a comparison or of a flag, put in a list
+  (`[str(a == b), "x"]`), showed as `true` / `false` when the list was
+  shown, where CPython shows `True` / `False`.
+- The AGENTS.md that `apkpy init` writes listed as refused much of the
+  Python that 1.14.0 translates (unpacking, comprehensions, `sorted`,
+  `print`, several `except`). It lists what is translated now, classes
+  included.
+- A class left inside a function says to move it to the top of the file.
+
+### Checked
+
+- 46 class tests, three of them whole apps whose generated Java runs on the
+  JVM against CPython; 3 tests of classes in a helper module; the three
+  suites (2422 features, 44 core, 258 transpile).
+- The 89 example apps swept against 1.14.0: none stops building that built
+  before, examples 44 and 45 build, and the only other change in the
+  generated code is the `str()` fix above.
+- Both examples built with Gradle and run on a phone with Android 16: at
+  every step each showed the labels CPython shows (9 of 9 and 8 of 8).
+
+---
+
 ## [1.14.0] - 2026-10-20
 
 The Python you write every day reaches the phone, Python that answered wrong

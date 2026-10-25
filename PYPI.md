@@ -12,6 +12,50 @@ You write the whole app in Python with a CSS-style design system, see it on your
 
 ---
 
+## ApkPy 1.14.1 — classes reach the phone
+
+A `class` in `writehere.py` or in a helper module is translated to Java, and
+an object behaves as it does in CPython: every name that holds it sees the
+same changes, `is`, `isinstance()` and `type(x).__name__` follow the family
+tree, and the method that runs is the one of the object's own class.
+Methods, a parent class and `super()`, class attributes, `@staticmethod`,
+`@property`, `__str__`, `__repr__` and `__eq__` are translated, and so are
+`@dataclass` and errors of your own for `raise` and `except`.
+
+```python
+from dataclasses import dataclass, field
+
+
+class SoldOut(Exception):
+    pass
+
+
+@dataclass
+class Cart:
+    owner: str
+    items: list = field(default_factory=list)
+
+    def add(self, name, stock):
+        if stock == 0:
+            raise SoldOut(f"{name} is sold out")
+        self.items.append(name)
+
+
+def buy():
+    cart = Cart("ana")
+    try:
+        cart.add("tea", 3)
+        cart.add("cake", 0)
+    except SoldOut as e:
+        out.set_value(f"{e}: {cart}")
+```
+
+On the phone the label reads `cake is sold out: Cart(owner='ana', items=['tea'])`,
+the same as in CPython.
+
+Upgrade with `python -m pip install --upgrade apkpy==1.14.1`. See the
+[1.14.1 notes](https://repo-apkpy.pages.dev/version-1.14.1/).
+
 ## ApkPy 1.14.0 — the Python you write every day
 
 Most of the Python an app is written with now reaches the phone: unpacking,

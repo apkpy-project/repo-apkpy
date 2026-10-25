@@ -66,7 +66,10 @@ class ThePortableFormatTests(unittest.TestCase):
     def test_tampering_is_caught(self):
         from apkpy_lib import crypto
         box = crypto.encrypt("x", password="pw")
-        self.assertEqual(crypto.decrypt(box[:-2] + "00", password="pw"), "")
+        # Two characters that differ from the last two: "00" alone was the same
+        # box one time in 256, and the test failed at random.
+        tail = "11" if box[-2:] == "00" else "00"
+        self.assertEqual(crypto.decrypt(box[:-2] + tail, password="pw"), "")
 
     def test_no_password_on_a_password_box_gets_nothing(self):
         from apkpy_lib import crypto
