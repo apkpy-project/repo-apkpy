@@ -49,9 +49,9 @@ jobs:
           # The rest of the versions setup.py names, so that each one it
           # promises is one a run has checked (3.12 reads Python with a new
           # tokenizer). Added on 2026-10-27.
-          - {os: windows-latest, python: "3.9", seen: false}
-          - {os: windows-latest, python: "3.10", seen: false}
-          - {os: windows-latest, python: "3.12", seen: false}
+          - {os: windows-latest, python: "3.9", seen: true}
+          - {os: windows-latest, python: "3.10", seen: true}
+          - {os: windows-latest, python: "3.12", seen: true}
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ !matrix.seen }}
     steps:
