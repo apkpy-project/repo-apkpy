@@ -24,7 +24,9 @@ from apkpy_lib.core.features import lambda_defaults
 
 
 def _bound(source):
-    return ast.unparse(lambda_defaults.bind(ast.parse(source)))
+    # Python 3.9 and 3.10 unparse "lambda: x" as "lambda : x".
+    text = ast.unparse(lambda_defaults.bind(ast.parse(source)))
+    return text.replace("lambda :", "lambda:")
 
 
 def _callback(java, name):
