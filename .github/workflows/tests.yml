@@ -46,6 +46,12 @@ jobs:
           - {os: windows-latest, python: "3.8", seen: true}
           - {os: windows-latest, python: "3.11", seen: true}
           - {os: ubuntu-latest, python: "3.13", seen: true}
+          # The rest of the versions setup.py names, so that each one it
+          # promises is one a run has checked (3.12 reads Python with a new
+          # tokenizer). Added on 2026-10-27.
+          - {os: windows-latest, python: "3.9", seen: false}
+          - {os: windows-latest, python: "3.10", seen: false}
+          - {os: windows-latest, python: "3.12", seen: false}
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ !matrix.seen }}
     steps:

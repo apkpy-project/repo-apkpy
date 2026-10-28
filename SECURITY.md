@@ -7,8 +7,8 @@ upgrade (`python -m pip install --upgrade apkpy`) and build the app again.
 
 | Version | Supported |
 | :---: | :---: |
-| 1.13.x | ✅ Yes |
-| < 1.13 | ❌ No |
+| The latest release on [PyPI](https://pypi.org/project/apkpy/) | ✅ Yes |
+| Any earlier release | ❌ No |
 
 ## Reporting a vulnerability
 
