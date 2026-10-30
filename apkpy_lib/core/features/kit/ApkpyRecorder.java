@@ -34,6 +34,7 @@ public final class ApkpyRecorder {
 
     private ApkpyRecorder() { }
 
+    // apkpy:launcher -- left out of an app that never calls this
     /** Start. done: (true, "ok") once it is recording, or (false, why not). */
     public static void start(final Activity activity, final ApkpyKit.Done done) {
         final Context app = activity.getApplicationContext();
@@ -60,6 +61,7 @@ public final class ApkpyRecorder {
                     }
                 });
     }
+    // apkpy:launcher-end
 
     /** "ok" once it is recording, or the word for why not. */
     private static synchronized String begin(Context app) {

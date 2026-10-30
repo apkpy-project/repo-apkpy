@@ -264,10 +264,12 @@ class TheAppendTests(unittest.TestCase):
             self.assertNotIn('_apkpyJsonVal', line)
 
     def test_a_row_from_a_json_loop_is_restored_as_a_structure(self):
-        # `row` is a dict in Python; appending it has to keep it one.
+        # `row` is a dict in Python; appending it has to keep it one. The item
+        # goes in as the JSON holds it (since 1.14.2), a dict as a dict.
         java = _java('    itens = []\n    linhas = []\n'
                      '    for linha in linhas:\n        itens.append(linha)\n')
-        self.assertIn('_apkpyJsonVal(String.valueOf(linha))', java)
+        self.assertRegex(java, r'Object (_fr_\d+) = _fa_\d+\.opt\(_fi_\d+\);')
+        self.assertRegex(java, r'itens = _apkpyListAppend\(String\.valueOf\(itens\), _fr_\d+\);')
 
     def test_a_module_level_list_is_one_list_for_the_whole_app(self):
         """A per-Activity copy would reset every time a screen opened.
@@ -459,9 +461,9 @@ class TheMathTests(unittest.TestCase):
         self.assertIn('whole ? String.valueOf((long) total)', java)
 
     def test_a_keyword_argument_is_refused_rather_than_ignored(self):
-        # min(items, key=...) has no translation, and dropping the key
-        # silently would answer with the wrong element.
-        self.assertIsNotNone(_error('    out.set_value(min([1, 2], key=abs))'))
+        # Dropping a keyword silently would answer with the wrong element.
+        # key= is translated (TheSortKeyTests); default= on its own is not.
+        self.assertIsNotNone(_error('    out.set_value(min([1, 2], default=0))'))
 
 
 class TheFloatTextTests(unittest.TestCase):
@@ -972,7 +974,7 @@ class TheArithmeticTests(unittest.TestCase):
                      '    out.set_value(float(price) * 2)\n'
                      '    n = field.get_value()\n'
                      '    out.set_value(f"n={n}")')
-        self.assertIn('Double.parseDouble(String.valueOf(price)) * 2', java)
+        self.assertIn('ApkpyValues.toFloat(String.valueOf(price)) * 2', java)
 
     def test_a_range_index_is_a_number(self):
         # i + 1 was "0" + "1": 01 on the phone and 1 in the Previewer.
@@ -998,7 +1000,7 @@ class TheArithmeticTests(unittest.TestCase):
                      '    out.set_value(x)\n'
                      '    out.set_value(-int(field.get_value()))')
         self.assertIn('String x = "-1";', java)
-        self.assertIn('Math.negateExact((long)(Long.parseLong(', java)
+        self.assertIn('Math.negateExact((long)(ApkpyValues.toInt(', java)
 
     def test_a_job_attempt_stays_exempt(self):
         files = translate_python_to_android(
@@ -1626,11 +1628,6 @@ class TheListMethodTests(unittest.TestCase):
         self.assertIn('U2033', text)
         self.assertIn('cart = add_item(cart, name)', text)
 
-    def test_sort_with_a_key_says_why(self):
-        text = _error('    xs = ["bb", "a"]\n    xs.sort(key=len)\n    out.set_value(str(xs))')
-        self.assertIn('U2033', text)
-        self.assertIn('sort(key=...) is not translated', text)
-
     def test_sorted_and_reversed_are_lists(self):
         java = self._java('    words = sorted(field.get_value().split(","), reverse=True)\n'
                           '    back = reversed(words)\n'
@@ -1661,6 +1658,296 @@ class TheListMethodTests(unittest.TestCase):
         java = self._java('    rows = [{"tags": []}]\n    rows[0]["tags"].append("new")\n'
                           '    out.set_value(str(rows))')
         self.assertIn('_apkpyListAppend(String.valueOf(_jsonGet(', java)
+
+
+class TheSortKeyTests(unittest.TestCase):
+    """sorted(key=), list.sort(key=), min(key=) and max(key=) (features/sort_key.py).
+
+    The keys are one list, worked out on the line before from the same items
+    the sort reads, and the items are ordered by them. The answers were
+    checked against CPython by running the generated Java on the JVM.
+    """
+
+    def _java(self, body, module_lines=PHASE_ONE):
+        return _java(body, module_lines=module_lines)
+
+    def test_sorted_orders_the_items_by_their_keys(self):
+        java = self._java('    words = ["bb", "a"]\n'
+                          '    out.set_value(str(sorted(words, key=len, reverse=True)))')
+        self.assertIn('String _apkpy_s1 = words;', java)
+        self.assertIn('_apkpy_c1 = _apkpyListAppend(String.valueOf(_apkpy_c1), Long.valueOf(', java)
+        self.assertIn('_apkpySortBy(_apkpyItems(String.valueOf(_apkpy_s1)), '
+                      'String.valueOf(_apkpy_c1), true)', java)
+
+    def test_the_order_is_stable_and_pythons(self):
+        java = self._java('    words = ["bb", "a"]\n    out.set_value(str(sorted(words, key=len)))')
+        self.assertIn('java.util.Arrays.sort(order, new java.util.Comparator<Integer>() {', java)
+        self.assertIn('return reverse ? _apkpyCmp(keys.opt(y), keys.opt(x)) '
+                      ': _apkpyCmp(keys.opt(x), keys.opt(y));', java)
+
+    def test_a_key_read_from_json_keeps_its_type(self):
+        # 10 sorted before 9 when the price went into the keys as text.
+        java = self._java('    rows = [{"p": 10}, {"p": 9}]\n'
+                          '    top = sorted(rows, key=lambda r: r["p"])\n    out.set_value(str(top))')
+        self.assertIn('_apkpyStored(_apkpyRawOr(String.valueOf(_apkpy_c2), String.valueOf("p"), ', java)
+        self.assertIn('String top = _apkpySortBy(_apkpyItems(String.valueOf(_apkpy_s1)), ', java)
+
+    def test_sort_with_a_key_gives_the_name_the_sorted_list(self):
+        java = self._java('    xs = ["bb", "a"]\n    xs.sort(key=str.lower)\n    out.set_value(str(xs))')
+        self.assertIn('.toLowerCase(java.util.Locale.ROOT)', java)
+        self.assertIn('xs = _apkpySortBy(_apkpyListArg(String.valueOf(xs), "sort"), '
+                      'String.valueOf(_apkpy_c1), false);', java)
+
+    def test_max_with_a_key_answers_the_first_best_item(self):
+        java = self._java('    d = {"a": 2, "b": 5}\n    out.set_value(max(d, key=d.get))')
+        self.assertIn('_apkpyRawGet(String.valueOf(d), String.valueOf(_apkpy_c2), '
+                      'org.json.JSONObject.NULL)', java)
+        self.assertIn('_apkpyExtremeBy(_apkpyItems(String.valueOf(_apkpy_s1)), '
+                      'String.valueOf(_apkpy_c1), "max", null, false)', java)
+        self.assertIn('if (wantMax ? cmp > 0 : cmp < 0) best = i;', java)
+
+    def test_min_with_a_default_and_nothing_to_choose(self):
+        java = self._java('    xs = ["bb", "a"]\n    out.set_value(min(xs, key=len, default="none"))')
+        self.assertIn('"min", String.valueOf("none"), true)', java)
+        self.assertIn('fn + "() iterable argument is empty"', java)
+
+    def test_a_key_inside_a_comprehension_is_worked_out_per_item(self):
+        java = self._java('    groups = [["bb", "a"], ["c"]]\n'
+                          '    out.set_value(str([sorted(g, key=len) for g in groups]))')
+        self.assertIn('_apkpySortBy(_apkpyItems(String.valueOf(', java)
+
+    def test_a_key_that_is_always_a_number_is_compared_as_one(self):
+        # key=abs on items the source says nothing about: '12' sorted before '2'.
+        java = self._java('    rows = [{"n": -12}, {"n": 2}]\n'
+                          '    out.set_value(str(sorted(rows, key=lambda r: abs(r["n"]))))')
+        self.assertIn('_apkpyListAppend(String.valueOf(_apkpy_c1), _apkpyNumberOf(String.valueOf(', java)
+
+    def test_a_number_appended_stays_a_number(self):
+        # [len(w) for w in words] held '2' and '12', and sorted() put '12' first.
+        java = self._java('    xs = []\n    xs.append(len("abc"))\n    out.set_value(str(xs))')
+        self.assertIn('xs = _apkpyListAppend(String.valueOf(xs), Long.valueOf(', java)
+
+    def test_a_float_appended_stays_a_number(self):
+        # As text it showed quotes in str(xs), and sorted() stopped on str < float.
+        java = self._java('    xs = []\n    xs.append(len("abc") * 1.5)\n'
+                          '    out.set_value(str(sorted(xs)))')
+        self.assertIn('xs = _apkpyListAppend(String.valueOf(xs), Double.valueOf(', java)
+
+    def test_at_the_top_of_the_file_it_says_where(self):
+        text = _flat(_error('    out.set_value(str(TOP))',
+                            module_lines='TOP = sorted(["b", "a"], key=len)\n'))
+        self.assertIn('U2033', text)
+        self.assertIn('sorted() with key= works the key out for each item', text)
+        self.assertIn('here it is at the top of the file', text)
+
+    def test_inside_a_lambda_it_says_where(self):
+        text = _flat(_error('    pass\n\n\nbutton("L", id="l", screen=home, '
+                            'command=lambda: out.set_value(min(ITEMS, key=len)))'))
+        self.assertIn('U2033', text)
+        self.assertIn('here it is inside a lambda', text)
+        self.assertIn('def by_price(): return sorted(items, key=...)', text)
+
+    def test_a_key_worked_out_by_a_call_is_refused(self):
+        text = _flat(_error('    out.set_value(str(sorted(ITEMS, key=make())))'))
+        self.assertIn('U2033', text)
+        self.assertIn('key=lambda item: item["price"]', text)
+
+    def test_a_line_with_if_else_becomes_an_if_and_an_else(self):
+        # Only the branch Python reaches works its keys out.
+        java = self._java('    groups = {"a": ["x", "yy"]}\n'
+                          '    slots = max(groups.values(), key=len) if groups else []\n'
+                          '    out.set_value(str(slots))')
+        self.assertIn('_apkpyExtremeBy(_apkpyItems(String.valueOf(_apkpy_s1)), ', java)
+        self.assertNotIn('U2033', java)
+
+    def test_on_the_right_of_or_it_says_why(self):
+        text = _flat(_error('    xs = field.get_value() or sorted(ITEMS, key=len)\n'
+                            '    out.set_value(str(xs))'))
+        self.assertIn('U2033', text)
+        self.assertIn('On the right of and/or, which Python reaches only sometimes', text)
+        self.assertNotIn('_apkpy_', text)
+
+
+class TheJsonTests(unittest.TestCase):
+    """import json: json.loads() and json.dumps() (features/json_module.py).
+
+    loads() reads the text while the app runs, with a parser that stops where
+    CPython's stops and with the same message; dumps() writes CPython's text.
+    The answers were checked against CPython by running the generated Java on
+    the JVM (test_json_module.py).
+    """
+
+    def _java(self, body, module_lines='import json\n'):
+        return _java(body, module_lines=module_lines)
+
+    def _why(self, body, module_lines='import json\n'):
+        return _flat(_error(body, module_lines=module_lines))
+
+    def test_loads_reads_the_text_while_the_app_runs(self):
+        java = self._java('    data = json.loads(field.get_value())\n'
+                          '    out.set_value(str(data["a"]))')
+        self.assertIn('String data = _apkpyJsonLoads(String.valueOf(', java)
+        self.assertIn('Expecting property name enclosed in double quotes', java)
+
+    def test_an_app_without_json_carries_none_of_it(self):
+        java = self._java('    out.set_value("x")', module_lines='')
+        self.assertNotIn('_apkpyJsonLoads', java)
+        self.assertNotIn('_apkpyJsonDumps', java)
+
+    def test_a_list_the_source_knows_is_written_as_the_list_it_is(self):
+        java = self._java('    xs = [1, 2]\n'
+                          '    out.set_value(json.dumps(xs, indent=2, sort_keys=True))')
+        self.assertIn('_apkpyJsonDumps(_apkpyJsonVal(String.valueOf(xs)), 1, '
+                      '(Object) Long.valueOf(2), true, true, null, null, true)', java)
+
+    def test_separators_and_ensure_ascii_go_to_the_helper(self):
+        java = self._java('    out.set_value(json.dumps({"a": field.get_value()}, '
+                          'separators=(",", ":"), ensure_ascii=False))')
+        self.assertIn(', 1, null, false, false, ",", ":", true)', java)
+
+    def test_a_value_the_source_says_nothing_about_is_decided_while_the_app_runs(self):
+        java = self._java('    out.set_value(json.dumps(storage.get("k")))')
+        self.assertIn('String.valueOf(""))), 0, null, false, true, null, null, true)', java)
+        self.assertIn('private Object _apkpyJsonGuess(Object v) ', java)
+
+    def test_a_text_written_out_is_read_while_building(self):
+        java = self._java('    out.set_value(CONFIG["theme"])',
+                          module_lines='import json\nCONFIG = json.loads(\'{"theme": "dark"}\')\n')
+        self.assertIn('private static final String CONFIG = "' + chr(123) + '\\"theme\\":\\"dark\\"'
+                      + chr(125) + '";', java)
+        self.assertNotIn('_apkpyJsonLoads', java)
+
+    def test_dumps_of_a_value_written_out_is_the_text(self):
+        java = self._java('    out.set_value(json.dumps((1, 2.0)))')
+        self.assertIn('lbl1.setText(String.valueOf("' + chr(91) + '1, 2.0' + chr(93) + '"));', java)
+
+    def test_dumps_answers_text(self):
+        java = self._java('    out.set_value(json.dumps(' + chr(91) + '1' + chr(93) + ') + "!" '
+                          '+ json.dumps(field.get_value()))')
+        self.assertIn('" + "!" + _apkpyJsonDumps(String.valueOf(', java)
+
+    def test_the_other_spellings_are_the_same_calls(self):
+        for module_lines, body in (
+                ('import json as j\n', 'j.dumps(j.loads(field.get_value()))'),
+                ('from json import loads, dumps\n', 'dumps(loads(field.get_value()))')):
+            java = self._java('    out.set_value(%s)' % body, module_lines=module_lines)
+            self.assertIn('_apkpyJsonDumps(String.valueOf(_apkpyJsonLoads(String.valueOf(', java)
+
+    def test_a_loads_on_a_line_of_its_own_checks_the_text(self):
+        java = self._java('    try:\n        json.loads(field.get_value())\n'
+                          '    except json.JSONDecodeError as e:\n        out.set_value(str(e))')
+        self.assertIn('_apkpy_json = _apkpyJsonLoads(String.valueOf(', java)
+        self.assertIn('"JSONDecodeError")) ', java)
+
+    def test_json_decode_error_is_a_value_error(self):
+        java = self._java('    try:\n        json.loads(field.get_value())\n'
+                          '    except ValueError as e:\n        out.set_value(str(e))')
+        self.assertIn('case "JSONDecodeError":\n                return "ValueError";', java)
+
+    def test_an_object_of_a_class_is_not_serializable(self):
+        java = self._java('    out.set_value(json.dumps(field.get_value()))')
+        self.assertIn('" is not JSON serializable");', java)
+
+    def test_load_and_dump_say_what_does_the_same(self):
+        text = self._why('    json.dump(' + chr(91) + '1' + chr(93) + ', f)')
+        self.assertIn('U2033', text)
+        self.assertIn('json.dump() works on a file object, and open() is not translated', text)
+        self.assertIn('files.write("data.json", json.dumps(data))', text)
+        text = self._why('    out.set_value(str(json.load(f)))')
+        self.assertIn('data = json.loads(files.read("data.json"))', text)
+
+    def test_a_keyword_that_hands_over_a_function_is_refused(self):
+        text = self._why('    out.set_value(json.dumps(field.get_value(), default=str))')
+        self.assertIn('U2033', text)
+        self.assertIn('json.dumps(default=...) is not translated: it hands json a function', text)
+
+    def test_separators_are_translated_when_written_out(self):
+        text = self._why('    out.set_value(json.dumps(field.get_value(), separators=SEP))',
+                         module_lines='import json\nSEP = (",", ":")\n')
+        self.assertIn('separators= is translated when it is written out', text)
+
+    def test_indent_is_a_whole_number_a_text_or_none(self):
+        text = self._why('    out.set_value(json.dumps(field.get_value(), indent=1.5))')
+        self.assertIn('indent= is a whole number of spaces, a text or None.', text)
+        text = self._why('    out.set_value(json.dumps(field.get_value(), indent=storage.get("n")))')
+        self.assertIn('ApkPy cannot tell which this is', text)
+        self.assertIn('indent=int(spaces)', text)
+
+    def test_the_rest_of_the_module_is_refused(self):
+        text = self._why('    out.set_value(str(json.JSONEncoder))')
+        self.assertIn('U2033', text)
+        self.assertIn('ApkPy translates json.loads() and json.dumps()', text)
+        text = self._why('    out.set_value(dumps(field.get_value()))',
+                         module_lines='from json import *\n')
+        self.assertIn('from json import * hides which names come from json.', text)
+
+    def test_at_the_top_of_the_file_it_says_why(self):
+        # The Java had nowhere to run it: javac stopped on a name never declared.
+        text = self._why('    out.set_value(str(DATA))',
+                         module_lines='import json\nDATA = json.loads(storage.get("k"))\n')
+        self.assertIn('json.loads() at the top of the file is worked out while ApkPy builds the '
+                      'app, so what it reads has to be written out in the source.', text)
+        self.assertIn('data = None, then in load(): global data;', text)
+        text = self._why('    out.set_value(str(DATA))',
+                         module_lines='import json\nDATA = json.loads("' + chr(123) + '")\n')
+        self.assertIn('here it raises json.JSONDecodeError: Expecting property name enclosed in '
+                      'double quotes: line 1 column 2 (char 1).', text)
+
+    def test_inside_a_lambda_it_runs_later(self):
+        java = self._java('    pass\n\n\nbutton("L", id="l", screen=home, '
+                          'command=lambda: out.set_value(json.dumps(field.get_value())))')
+        self.assertIn('_apkpyJsonDumps(String.valueOf(', java)
+
+
+class TheUntypedCompareTests(unittest.TestCase):
+    """<, >, <=, >= between two values the source says nothing about.
+
+    As text, the largest of [9, 12, 10] found with a for was 9: "9" sorts
+    after "12". An item now goes in as the JSON holds it, the name of a for
+    over a list carries its item (_RAW_LOOP_VARS), and the rest is read as
+    isinstance() reads it. The answers are checked against CPython on the JVM
+    in test_item_compare.py.
+    """
+
+    def test_two_items_are_compared_as_the_json_holds_them(self):
+        java = _java('    xs = [9, 12, 10]\n    if xs[1] > xs[2]:\n        out.set_value("big")')
+        self.assertIn('if (_apkpyCompare(_apkpyStored(_apkpyRawOr(String.valueOf(xs), '
+                      'String.valueOf(1), ', java)
+        self.assertIn(', 3, ">") > 0) ', java)
+        self.assertIn('private int _apkpyCompare(Object a, Object b, int raw, String op) ', java)
+
+    def test_the_name_of_a_for_carries_its_item(self):
+        java = _java('    xs = [9, 12, 10]\n    best = xs[0]\n    for s in xs:\n'
+                     '        if s > best:\n            best = s\n    out.set_value(str(best))')
+        self.assertRegex(java, r'Object (_fr_\d+) = _fa_\d+\.opt\(_fi_\d+\);')
+        self.assertRegex(java, r'String s = _apkpyFromJson\(_fr_\d+\);')
+        self.assertRegex(java, r'if \(_apkpyCompare\(_fr_\d+, String\.valueOf\(best\), 1, ">"\) > 0\)')
+
+    def test_a_copy_of_a_list_keeps_its_numbers(self):
+        # [x for x in SCORES] held '9', '12', '10'.
+        java = _java('    xs = [9, 12, 10]\n    ys = []\n    for s in xs:\n        ys.append(s)\n'
+                     '    out.set_value(str(ys))')
+        self.assertRegex(java, r'ys = _apkpyListAppend\(String\.valueOf\(ys\), _fr_\d+\);')
+
+    def test_a_for_that_changes_its_name_does_not_carry_the_item(self):
+        # row.append(0) changes the item: the one read before is stale.
+        java = _java('    xs = [[1], [2]]\n    ys = []\n    for row in xs:\n        row.append(0)\n'
+                     '        ys.append(row)\n    out.set_value(str(ys))')
+        self.assertNotIn('_fr_', java)
+        self.assertIn('ys = _apkpyListAppend(String.valueOf(ys), _apkpyJsonVal(String.valueOf(row)));',
+                      java)
+
+    def test_text_against_an_item_stays_text(self):
+        java = _java('    a = field.get_value()\n    xs = ["b"]\n    if xs[0] < a:\n'
+                     '        out.set_value("x")')
+        self.assertIn('.compareTo(String.valueOf(a)) < 0) ', java)
+        self.assertNotIn('_apkpyCompare(_apkpyStored', java)
+
+    def test_a_guess_that_meets_text_stays_text(self):
+        java = _java('    out.set_value("x")')
+        self.assertIn('if (x instanceof Number && (raw & 1) == 0 && y instanceof String) '
+                      'x = _apkpyComparable(a);', java)
+        self.assertIn('"\'" + op + "\' not supported between instances of \'"', java)
 
 
 class TheDictMethodTests(unittest.TestCase):

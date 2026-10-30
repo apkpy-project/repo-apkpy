@@ -10,6 +10,248 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.14.2] - 2026-10-30
+
+Sorting with `key=` and the `json` module: `sorted()`, `list.sort()`, `min()`
+and `max()` take a key inside a function, and `json.loads()` / `json.dumps()`
+read and write what CPython does. Lists and dicts answer as CPython's do:
+their items keep their type when compared and copied, and a list changed
+through a second name stops the build instead of answering differently.
+Notes: [releases/1.14.2.md](releases/1.14.2.md).
+
+### Added
+
+- **The Previewer reloads when you save.** `python writehere.py` watches the
+  app's folder: saving a `.py` file there, or in a folder directly inside it,
+  starts the new code behind the open window, on the same screen, with the
+  screens behind it for Back, each scrolled as it was. What was typed and chosen
+  comes back by the component's `id` -- text fields (never a password),
+  switches, checkboxes, sliders, radios, selects, dates, chips, segmented
+  buttons and a pager's page -- and so does how far the screen was scrolled,
+  unless the new code starts that component differently. The old window
+  closes once the new one is drawn, about half a second after the save: a
+  second Python waits with ApkPy already loaded. A save that changes only
+  `style` goes to the open window, which redraws in place. The editor keeps
+  the keyboard. A change that does not start leaves the window running the
+  last version, with the error and its line on it; the terminal has the
+  whole traceback. `APKPY_RELOAD=0` turns it off.
+- **`apkpy logs`: what the app prints on the phone, as it runs.** With the
+  phone connected by USB, it shows the app's `print()` as it was printed,
+  ApkPy's warnings and errors, and a crash with its error and the line of
+  `writehere.py` it came from, with the line's text:
+  `at writehere.py, line 13: n = int(field.get_value())`. The line comes from
+  a map `apkpy run` and `apkpy build` keep in `~/.apkpy/lines/`, outside the
+  project; the Java line stays beside it. It finds the app by the
+  `application_id` in `apkpy.toml` (or `--app`), waits for it to be opened,
+  and follows it through a crash and a reopen. `--all` adds what Android
+  itself writes in the app's process; `--device` picks a phone when more than
+  one is connected.
+- **`import json`: `json.loads()` and `json.dumps()`.** `loads()` reads JSON
+  while the app runs; a text that is not JSON raises `json.JSONDecodeError`
+  (a `ValueError`) with CPython's message, line and column, word for word.
+  `dumps()` writes CPython's text, with `indent=`, `sort_keys=`,
+  `ensure_ascii=`, `separators=` and `allow_nan=`. `from json import loads,
+  dumps` and `import json as j` work too. With `files`, they keep data in a
+  file: `json.loads(files.read("data.json"))`. A call given text written out
+  in the source is worked out while the app builds, so
+  `CONFIG = json.loads('{"theme": "dark"}')` works at the top of the file.
+  `json.load()` / `json.dump()`, `default=` and the other keywords that hand
+  over a function, and a `json` call at the top of the file on a value only
+  known while the app runs stop the build and say what to write instead.
+- Example `47_saving_with_json.py`: a reading list kept in `books.json`, with
+  the file's text editable on the screen.
+
+- **`key=` for `sorted()`, `list.sort()`, `min()` and `max()`.** A lambda of
+  one parameter (`key=lambda r: r["price"]`), the name of a function
+  (`key=len`, or a `def` of the app), `str.lower`, or `d.get`, with
+  `reverse=` and `default=`. Each key is worked out once per item and the
+  order is stable, also reversed, as in CPython. A key read from a list or a
+  dict keeps its type, so a price of 10 sorts after 9; so does a field of an
+  object that holds `0` at first and `2.5` later. `top = max(items, key=len)
+  if items else None` is translated as the `if` it stands for. A `key=` at the
+  top of the file, inside a lambda or in the test of a `while` stops the build
+  and says where to move it.
+- Example `46_sorting_with_key.py`: a scoreboard ordered by score, by name or
+  in the order players joined.
+
+### Fixed
+
+- A whole number appended to a list stays a number: `[len(w) for w in words]`
+  held `'2'` and `'12'`, so `str()` showed quotes and `sorted()` put `'12'`
+  first.
+- A float appended to a list stays a number, as `d[k] = x` already stored
+  it: `prices.append(price * qty)` stored text, so `str(prices)` showed
+  quotes, `json.dumps()` wrote `"3.5"`, and `sorted()` stopped the app with
+  `TypeError: '<' not supported between instances of 'str' and 'float'`.
+- A list appended to a list stays a list: `[sorted(g) for g in groups]` held
+  the JSON text of each group.
+- An item read from a list or a dict and put into another one keeps its type:
+  `b["n"] = a["n"]` stored `'5'`, and a request body sent it as text.
+- A name given an item of a list or a dict keeps the item's type:
+  `k = data["n"]` then `json.dumps({"k": k})` wrote `{"k": "5"}`,
+  `[first, 1]` held `'10'`, and `sorted([first, 3])` stopped the app with
+  `TypeError`. The same when the name is given an item again in a loop, or
+  in each branch of an `if`.
+- `sorted(NUMS, key=abs)` anywhere in the app made `max(NUMS)`, `min(NUMS)`
+  and `NUMS[0]` text in every function: `[1, max(NUMS)]` held `'12'`.
+- `storage.set(name, value)`, `storage.get(name, default)` and
+  `storage.delete(name)` with the key in a name, an f-string or any
+  expression used the key `""` on the phone: every value went to one place
+  and each overwrote the last. A default in a name was `""` too. A key with
+  quotes in it broke the Java, and two `storage.delete()` of one key in a
+  function stopped javac.
+- `on_click_navigate(detail, {"id": item["id"]})`, the data given without
+  `data=` as the API reference shows it, opened the next screen with every
+  `get_param()` at its default. So did a `transition` given third.
+- `set_items([{"title": text}])`, a list written in the call with a name in
+  it, showed an empty row on the phone; a name on its own in the list was
+  left out.
+- `markdown(...).set_value(text)` stopped the app on the phone with
+  `ClassCastException`, and changed nothing in the Previewer. Both draw the
+  new text now.
+- An app that used `speech.say()` and not `speech.listen()` did not compile:
+  `package ApkpyKitActivity does not exist`.
+- A list, a dict or a text at the top of the file above 64 KB stopped javac
+  (`cannot find symbol`, or `constant string too long`); it is built from
+  pieces now.
+- `gap` on a `virtual_collection(row=...)` spaced the rows in the Previewer
+  and not on the phone, where the cards touched.
+- Two items of a list or a dict compare as CPython compares them: numbers as
+  numbers, text as text, and a number against text raises `TypeError`. The
+  largest of `[9, 12, 10]` found in a `for` was `9`, because the items were
+  compared as text; `max(["10", "9", "011"])` was `"011"`.
+- The variable of a `for` over a list keeps the item's type when it is
+  copied: `[x for x in scores]` held `'9'` and `'12'`; and over a list
+  written out, `for x in [4, 9]` and `for g in [[1], [2]]`, too.
+- An item of a list of numbers written at the top of the file is a number:
+  `best = NUMS[0]`, `max(NUMS)`, `sum(FLOATS)` and `NUMS[1] * 2`, which
+  stopped the build.
+- A number worked out by `sum()`, `abs()` or `round()`, or a sum with one on
+  one side, goes into a list, a dict and `json.dumps()` as a number:
+  `json.dumps(sum(prices))` wrote `"22.25"`, and `sum(prices) + 30.5` was
+  glued as text. So does a name given one: `a = sum(xs)` and
+  `b = sum(ys)`, then `a + b`, gave `34` for 3 + 4. `max(a, b)` with a number
+  among them is a number too, and `[n if ok else 0]` keeps each branch's
+  type.
+- What a function of the app returns, when every `return` gives a list, a
+  dict or text, is read as that: `str(evens(xs))` showed the JSON `[2,4]`,
+  and `"te" in names()` was `True`, finding the letters inside it. A
+  parameter the function appends to is a list inside it too.
+- `isinstance()` of an item of a list says what the item is: `"10"` read
+  from a list was an `int`.
+- `a = str(name.startswith("p"))` kept Java's `false`; it is `False`, as
+  when written straight into the text.
+- `def add(x, tags=None)` with `if tags is None: tags = []`, and any
+  parameter given a new value inside an `if`, stopped javac with "variable
+  tags is already defined".
+- A refusal inside a comprehension names its variables as they were
+  written; it showed `_apkpy_c2 * 2` for `x * 2`.
+- On Python 3.9 and 3.10, a message that quotes a `lambda` without
+  parameters writes `lambda: x`, as on the other versions; it wrote
+  `lambda : x`.
+- `int()` and `float()` of a text that is not a number raise Python's
+  `ValueError` with CPython's message: `invalid literal for int() with base
+  10: 'x'` and `could not convert string to float: 'x'`. They raised Java's
+  `NumberFormatException` (`For input string: "x"`), which is what a crash,
+  `apkpy logs` and `str(e)` in an `except ValueError` showed. `int()` also
+  reads `1_000`, and `0x1f` with base 16 or 0, as CPython does; `float()`
+  reads `inf` and `1_0.5`, and no longer reads `1.5f` or `0x1p3`, which
+  Java took and CPython refuses. `int(None)` is CPython's `TypeError`.
+- `markdown()`, `rich_text()`, `tree_view()` and the rows of a
+  `virtual_collection(template=)` that name no colour of their own take the
+  screen's `color`, then the Theme's text, then the colour that reads on what
+  is under them -- the same rule on the phone and in the Previewer. Without a
+  Theme the phone gave them a dark theme's colours: markdown was white on a
+  light screen, and template rows were dark cards. The Previewer drew them
+  black, also on a screen its author had made dark.
+- A `label()` with no colour of its own follows the same rule, and reads on
+  the card or container it sits in. Android drew it in Material's secondary
+  grey (`#757575`) where the Previewer drew `#212121`.
+- With a Theme, an inherited colour that does not read on what is under it
+  gives way: the Theme's dark text in a dark card, or on a screen made dark,
+  is light now, and a screen's `color:` reaches its labels (the Theme wrote
+  its text as every label's own, so the screen's colour never got there). A
+  colour the app names for the component itself always wins. The
+  accessibility report (U2035) reads the colour that is drawn, so it no
+  longer reports those labels and still reports what is unreadable.
+- The top bar (`app_bar()`) without a Theme is dark in the Previewer too, as
+  on the phone; it took the screen's colour under a white title. On the
+  phone, a light `body` or bar background gets dark title text instead of
+  white.
+- The top bar runs under the status bar in its own colour on the phone, as
+  in the Previewer, and the clock and battery follow its colour. The strip
+  above it was the screen's colour: a light band over a dark bar. A
+  `font-size` on the bar reaches the title on the phone (it was always
+  Material's 20sp there).
+- Previewer: a `button()` with no colour is Material's own button, as on the
+  phone: the primary colour, white 14sp text, a 36px fill. It was grey with
+  dark 11px text. Buttons that name no size have the phone's 14sp text; the
+  top bar's title is the phone's 20sp and starts where the phone's does.
+- `last = xs.pop()`, `v = d.pop(k, default)` and `g = d.get(k, default)` keep
+  the item's type: `[last]` was `['9']` where CPython has `[9]`.
+- Previewer: **bold**, *italic* and `code` in markdown are the size of the
+  text around them, and headings are their full size again: the font was
+  read in points and written back in pixels, 11px beside 14px text.
+- Previewer: markdown and a tree have the phone's padding when the CSS gives
+  none (10 at the sides), the rows of a list start their text where the
+  phone does, a tree has no lines between rows (the phone has none), and
+  markdown reads `secondary-color` and `accent-color` as the phone does.
+- Previewer: a number field (`type="number"`) gets its placeholder back after
+  `set_value("")` or a click away; it stayed blank.
+- Previewer: a heads-up notification floats over the app with the screen
+  showing around it, as on Android; it sat on a grey band that hid the top
+  of the window, the app bar included.
+- Previewer: `screen.get_param("id", "0")` is the text it stands for:
+  `int()` of it raised `TypeError`, and `== "42"` was `False` after opening
+  the screen with 42.
+- Previewer: `json_get(text, "items.0")` gives the object as the phone does,
+  in JSON (`{"id":1}`); it gave Python's `{'id': 1}`, which no JSON reader
+  takes back.
+- Previewer: a field given a value while its container was hidden came back
+  with the hint's grey once shown, as if it were empty.
+- Previewer: Back returns to where the screen was scrolled, as on Android,
+  and so does a tab of the bottom bar brought forward; it went back to the
+  top. A screen opened again starts at the top, as a new Activity does, and
+  a screen drawn again (a turn, a new theme or language) keeps its place.
+
+### Changed
+
+- A name used at the top of the file above the line that makes it stops the
+  build (`E1201`), as Python stops: `button("Save", command=save)` above
+  `def save():` built and ran on the phone while the Previewer ended with
+  NameError. The message says which line makes it, and that
+  `command=lambda: save()` also works.
+- One list or dict changed through a second name stops the build (`U2033`)
+  where CPython would show the change under the first name too, and the
+  phone would not: `l2 = l1` then `l2.append(x)`, `row = rows[0]` then
+  `row["done"] = True`, `.append()` on the variable of a `for`, a default
+  `tags=[]` that the function changes or hands on, and `add(CART, "tea")`
+  when `add()` appends to the list it is given. Each one built and ran
+  before, and answered differently. The message gives the form that answers
+  the same on both: `list(l1)`, `rows[0]["done"] = True`, `tags=None`,
+  `CART = add(CART, "tea")`. A second name that is only read, or never read
+  again, still builds.
+- The data of `on_click_navigate()` in a name, or a dict whose keys are
+  worked out, stops the build (`U2033`) and says to write the dict in the
+  call: each key is an extra of the Intent, and it was dropped without a
+  word. `set_value()` on a `rich_text()` or a `tree_view()` stops the build
+  too, where it stopped the app.
+
+- `SECURITY.md` names the latest release on PyPI as the one supported; it
+  still named 1.13.x.
+
+### Tests
+
+- 2,654 unit tests and 258 transpile checks, all passing.
+  Programs generated at random were run as generated Java on the JVM and in
+  CPython, 1,261 of them, and every difference found was fixed or now stops
+  the build. The test app of `tests/features/test_shared_containers.py`
+  gave the same six answers as CPython on a phone.
+- The suites also run on Python 3.9, 3.10 and 3.12 on GitHub, so each version
+  `setup.py` names is one a run checks.
+
+---
+
 ## [1.14.1] - 2026-10-25
 
 Classes reach the phone: a `class` in `writehere.py` or in a helper module is

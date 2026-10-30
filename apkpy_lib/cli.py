@@ -1069,6 +1069,22 @@ def _apply_app_config(build_dir, config, has_icon=False):
         f.write(manifest)
 
 
+def _keep_line_map(text, config):
+    """Where each line of the generated Java came from, for `apkpy logs` to
+    show the line of writehere.py in a crash: ~/.apkpy/lines/<application_id>.json,
+    outside the project, so the zip and the Gradle folder are as they were."""
+    if not text:
+        return
+    app_id = (config or appconfig.default_config()).get("application_id") or "app"
+    folder = os.path.join(nb.apkpy_home(), "lines")
+    try:
+        os.makedirs(folder, exist_ok=True)
+        with open(os.path.join(folder, app_id + ".json"), "w", encoding="utf-8") as f:
+            f.write(text)
+    except OSError:
+        pass        # only apkpy logs reads it, and it does without
+
+
 def _generate_android_project(python_code, build_dir, app_name, config=None, signing=None):
     """Transpile writehere.py and assemble a full, buildable Gradle project in build_dir.
 
@@ -1100,7 +1116,10 @@ def _generate_android_project(python_code, build_dir, app_name, config=None, sig
         os.makedirs(drawable_dir, exist_ok=True)
         os.makedirs(anim_dir, exist_ok=True)
 
+        _keep_line_map(multi_files.get("apkpy/lines.json"), config)
         for rel_path, content in multi_files.items():
+            if rel_path.startswith("apkpy/"):
+                continue        # ApkPy's own notes on the build, not part of the project
             if rel_path.startswith("java/"):
                 out = os.path.join(java_dir, os.path.basename(rel_path))
             elif rel_path.startswith("res/"):
@@ -1587,6 +1606,48 @@ def release(aab, name):
         click.echo("   https://play.google.com/console")
     else:
         click.echo("\n   This signed .apk installs directly on any phone (no 'unsigned' warning).")
+
+
+@main.command()
+@click.option('--app', 'package', default=None,
+              help="The app's package (default: application_id in apkpy.toml).")
+@click.option('--all', 'everything', is_flag=True,
+              help="Every line the app's process writes, Android's own included.")
+@click.option('--device', default=None,
+              help="The phone's serial, when more than one is connected (see 'adb devices').")
+def logs(package, everything, device):
+    """Show what the app prints on a phone connected by USB, as it runs."""
+    from . import logs as applogs
+    if not package:
+        config = appconfig.load_config(".")
+        for w in config.get("_warnings", []):
+            click.echo(f"   [config]  {w}")
+        package = config["application_id"]
+    adb = applogs.find_adb(nb.find_android_sdk())
+    if not adb:
+        click.echo("adb was not found. 'apkpy setup' installs it with the Android SDK.")
+        sys.exit(1)
+    phones = applogs.devices(adb)
+    ready = [serial for serial, state in phones if state == "device"]
+    if device and device not in ready:
+        click.echo(f"No phone '{device}' is ready. Connected: "
+                   + (", ".join(f"{serial} ({state})" for serial, state in phones) or "none"))
+        sys.exit(1)
+    if not ready:
+        waiting = [serial for serial, state in phones if state == "unauthorized"]
+        if waiting:
+            click.echo(f"The phone {waiting[0]} has not allowed this computer yet: unlock it "
+                       "and accept 'Allow USB debugging'.")
+        else:
+            click.echo("No phone found. Connect it by USB, with USB debugging on "
+                       "(Settings > Developer options).")
+        sys.exit(1)
+    serial = device or ready[0]
+    if not device and len(ready) > 1:
+        click.echo(f"{len(ready)} phones connected; showing {serial}. "
+                   "Choose another with --device SERIAL.")
+    sys.exit(applogs.follow(adb, serial, package, everything=everything, say=click.echo,
+                            lines=applogs.load_lines(package)))
 
 
 @main.command()

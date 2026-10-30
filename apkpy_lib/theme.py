@@ -299,7 +299,11 @@ class Theme:
                 "gap": spacing,
                 "padding": spacing,
             },
-            "label": {"color": t["text"], "font-family": t["font-family"]},
+            # No colour: body carries the text, and a label takes it through
+            # the screen (content_ink), which can see whether it reads. Written
+            # here as the label's own, it was dark text in a dark card and the
+            # screen's `color:` never reached a label of a themed app.
+            "label": {"font-family": t["font-family"]},
             "button": {
                 "background-color": t["primary"], "color": t["on_primary"],
                 "pressed-color": t["secondary"], "border-radius": radius,
@@ -689,6 +693,110 @@ def system_icon_color(background):
     return _contrast_text(background)
 
 
+# The window colour of an app without a Theme (res/values/apkpy_theme.xml).
+LIGHT_BACKGROUND = "#FFFBFE"
+
+# What content draws when nothing names its colours, by what lies under it.
+_CONTENT_INK = {
+    True: {"text": "#212121", "muted": "#64748B", "border": "#E2E8F0"},    # on light
+    False: {"text": "#FAFAFA", "muted": "#A1A1AA", "border": "#3F3F46"},   # on dark
+}
+
+
+def _is_light(color):
+    """True or False for a colour written as #RGB / #RRGGBB; None otherwise
+    (a transparent #00000000 says nothing about what is under it)."""
+    rgb = _hex_rgb(color)
+    if rgb is None:
+        return None
+    luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255
+    return luminance > LIGHT_SURFACE_LUMINANCE
+
+
+# Below this, text is unreadable at any size (WCAG's floor for large text).
+# An inherited colour under it gives way to the ink; above it, it is the
+# author's choice and the U2035 audit speaks to it.
+READABLE_CONTRAST = 3.0
+
+
+def _contrast(front, back):
+    """WCAG contrast of two #RGB / #RRGGBB colours, or None."""
+    def luminance(rgb):
+        def channel(value):
+            value /= 255.0
+            return value / 12.92 if value <= 0.03928 else ((value + 0.055) / 1.055) ** 2.4
+        return 0.2126 * channel(rgb[0]) + 0.7152 * channel(rgb[1]) + 0.0722 * channel(rgb[2])
+    a, b = _hex_rgb(front), _hex_rgb(back)
+    if a is None or b is None:
+        return None
+    hi, lo = sorted((luminance(a), luminance(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def content_ink(tokens, own_bg=None, screen_fg=None, screen_bg=None, parent_bg=None):
+    """The text, muted text and divider colours of content that names none of
+    its own: a label, markdown, rich_text, a tree_view, the rows of a
+    virtual_collection. Both runtimes ask here.
+
+    What is under the content decides: its own background (not body's), else
+    the card or container it sits in, else the screen's, else the Theme's,
+    else the window of an app without a Theme, which is light. The text is
+    the inherited colour -- the screen's `color` (body's included), then the
+    Theme's text -- while it reads on that; else the ink that does.
+
+    A fixed colour was wrong one way or the other: the phone gave a dark
+    theme's white text to a light app, and the Previewer black text to a
+    screen its author had made dark. Inherited without a look at what is
+    under it, a Theme's dark text went into a dark card and onto a screen
+    made dark, and the screen's light `color` into a white card.
+    """
+    tokens = tokens or {}
+    under, light = LIGHT_BACKGROUND, True
+    for candidate in (own_bg, parent_bg, screen_bg, tokens.get("background"),
+                      LIGHT_BACKGROUND):
+        found = _is_light(candidate) if candidate else None
+        if found is not None:
+            under, light = candidate, found
+            break
+    ink = _CONTENT_INK[light]
+
+    def reads(colour):
+        ratio = _contrast(colour, under)
+        # A colour that cannot be measured (a var() left as it is) is kept.
+        return colour and (ratio is None or ratio >= READABLE_CONTRAST)
+
+    text = next((c for c in (screen_fg, tokens.get("text")) if reads(c)), None)
+    muted = tokens.get("text_secondary")
+    return {
+        "text": text or ink["text"],
+        "muted": muted if reads(muted) else ink["muted"],
+        "border": tokens.get("border") or ink["border"],
+    }
+
+
+# The top bar of an app without a Theme is dark, as the bottom one is
+# (NAV_FALLBACK): the phone has always drawn it so.
+APP_BAR_FALLBACK = "#18181B"
+
+
+def app_bar_colors(tokens, own_bg=None, own_fg=None):
+    """The top bar's background and text, read the same by both runtimes.
+
+    The background is the bar's own (body included), then the Theme's
+    surface, then APP_BAR_FALLBACK. The text is the bar's own, then the
+    Theme's, then the one that reads on that background. A Theme's values
+    come back as they are, so the phone can still tie them to @color/.
+
+    The Previewer used to put the bar on the screen's colour with the dark
+    bar's white title: white on white. And on the phone a light `body`
+    background gave the bar a light background under the same white title.
+    """
+    tokens = tokens or {}
+    background = own_bg or tokens.get("surface") or APP_BAR_FALLBACK
+    text = own_fg or tokens.get("text") or _CONTENT_INK[_is_light(background) is True]["text"]
+    return background, text
+
+
 def button_variant_style(styles, variant):
     """Return Material 3 defaults for one explicit button variant."""
     variant = normalize_button_variant(variant)
@@ -797,6 +905,9 @@ def label_variant_style(styles, variant):
     # generates changes; the fallbacks say the same thing for a stylesheet
     # that never named a Theme and so has no ramp to read.
     variants = {
+        # A variant's colour is part of its role, and more specific than a
+        # `label { color: }` rule: without it, a muted rule for every label
+        # greyed the titles too.
         "title": {
             "color": tokens["text"],
             "font-size": tokens.get("text-xl", "20px"),

@@ -90,6 +90,24 @@ _MUTATORS = ('append', 'extend', 'insert', 'remove', 'pop', 'clear', 'sort',
 
 _BOTTOM = "<nothing yet>"
 
+# Set on a field read that is always a number, but not always a whole one:
+# self.total = 0 and later self.total += 2.5. It is read as text (no int() or
+# float() fits both), and a key of sorted() reads the mark to compare it as
+# the number it is (features/sort_key.py, _sort_key_java in the compiler).
+NUMBER = "_apkpy_number"
+_NUMBER_KINDS = ('int', 'float', 'num')
+
+
+def _join_number(a, b):
+    """'int', 'float' or 'num' (both) while every value is a number; None otherwise."""
+    if a == _BOTTOM:
+        return b if b == _BOTTOM or b in _NUMBER_KINDS else None
+    if b == _BOTTOM:
+        return a
+    if a in _NUMBER_KINDS and b in _NUMBER_KINDS:
+        return a if a == b else 'num'
+    return None
+
 
 # --- small helpers -----------------------------------------------------------
 
@@ -109,6 +127,16 @@ def _call(func, args, like, keywords=None):
     if isinstance(func, str):
         func = _name(func, like)
     return _loc(ast.Call(func=func, args=list(args), keywords=list(keywords or [])), like)
+
+
+# Set on an int()/float() this module writes around a field it knows holds a
+# number: the compiler reads the text back with Long.parseLong/Double.parseDouble.
+READ_BACK = '_apkpy_read_back'
+
+
+def _read_back(call):
+    setattr(call, READ_BACK, True)
+    return call
 
 
 def _assign(target, value, like):
@@ -827,6 +855,7 @@ class _Analysis(object):
         self.locals[None] = {}
         self.returns = {fn: _BOTTOM for fn in self.functions}
         self.fields = {}                       # (root class, field) -> kind
+        self.numbers = {}                      # (root class, field) -> _join_number
         self.poisoned_fields = set()
         self.callbacks = set()                 # functions handed around as values
         self.kit_names = set()
@@ -953,6 +982,12 @@ class _Analysis(object):
         if name in self.poisoned_fields:
             return None
         return self.fields.get((self.root(cls), name), _BOTTOM)
+
+    def field_number(self, cls, name):
+        """'num' when every value the field is given is a number, whole or not."""
+        if name in self.poisoned_fields:
+            return None
+        return self.numbers.get((self.root(cls), name))
 
     def field_classes(self, name):
         """Roots of the classes that set *name* on their objects."""
@@ -1258,7 +1293,8 @@ class _Analysis(object):
                 repr(sorted((id(f) if f else 0, sorted(v.items(), key=repr))
                             for f, v in self.locals.items())),
                 repr(sorted((id(f), r) for f, r in self.returns.items())),
-                repr(sorted(self.fields.items(), key=repr)), repr(sorted(self.poisoned_fields)))
+                repr(sorted(self.fields.items(), key=repr)), repr(sorted(self.poisoned_fields)),
+                repr(sorted(self.numbers.items(), key=repr)))
 
     def _scopes(self):
         yield None, [s for s in self.tree.body
@@ -1273,14 +1309,16 @@ class _Analysis(object):
             for node in _own_walk(body):
                 if isinstance(node, ast.Assign):
                     value = self._kind(node.value, fn)
+                    number = self._number(node.value, fn)
                     for target in node.targets:
-                        self._bind(target, node.value, value, fn, loc)
+                        self._bind(target, node.value, value, fn, loc, number)
                 elif isinstance(node, ast.AnnAssign) and node.value is not None:
-                    self._bind(node.target, node.value, self._kind(node.value, fn), fn, loc)
+                    self._bind(node.target, node.value, self._kind(node.value, fn), fn, loc,
+                               self._number(node.value, fn))
                 elif isinstance(node, ast.AugAssign):
-                    new = self._kind(ast.BinOp(left=_aug_read(node.target), op=node.op,
-                                               right=node.value), fn)
-                    self._bind(node.target, None, new, fn, loc)
+                    sum_ = ast.BinOp(left=_aug_read(node.target), op=node.op, right=node.value)
+                    new = self._kind(sum_, fn)
+                    self._bind(node.target, None, new, fn, loc, self._number(sum_, fn))
                 elif isinstance(node, (ast.For, ast.comprehension)):
                     it = self._kind(node.iter, fn)
                     item = None
@@ -1315,11 +1353,11 @@ class _Analysis(object):
                 if isinstance(sub, ast.Call):
                     self._call_site(sub, fn)
 
-    def _bind(self, target, value_node, kind, fn, loc):
+    def _bind(self, target, value_node, kind, fn, loc, number=None):
         if isinstance(target, ast.Name):
             loc[target.id] = self.join(loc.get(target.id, _BOTTOM), kind)
         elif isinstance(target, ast.Attribute):
-            self._store_field(target, kind, fn)
+            self._store_field(target, kind, fn, number)
         elif isinstance(target, (ast.Tuple, ast.List)):
             values = value_node.elts if isinstance(value_node, (ast.Tuple, ast.List)) \
                 and len(value_node.elts) == len(target.elts) else None
@@ -1337,13 +1375,41 @@ class _Analysis(object):
                     if _is_list(current):
                         self._store_field(base, ('list', self.join(current[1], kind)), fn)
 
-    def _store_field(self, target, kind, fn):
+    def _number(self, node, fn):
+        """'int', 'float' or 'num' when *node* is always a number; _BOTTOM while
+        that is not known yet; None when it may be something else.
+
+        Not _kind: self.total + price, with total given 0 and 2.5, is no one
+        kind, and still always a number -- the field reads its own NUMBER.
+        """
+        if isinstance(node, ast.BinOp) and isinstance(node.op, (
+                ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow)):
+            a, b = self._number(node.left, fn), self._number(node.right, fn)
+            if a is None or b is None:
+                return None
+            if _BOTTOM in (a, b):
+                return _BOTTOM
+            if isinstance(node.op, ast.Div):
+                return 'float'
+            return a if a == b else 'num'
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+            return self._number(node.operand, fn)
+        if isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load):
+            rk = self._kind(node.value, fn)
+            if _is_obj(rk) and (self.root(rk[1]), node.attr) in self.fields:
+                return self.field_number(rk[1], node.attr) or None
+        kind = self._kind(node, fn)
+        return kind if kind == _BOTTOM or kind in _NUMBER_KINDS else None
+
+    def _store_field(self, target, kind, fn, number=None):
+        number = kind if number is None else number
         rk = self._kind(target.value, fn)
         if isinstance(target.value, ast.Name) and target.value.id in self.classes:
             return                              # Cls.attr = ...: a class attribute
         if _is_obj(rk):
             key = (self.root(rk[1]), target.attr)
             self.fields[key] = self.join(self.fields.get(key, _BOTTOM), kind)
+            self.numbers[key] = _join_number(self.numbers.get(key, _BOTTOM), number)
         elif rk is None and not self._kit(target.value):
             # An object of a class the source does not say: the value counts
             # for that field of every class it could be.
@@ -1351,6 +1417,7 @@ class _Analysis(object):
                 if info.base is None:
                     key = (cls, target.attr)
                     self.fields[key] = self.join(self.fields.get(key, _BOTTOM), kind)
+                    self.numbers[key] = _join_number(self.numbers.get(key, _BOTTOM), number)
 
     def _mutation(self, call, fn):
         f = call.func
@@ -1430,6 +1497,7 @@ class _Analysis(object):
             self.locals[fn] = {k: done(v) for k, v in self.locals[fn].items()}
         self.returns = {f: done(v) for f, v in self.returns.items()}
         self.fields = {k: done(v) for k, v in self.fields.items()}
+        self.numbers = {k: done(v) for k, v in self.numbers.items()}
 
 
 def _aug_read(target):
@@ -1540,24 +1608,32 @@ class _Writer(object):
         node = _call(GETATTR, [recv, _const(attr, like)], like)
         if cls is not None:
             kind = self.a.field_kind(cls, attr)
+            number = self.a.field_number(cls, attr)
             if kind == _BOTTOM:
                 kind = None
         else:
-            kind = None
+            kind = number = None
             roots = self.a.field_classes(attr)
             if roots and attr not in self.a.poisoned_fields:
-                kind = _BOTTOM
+                kind = number = _BOTTOM
                 for root in roots:
                     kind = self.a.join(kind, self.a.fields[(root, attr)])
+                    number = _join_number(number, self.a.numbers.get((root, attr)))
                 if kind == _BOTTOM:
                     kind = None
-        return self.wrap(node, kind, like)
+        node = self.wrap(node, kind, like)
+        if kind is None and number == 'num':
+            setattr(node, NUMBER, True)
+        return node
 
     def wrap(self, node, kind, like):
+        # A field that only ever holds numbers is read back as one: the text
+        # is the app's own number, so the compiler parses it as it is and
+        # not as Python's int()/float() of a text (READ_BACK).
         if kind == 'int':
-            return _call('int', [node], like)
+            return _read_back(_call('int', [node], like))
         if kind == 'float':
-            return _call('float', [node], like)
+            return _read_back(_call('float', [node], like))
         if kind == 'str':
             return _call('str', [node], like)
         if _is_list(kind):

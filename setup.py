@@ -2,7 +2,7 @@ from setuptools import setup, find_namespace_packages
 
 setup(
     name='apkpy',
-    version='1.14.1',
+    version='1.14.2',
     author='Martim',
     # Apache 2.0, with an exception at the end of LICENSE for what ApkPy
     # writes into the apps it builds.

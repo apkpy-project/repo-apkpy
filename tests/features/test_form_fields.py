@@ -279,6 +279,25 @@ class ThePreviewer(unittest.TestCase):
             p.ns['secret'].set_value('')
             self.assertEqual(entry.cget('show'), '')
 
+    def test_a_number_field_gets_its_hint_back(self):
+        # The hint is drawn as the field's text, and the number check refused
+        # it: after set_value("") the field stayed blank (example 47).
+        body = ('home = Screen(id="home")\n'
+                'pages = inputs("Pages", id="pages", type="number", screen=home)\n')
+        with Previewed(body, '') as p:
+            entry = p.ns['pages'].widget
+            self.assertEqual(entry.get(), 'Pages')
+            p.ns['pages'].set_value('730')
+            self.assertEqual(p.ns['pages'].get_value(), '730')
+            p.ns['pages'].set_value('')
+            self.assertEqual(entry.get(), 'Pages')
+            self.assertEqual(p.ns['pages'].get_value(), '')
+            entry.delete(0, 'end')                                # still numbers only
+            entry.insert('end', 'x')
+            self.assertEqual(entry.get(), '')
+            entry.insert('end', '5')
+            self.assertEqual(entry.get(), '5')
+
     def test_a_switch_refuses(self):
         from apkpy_lib import inputs
         with self.assertRaises(ApkpyError) as caught:

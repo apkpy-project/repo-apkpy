@@ -81,6 +81,7 @@ __HEALTH_ARMS__
                 && granted(activity, permission(ApkpyKitRules.trim(kind))));
     }
 
+    // apkpy:launcher -- left out of an app that never calls this
     /** Ask for every kind named, in Health Connect's own screen. */
     public static void ask(Activity activity, String kinds, final ApkpyKit.Done done) {
         if (!has(activity)) {
@@ -103,6 +104,7 @@ __HEALTH_ARMS__
                     }
                 });
     }
+    // apkpy:launcher-end
 
     /** One number for the time between start and end. */
     public static void read(Activity activity, String kind, String start, String end,

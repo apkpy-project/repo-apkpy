@@ -32,6 +32,8 @@ are the app's own calls and are left alone.
 
 import ast
 
+from .sort_key import KEYS
+
 SETITEM = "__apkpy_setitem__"
 DELITEM = "__apkpy_delitem__"
 LISTOP = "__apkpy_listop__"
@@ -214,21 +216,25 @@ class _Rewriter:
         args = list(call.args)
         if method == 'sort':
             reverse = _loc(ast.Constant(value=False), stmt)
+            keys = None
             for kw in call.keywords:
+                if kw.arg == KEYS:
+                    keys = kw.value          # key=, worked out by features/sort_key.py
+                    continue
+                if kw.arg == 'key' and isinstance(kw.value, ast.Constant) \
+                        and kw.value.value is None:
+                    continue
                 if kw.arg != 'reverse':
                     from ..unsupported import raise_unsupported
                     raise_unsupported(
                         stmt,
-                        cause=('sort(%s=...) is not translated: the key is a function, '
-                               'and a function handed around as a value is not '
-                               'translated yet. sort() and sort(reverse=True) are.'
-                               % kw.arg),
-                        suggestions=['Sort a list of plain values: names.sort().',
-                                     'Or keep the value to sort by first in each item '
-                                     'and sort that list.'],
+                        cause=('sort(%s=...) is not translated here. sort() takes key= '
+                               'and reverse=, and the keys are worked out on a line of '
+                               'a def.' % kw.arg),
+                        suggestions=['names.sort(key=str.lower, reverse=True), inside a def.'],
                     )
                 reverse = kw.value
-            return [reverse]
+            return [reverse] + ([keys] if keys is not None else [])
         if call.keywords:
             return None
         if method == 'pop' and not args:

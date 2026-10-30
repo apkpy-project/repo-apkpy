@@ -225,11 +225,27 @@ public final class ApkpyRichContentView extends LinearLayout {
         this(context, null);
     }
 
+    // What the layout handed over, kept after the first drawing: the
+    // description it came in is cleared then, and setMarkdown() needs the
+    // colours and the size again to draw a new text the same way.
+    private JSONObject kept;
+
     public ApkpyRichContentView(Context context, AttributeSet attrs) {
         super(context, attrs);
         setOrientation(VERTICAL);
         setClipToPadding(false);
         post(this::renderPayload);
+    }
+
+    /** markdown(...).set_value(text): the new text, drawn as the first was. */
+    public void setMarkdown(CharSequence source) {
+        try {
+            if (kept == null) kept = payload();
+            kept.put("source", source == null ? "" : source.toString());
+        } catch (Exception ignored) {
+            return;
+        }
+        renderPayload();
     }
 
     private int dp(float value) {
@@ -255,7 +271,8 @@ public final class ApkpyRichContentView extends LinearLayout {
     private void renderPayload() {
         removeAllViews();
         try {
-            JSONObject data = payload();
+            JSONObject data = kept != null ? kept : payload();
+            kept = data;
             setContentDescription(null);
             int textColor = color(data.optString("textColor"), Color.WHITE);
             int secondary = color(data.optString("secondaryColor"), 0xFF9CA3AF);

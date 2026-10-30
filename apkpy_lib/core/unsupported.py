@@ -25,6 +25,7 @@ suggestion can be copied straight into the file.
 """
 
 import ast
+import re
 
 DOCS = 'https://repo-apkpy.pages.dev/compatibility/'
 
@@ -41,7 +42,8 @@ REPLACEMENTS = {
     'secrets.token_urlsafe': 'crypto.token(16)',
     'hashlib.sha256': 'crypto.hash(text)',
     'hashlib.md5': 'crypto.hash(text)',
-    'json.loads': 'json_get(text, "key")',
+    'json.load': 'json.loads(files.read("data.json"))',
+    'json.dump': 'files.write("data.json", json.dumps(data))',
     'requests.get': 'https.get(url, on_result=done)',
     'requests.post': 'https.post(url, json=body, on_result=done)',
     'urllib.request.urlopen': 'https.get(url, on_result=done)',
@@ -68,12 +70,17 @@ FULL_CAUSES = {
         'translation that is right most of the time is the thing this '
         'library refuses to ship.'
     ),
+    'json': (
+        'ApkPy translates json.loads() and json.dumps() (with indent=, sort_keys=, '
+        'ensure_ascii=, separators= and allow_nan=), and except json.JSONDecodeError. '
+        'json.load() and json.dump() work on a file object, and open() is not '
+        'translated: files.read() and files.write() keep the text instead.'
+    ),
 }
 
 # Modules Java can already do; ApkPy has not wired them up yet.
 PLANNED = {
     'math': '',   # a causa inteira está em FULL_CAUSES
-    'json': 'ApkPy can read JSON with json_get(); writing it is not mapped yet.',
     'base64': 'Android has android.util.Base64, so this is a gap in ApkPy.',
     'statistics': 'Add it up in a loop for now -- for and += both translate.',
     'decimal': 'Not mapped yet. For money, keep whole cents in an integer.',
@@ -170,12 +177,23 @@ def dotted_name(node):
     return ''
 
 
+def as_written(text):
+    """*text* with the names a pass gave its own put back: [x * 2 for x in t]
+    is a loop over _apkpy_c2 by the time it is translated, and a refusal
+    showed "_apkpy_c2 * 2"."""
+    from .features.comprehensions import SHOWN, _PREFIX
+    if not SHOWN or _PREFIX not in str(text):
+        return text
+    return re.sub(r'\b%s\d+\b' % _PREFIX, lambda m: SHOWN.get(m.group(0), m.group(0)), text)
+
+
 def describe(node):
     """The offending source, as close to what was written as possible."""
     unparse = getattr(ast, 'unparse', None)   # 3.9+; ApkPy supports 3.8
     if unparse is not None:
         try:
-            return unparse(node)
+            # 3.9 and 3.10 write a lambda without parameters as "lambda : x".
+            return as_written(re.sub(r'\blambda :', 'lambda:', unparse(node)))
         except Exception:
             pass
     name = dotted_name(node)
@@ -330,7 +348,9 @@ def raise_unsupported(node, cause='', suggestions=(), received=''):
     """Stop the build naming the construct, instead of writing "" and going on."""
     from ..diagnostics import ApkpyError   # the layer above this one
 
-    source = received or describe(node)
+    source = as_written(received or describe(node))
+    cause = as_written(cause)
+    suggestions = [as_written(tip) for tip in suggestions]
     name = dotted_name(node)
     if not cause:
         cause, extra = advice(name)

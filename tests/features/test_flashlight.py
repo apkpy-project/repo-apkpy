@@ -376,8 +376,8 @@ def show():
 button("Show", id="a", screen=home, command=show)
 run(start_screen=home)
 ''')
-        self.assertIn('"lit: " + String.valueOf((ApkpyTorch.isOn('
-                      'getApplicationContext()) ? "True" : "False"))', java)
+        self.assertIn('"lit: " + ApkpyValues.text(String.valueOf((ApkpyTorch.isOn('
+                      'getApplicationContext()) ? "True" : "False")))', java)
 
     def test_the_two_runtimes_write_the_same_words(self):
         # The Previewer answers a Python bool; the label shows str() of it. The

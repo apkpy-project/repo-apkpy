@@ -520,7 +520,10 @@ class _Drawer:
                 action_x+=bw+8
             bottom+=action_height+18
         canvas.delete(surface)
-        surface=ui._create_rounded_rect(canvas,x,y,x+width,bottom,24,fill=c["card"],outline=c["card"],tags=key)
+        # A heads-up floats over the app, so its edge is drawn; in the drawer
+        # the cards sit on the shade and need none.
+        surface=ui._create_rounded_rect(canvas,x,y,x+width,bottom,24,fill=c["card"],
+            outline=c["line"] if banner else c["card"],tags=key)
         canvas.tag_lower(surface)
         canvas.tag_bind(key,"<ButtonPress-1>",self._press)
         canvas.tag_bind(key,"<ButtonRelease-1>",lambda e,k=item["id"]:self._card_release(e,k))
@@ -548,19 +551,78 @@ class _Drawer:
 
     def heads_up(self,id):
         import tkinter as tk
+        from .. import ui
         if self.panel or id not in self.api.items:
             return
         self.hide_banner()
         self.banner_id=id
         c=self.colors()
-        self.banner=tk.Canvas(self.app.root,bg=c["shade"],bd=0,highlightthickness=0)
         w=max(240,self.app.root.winfo_width())
         content_width=min(560,w-24)
-        height=self.card(self.banner,self.api.items[id],(w-content_width)/2,6,content_width,c,True)
-        self.banner.place(x=0,y=-height-6,relwidth=1,height=height+6)
+        # The card floats over the app, as Android's heads-up does, instead of
+        # sitting on a band across the window. A Tk canvas cannot be
+        # see-through, so it is only as big as the card, and the four corners
+        # outside the rounding take the colour of what is under each one.
+        self.banner=tk.Canvas(self.app.root,bg=c["card"],bd=0,highlightthickness=0)
+        for corner in ("nw","ne","sw","se"):
+            self.banner.create_rectangle(0,0,0,0,width=0,tags=("corner","corner_"+corner))
+        bottom=self.card(self.banner,self.api.items[id],0,0,content_width,c,True)
+        width,height=content_width,bottom+1
+        half_w,half_h=width/2,height/2
+        for corner,(x0,y0) in (("nw",(0,0)),("ne",(half_w,0)),("sw",(0,half_h)),("se",(half_w,half_h))):
+            self.banner.coords("corner_"+corner,x0,y0,x0+half_w,y0+half_h)
+        self.banner.tag_lower("corner")
+        self._banner_box=(int((w-content_width)/2),width,height)
+        self.banner.place(x=self._banner_box[0],y=-height,width=width,height=height)
         self.banner.tk.call("raise", self.banner._w)
-        self._animate_banner(0, height+6, False)
-        self.banner_timer=self.app.root.after(4000,lambda:self._animate_banner(0,height+6,True))
+        self._animate_banner(0, height, False)
+        self.banner_timer=self.app.root.after(4000,lambda:self._animate_banner(0,height,True))
+
+    def _colour_under(self, x, y):
+        """The colour the app shows at (x, y) of the window, without the
+        banner: the topmost filled shape of a canvas there, else the
+        background of the widget there."""
+        root=self.app.root
+        left,top=root.winfo_rootx(),root.winfo_rooty()
+        widget=root
+        while True:
+            inner=None
+            # winfo children lists the stack bottom first: the last hit is on top.
+            for child in widget.winfo_children():
+                try:
+                    if child is self.banner or child.winfo_class()=="Toplevel" or not child.winfo_ismapped():
+                        continue
+                    cx,cy=child.winfo_rootx()-left,child.winfo_rooty()-top
+                    if cx<=x<cx+child.winfo_width() and cy<=y<cy+child.winfo_height():
+                        inner=child
+                except Exception:
+                    pass
+            if inner is None:
+                break
+            widget=inner
+        try:
+            if widget.winfo_class()=="Canvas":
+                px=widget.canvasx(x-(widget.winfo_rootx()-left))
+                py=widget.canvasy(y-(widget.winfo_rooty()-top))
+                for item in reversed(widget.find_overlapping(px,py,px,py)):
+                    if widget.type(item) in ("rectangle","oval","polygon","arc"):
+                        fill=widget.itemcget(item,"fill")
+                        if fill:
+                            return fill
+            return widget.cget("background")
+        except Exception:
+            return None
+
+    def _paint_corners(self, y):
+        """Each corner of the banner, at height y, in the colour under it."""
+        if self.banner is None:
+            return
+        x,width,height=self._banner_box
+        for corner,(px,py) in (("nw",(x+3,y+3)),("ne",(x+width-4,y+3)),
+                               ("sw",(x+3,y+height-4)),("se",(x+width-4,y+height-4))):
+            colour=self._colour_under(px,py)
+            if colour:
+                self.banner.itemconfigure("corner_"+corner,fill=colour)
 
     def _animate_banner(self, step, height, closing):
         self.banner_animation=None
@@ -568,7 +630,10 @@ class _Drawer:
             return
         t=min(1,step/12)
         progress=t*t if closing else (1-t)**3
-        self.banner.place_configure(y=int(24-(height+24)*progress))
+        # The card's top edge ends 6 px below the 24 px status strip.
+        y=int(30-(height+30)*progress)
+        self.banner.place_configure(y=y)
+        self._paint_corners(y)
         if step<12:
             self.banner_animation=self.app.root.after(15,lambda:self._animate_banner(step+1,height,closing))
         elif closing:

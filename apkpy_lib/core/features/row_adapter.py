@@ -91,10 +91,24 @@ JAVA = r'''
             }
         }
 
+        // gap: on the collection, half above and half below each row -- what
+        // the template rows and the Previewer do. Only set when the CSS says.
+        private int gapDp = 0;
+
+        void setGap(int dp) { gapDp = Math.max(0, dp); }
+
         @NonNull @Override
         public Holder onCreateViewHolder(@NonNull android.view.ViewGroup parent, int viewType) {
             android.view.View view = android.view.LayoutInflater.from(parent.getContext())
                     .inflate(layout, parent, false);
+            if (gapDp > 0 && view.getLayoutParams() instanceof android.view.ViewGroup.MarginLayoutParams) {
+                android.view.ViewGroup.MarginLayoutParams spaced =
+                        (android.view.ViewGroup.MarginLayoutParams) view.getLayoutParams();
+                int gap = Math.round(gapDp * parent.getResources().getDisplayMetrics().density);
+                spaced.topMargin += gap / 2;
+                spaced.bottomMargin += gap - gap / 2;
+                view.setLayoutParams(spaced);
+            }
             for (int i = 0; i < ratioIds.length; i++) {
                 final android.view.View picture = view.findViewById(ratioIds[i]);
                 final float ratio = ratios[i];

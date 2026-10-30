@@ -94,6 +94,18 @@ class Previewed:
             self.app.root.update()
             time.sleep(0.01)
 
+    def until(self, condition, seconds=6.0):
+        """Run the Previewer until condition() is true, for at most *seconds*,
+        and answer what it last said. A fixed settle() lost the race on a
+        busy machine: Play's update sheet was not up after 0.5 s."""
+        end = time.time() + seconds
+        while True:
+            self.app.root.update()
+            found = condition()
+            if found or time.time() >= end:
+                return found
+            time.sleep(0.01)
+
     def widget(self, comp):
         return self.ns[comp].widget if isinstance(comp, str) else comp.widget
 

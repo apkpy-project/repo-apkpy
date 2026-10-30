@@ -187,15 +187,26 @@ def tree_view(nodes, id=None, screen=None, parent=None, *,
     )
 
 
-def _font(base, *, size=None, bold=False, italic=False, family=None):
-    resolved_size = (
-        abs(int(size))
-        if size is not None
-        else abs(int(base.actual("size")))
-    )
+def _font(base, *, size=None, scale=None, least=8, bold=False, italic=False,
+          family=None):
+    """A font like *base*, in base's own unit: Tk reads a negative size as
+    pixels and a positive one as points. *size* is an explicit size in
+    pixels; *scale* multiplies base's, never below *least*.
+
+    It read base.actual("size"), which is in points, and wrote it back as
+    pixels: the base was 14px and the bold 11px, so **bold**, *italic*, code
+    and the headings came out smaller than the text around them."""
+    own = int(base.cget("size"))
+    if size is not None:
+        resolved = -abs(int(size))
+    elif scale is not None:
+        value = max(least, int(round(abs(own) * scale)))
+        resolved = -value if own < 0 else value
+    else:
+        resolved = own
     return tkfont.Font(
         family=family or base.actual("family"),
-        size=-resolved_size,
+        size=resolved,
         weight="bold" if bold else "normal",
         slant="italic" if italic else "roman",
     )
@@ -234,7 +245,12 @@ def _surface(app, comp, parent_widget, is_flex, pack_side, parent_bg,
     border = _get_style_border_color(style) or bg
     width = max(0, _parse_border_width(style))
     radius = max(0, _parse_radius(style))
-    padding = _parse_padding_tk(style)
+    # No padding in the CSS: the phone's default for a component, 5 above and
+    # below and 10 at the sides (the compiler's _parse_padding). It was 0
+    # here, so markdown and a tree sat 10dp further out than on the phone.
+    declared = any(style.get(key) not in (None, "") for key in (
+        "padding", "padding-top", "padding-right", "padding-bottom", "padding-left"))
+    padding = _parse_padding_tk(style) if declared else (5, 10, 5, 10)
     margin = _parse_margin(style)
 
     holder = tk.Frame(parent_widget, bg=parent_bg, bd=0, highlightthickness=0)
@@ -390,7 +406,7 @@ def configure_markdown_tags(text_widget, base_font, tokens, accent, muted):
         # O mesmo tamanho relativo do RelativeSizeSpan(0.85f) no Android.
         "copy_action",
         foreground=accent,
-        font=_font(base_font, size=max(8, round(base_font.actual("size") * 0.85))),
+        font=_font(base_font, scale=0.85),
     )
     text_widget.tag_configure("link", foreground=accent, underline=True)
     text_widget.tag_configure("quote", foreground=muted, lmargin1=8, lmargin2=8)
@@ -400,11 +416,7 @@ def configure_markdown_tags(text_widget, base_font, tokens, accent, muted):
     for level, factor in ((1, 1.75), (2, 1.5), (3, 1.3), (4, 1.15), (5, 1.05), (6, 1.0)):
         text_widget.tag_configure(
             f"h{level}",
-            font=_font(
-                base_font,
-                size=max(9, round(base_font.actual("size") * factor)),
-                bold=True,
-            ),
+            font=_font(base_font, scale=factor, least=9, bold=True),
             # Android's RelativeSizeSpan changes typography but does not add a
             # hidden paragraph margin. Markdown blank lines already provide the
             # intended section spacing.
@@ -510,6 +522,35 @@ def _render_markdown(text_widget, source, copy_code=False):
         text_widget.insert("end", "\n")
 
 
+def _own_style(comp, kind):
+    """What the stylesheet gives this component itself, body left out:
+    body's colour reaches content_ink through the screen's, which is how
+    it can tell whether it reads on a dark card."""
+    from .. import ui
+    from ..theme import component_style
+
+    return component_style(ui.global_styles, kind, comp.kwargs.get("comp_id"),
+                           include_body=False, viewport=ui._style_viewport)
+
+
+def _ink_for(app, tokens, style, parent_bg=None):
+    """theme.content_ink for content on the screen being drawn: the colour of
+    its own background, then the card or container it sits in, then the
+    screen's, read as the phone reads them."""
+    from ..theme import content_ink
+    from ..ui import _get_style_bg, _get_style_fg
+
+    screen = getattr(app, "_screen_ink_style", None) or {}
+    under = getattr(app, "_ink_parent_bg", None)
+    return content_ink(
+        tokens,
+        own_bg=_get_style_bg(style),
+        screen_fg=_get_style_fg(screen),
+        screen_bg=_get_style_bg(screen),
+        parent_bg=under(parent_bg) if callable(under) else None,
+    )
+
+
 def render_rich_content_preview(app, comp, parent_widget, is_flex, pack_side,
                                 bg_color):
     from ..ui import (
@@ -523,13 +564,17 @@ def render_rich_content_preview(app, comp, parent_widget, is_flex, pack_side,
     content, style, surface_bg, _holder = _surface(
         app, comp, parent_widget, is_flex, pack_side, bg_color, semantic
     )
-    body_fg = _get_style_fg(_get_body_style())
-    fg = _get_style_fg(style) or body_fg or "#212121"
     tokens = __import__("apkpy_lib.ui", fromlist=["global_styles"]).global_styles.get(
         "__theme__", {}
     )
-    muted = tokens.get("text_secondary", "#6B7280")
-    accent = tokens.get("secondary", tokens.get("primary", "#6750A4"))
+    own = _own_style(comp, semantic)
+    ink = _ink_for(app, tokens, own, bg_color)
+    fg = _get_style_fg(own) or ink["text"]
+    # The CSS the phone reads too: it took secondary-color and accent-color
+    # and the Previewer did not, so a styled link was one colour on each.
+    muted = style.get("secondary-color") or style.get("subtitle-color") or ink["muted"]
+    accent = (style.get("accent-color") or tokens.get("secondary")
+              or tokens.get("primary") or "#6750A4")
     base_font_spec = _build_tk_font(style, default_size=14)
     base_modifiers = {str(value).lower() for value in base_font_spec[2:]}
     base_font = tkfont.Font(
@@ -730,6 +775,28 @@ def render_rich_content_preview(app, comp, parent_widget, is_flex, pack_side,
         text_widget.bind("<Button-1>", lambda _event: "break")
     comp._rich_text_widget = text_widget
 
+    def refresh(new_source):
+        """set_value() on a markdown: the new text, drawn in place and
+        measured again. It used to leave the first text on screen."""
+        if semantic != "markdown":
+            return
+        from ..core.style_parser import wants_code_copy
+        try:
+            text_widget.configure(state="normal")
+            text_widget.delete("1.0", "end")
+            _render_markdown(text_widget, new_source,
+                             copy_code=wants_code_copy(style))
+            text_widget.configure(state="disabled")
+            if resize_job[0] is not None:
+                text_widget.after_cancel(resize_job[0])
+        except tk.TclError:
+            return
+        measured_width[0] = None
+        settle_passes[0] = 0
+        resize_job[0] = text_widget.after(30, apply_height)
+
+    comp._rich_refresh = refresh
+
 
 def _visible_nodes(nodes, depth=0):
     result = []
@@ -767,14 +834,17 @@ def render_tree_preview(app, comp, parent_widget, is_flex, pack_side, bg_color):
         "tree_view",
         fixed_height=height,
     )
-    fg = _get_style_fg(style) or _get_style_fg(_get_body_style()) or "#212121"
-    item_bg = style.get("item-background-color") or surface_bg
-    divider = style.get("item-border-color") or style.get("border-color") or "#3F3F46"
     tokens = __import__("apkpy_lib.ui", fromlist=["global_styles"]).global_styles.get(
         "__theme__", {}
     )
-    muted = style.get("subtitle-color") or tokens.get("text_secondary", "#6B7280")
-    accent = style.get("accent-color") or tokens.get("secondary", "#6750A4")
+    own = _own_style(comp, "tree_view")
+    ink = _ink_for(app, tokens, own, bg_color)
+    fg = _get_style_fg(own) or ink["text"]
+    item_bg = style.get("item-background-color") or surface_bg
+    divider = style.get("item-border-color") or style.get("border-color") or "#3F3F46"
+    muted = style.get("secondary-color") or style.get("subtitle-color") or ink["muted"]
+    accent = (style.get("accent-color") or tokens.get("secondary")
+              or tokens.get("primary") or "#6750A4")
     row_height = int(comp.kwargs.get("row_height", 58))
 
     viewport = tk.Canvas(
@@ -852,8 +922,7 @@ def render_tree_preview(app, comp, parent_widget, is_flex, pack_side, bg_color):
                     anchor="w",
                 )
                 subtitle_widget.pack(fill="x")
-            separator = tk.Frame(rows, bg=divider, height=1)
-            separator.pack(fill="x", padx=(indent + 25, 0))
+            # No line between rows: the phone's ApkpyTreeView has none.
 
             if has_children:
                 def toggle(_event=None, current=node):

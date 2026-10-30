@@ -11,6 +11,8 @@ from .theme import badge_at_end as _badge_at_end
 from .theme import card_text_colors as _card_text_colors
 from .theme import mini_player_colors as _mini_player_colors
 from .theme import system_icon_color as _system_icon_color
+from .theme import content_ink as _content_ink
+from .theme import app_bar_colors as _app_bar_colors
 from .theme import NAV_ACTIVE_LABEL_BOLD, NAV_BAR_DP, NAV_LABEL_GAP_DP
 from .theme import (
     Theme,
@@ -5136,8 +5138,16 @@ def _fade_component(widget, show, duration_ms, on_done=None):
     # background until cards and inputs were empty dark boxes.
     state = getattr(widget, _FADE_STATE_ATTR, None)
     if state is None:
-        state = {'original': {}, 'token': 0}
+        state = {'original': {}, 'token': 0, 'running': False}
         setattr(widget, _FADE_STATE_ATTR, state)
+    # Between two fades every colour is a true one again (a fade ends by
+    # painting them back) and the code may have changed it since: a field
+    # filled while its container was hidden is no longer the placeholder's
+    # grey. Kept from the first fade, that grey was painted back on show()
+    # and the field looked empty. So they are read again -- except over a
+    # fade still running, whose half-way colours are not true ones.
+    if not state.get('running'):
+        state['original'] = {}
     remembered = state['original']
 
     found = []
@@ -5154,6 +5164,7 @@ def _fade_component(widget, show, duration_ms, on_done=None):
         resolved.append((target, option, _hex_to_rgb(original), original, item))
 
     state['token'] += 1
+    state['running'] = True
     token = state['token']
     background = _theme_background()
     frame_ms = 16
@@ -5179,6 +5190,7 @@ def _fade_component(widget, show, duration_ms, on_done=None):
             return          # a newer fade took over; stop fighting it
         if index >= total:
             paint(1.0, final=True)
+            state['running'] = False
             if on_done:
                 on_done()
             return
@@ -5351,7 +5363,13 @@ def _animate_widget(root, widget, style_dict, spacer=None, canvas=None,
 # ─── ParamRef ─────────────────────────────────────────────────────────────────
 
 class _ParamRef:
-    """Referência lazy a um parâmetro de ecrã — re-avaliada no momento do render."""
+    """Referência lazy a um parâmetro de ecrã — re-avaliada no momento do render.
+
+    Everywhere else it is the text it stands for, read at the moment it is
+    used -- what the phone's getStringExtra() gives. It only knew __str__:
+    int(details.get_param("id", "0")) raised TypeError here and worked on the
+    phone, and get_param("id") == "42" was False after opening it with 42.
+    """
     def __init__(self, screen, key, default):
         self.screen  = screen
         self.key     = key
@@ -5360,6 +5378,57 @@ class _ParamRef:
         return str(self.screen._params.get(self.key, self.default))
     def __str__(self):
         return self.resolve()
+    def __repr__(self):
+        return repr(self.resolve())
+
+    @staticmethod
+    def _plain(value):
+        return value.resolve() if isinstance(value, _ParamRef) else value
+
+    def __eq__(self, other):
+        return self.resolve() == self._plain(other)
+    def __ne__(self, other):
+        return self.resolve() != self._plain(other)
+    def __lt__(self, other):
+        return self.resolve() < self._plain(other)
+    def __le__(self, other):
+        return self.resolve() <= self._plain(other)
+    def __gt__(self, other):
+        return self.resolve() > self._plain(other)
+    def __ge__(self, other):
+        return self.resolve() >= self._plain(other)
+    def __hash__(self):
+        return hash(self.resolve())
+    def __int__(self):
+        return int(self.resolve())
+    def __float__(self):
+        return float(self.resolve())
+    def __bool__(self):
+        return bool(self.resolve())
+    def __len__(self):
+        return len(self.resolve())
+    def __iter__(self):
+        return iter(self.resolve())
+    def __contains__(self, part):
+        return self._plain(part) in self.resolve()
+    def __getitem__(self, index):
+        return self.resolve()[index]
+    def __add__(self, other):
+        return self.resolve() + self._plain(other)
+    def __radd__(self, other):
+        return self._plain(other) + self.resolve()
+    def __mul__(self, times):
+        return self.resolve() * times
+    __rmul__ = __mul__
+    def __mod__(self, values):
+        return self.resolve() % values
+    def __format__(self, spec):
+        return format(self.resolve(), spec)
+    def __getattr__(self, name):
+        # .upper(), .split(","), .isdigit(): the text's own methods.
+        if name.startswith('__'):
+            raise AttributeError(name)
+        return getattr(self.resolve(), name)
 
 
 # Reactive state + screen lifecycle
@@ -5895,6 +5964,17 @@ class ComponentDef:
         # changed nothing: "Start" went on saying "Start" with the count
         # running. Kept in kwargs too, which is what the screen is drawn
         # from when it comes back.
+        if self.comp_type == 'markdown':
+            # Kept for the next time the screen is drawn, and drawn now if it
+            # is on screen. The phone's setMarkdown() does the same.
+            self.kwargs['source'] = str(value)
+            refresh = getattr(self, '_rich_refresh', None)
+            if refresh is not None:
+                try:
+                    refresh(str(value))
+                except Exception:
+                    pass
+            return
         if self.comp_type == 'button':
             self.kwargs['text'] = str(value)
             retitle = getattr(self, '_retitle_btn', None)
@@ -6573,6 +6653,9 @@ class AppPreview:
     def __init__(self):
         _prepare_preview_process_identity()
         self.root = tk.Tk()
+        # After a save, the new window starts invisible where the old one is.
+        from . import reload as _reload
+        _reload.child_window(self.root)
         install_tk_exception_hook(self.root)
         # The friendly printer stays; this only records the same failure where
         # crash.last() can find it, so the Previewer answers that call the way
@@ -6874,10 +6957,12 @@ class AppPreview:
         kind = bar.comp_type
         comp_id = bar.kwargs.get('comp_id')
         style = _merge_with_body(comp_id, kind)
-        return (
-            _get_style_bg(style) or tokens.get('surface', fallback_bg),
-            _get_style_fg(style) or tokens.get('text', '#FAFAFA'),
-        )
+        # The phone's bar: dark without a Theme, its text the one that reads
+        # on it. This used to fall back to the screen's colour under the dark
+        # bar's white title -- white on white on a light app.
+        return _app_bar_colors(
+            tokens, own_bg=_get_style_bg(style) or None,
+            own_fg=_get_style_fg(style) or None)
 
     def _settle_layout(self):
         """Run the deferred container relayouts before the first paint.
@@ -7074,6 +7159,20 @@ class AppPreview:
 
     def render_screen(self, screen, transition=None, _from_back=False):
         global _style_viewport
+        # How far a screen was scrolled when it was left: on the phone the
+        # Activity under the one on top stays as it was, so Back -- or a tab
+        # of the bottom bar brought forward -- finds it there. A screen opened
+        # anew starts at the top, as a new Activity does. The same screen
+        # drawn again (a new theme, a new language) stays where it was.
+        leaving = self._active_screen
+        if leaving is not None and self._scroll_canvas is not None:
+            try:
+                leaving._preview_scroll = _reload_scrolled_by(self._scroll_canvas)
+            except Exception:
+                pass
+        comes_back = _from_back or screen is leaving or screen in self._screen_stack
+        if not comes_back:
+            screen._preview_scroll = 0
         if not _from_back:
             self._remember_for_back(screen)
         # Which way up this screen is decides the size everything is laid
@@ -7116,11 +7215,15 @@ class AppPreview:
         # Ler estilos do ecrã (identificado pelo screen.id)
         load_styles_now()
         screen_style = _merge_with_body(screen.id)
+        # Markdown, a tree and a list's rows that name no colour read the
+        # screen's (theme.content_ink), as on the phone.
+        self._screen_ink_style = screen_style
 
         # Cor de fundo do ecrã: ID específico > body > branco
         body_bg = _get_style_bg(_get_body_style())
         screen_bg_css = _get_style_bg(screen_style) or body_bg or '#ffffff'
         screen_bg_tk  = screen_bg_css if screen_bg_css.startswith('#') else '#ffffff'
+        self._screen_ink_bg = screen_bg_tk
         self.body.configure(bg=screen_bg_tk)
 
         # A real Android status bar occupies these pixels, but it is visually
@@ -7302,6 +7405,15 @@ class AppPreview:
         _run_preview_lifecycle(screen, "on_resume")
 
         self._settle_layout()
+        scrolled = getattr(screen, '_preview_scroll', 0) if comes_back else 0
+        if scrolled and self._scroll_canvas is not None:
+            try:
+                self.root.update_idletasks()
+                _reload_scroll_to(self._scroll_canvas, scrolled)
+                if self._app_bar_scroll_update:
+                    self._app_bar_scroll_update(max(0, int(self._scroll_canvas.canvasy(0))))
+            except Exception:
+                pass
         if transition:
             self._slide_screen(transition)
 
@@ -7542,10 +7654,15 @@ class AppPreview:
         # only for its two colours, so a custom typeface reached the title on
         # the phone and not on the desktop.
         bar_style = _merge_with_body(bar.kwargs.get('comp_id'), kind)
+        # 20: Material's toolbar title (TextAppearance...Toolbar.Title), which
+        # is what the phone draws unless the bar itself names a size. It was
+        # 16px here, and body's size, which the phone's title never takes.
+        _bar_own = component_style(global_styles, kind, bar.kwargs.get('comp_id'),
+                                   include_body=False, viewport=_style_viewport)
         title_font = _build_tk_font(
             {'font-weight': 'bold', **bar_style, 'font-size':
-             bar_style.get('font-size', '16px')},
-            default_size=16,
+             _bar_own.get('font-size', '20px')},
+            default_size=20,
         )
         title_align = normalize_text_align(bar_style.get('text-align'), 'left')
         is_sliver = kind == 'sliver_app_bar'
@@ -7668,7 +7785,7 @@ class AppPreview:
                 _icon_button(str(leading))
 
         title_label = tk.Label(
-            toolbar, text=title, bg=surface, fg=fg,
+            toolbar, text=title, bg=surface, fg=fg, bd=0, padx=0,
             anchor=_TK_ANCHOR.get(title_align, 'w'), font=title_font,
         )
         if title_align == 'center':
@@ -7677,8 +7794,10 @@ class AppPreview:
             # centre in the gap and drift left as soon as an action appeared.
             title_label.place(relx=0.5, rely=0.5, anchor='center')
         else:
+            # Material's insets: the title starts 16dp in, or 72dp with a
+            # leading icon (48 of icon, then 24). It was 21 and 56 here.
             title_label.pack(side='left', fill='both', expand=True,
-                             padx=(8 if leading else 18, 4))
+                             padx=(24 if leading else 16, 4))
 
         for item in reversed(list(bar.kwargs.get('actions') or [])):
             if isinstance(item, ComponentDef):
@@ -8762,6 +8881,15 @@ class AppPreview:
         """Cor de fundo activa do ecrã."""
         return getattr(self, '_flex_bg', '#ffffff') or '#ffffff'
 
+    def _ink_parent_bg(self, bg_color):
+        """*bg_color* as theme.content_ink's parent_bg: the fill of the card
+        or container a component sits in, None on the screen itself (the
+        phone works it out from the same cards and containers)."""
+        screen = getattr(self, '_screen_ink_bg', None)
+        if not bg_color or not screen or str(bg_color).lower() == str(screen).lower():
+            return None
+        return bg_color
+
     def _render_label(self, comp, parent_widget, is_flex, pack_side, bg_color):
         # A slot of the layout engine is the box ApkpyLayout gives the
         # TextView on the phone: the label fills it, text at the start unless
@@ -8775,8 +8903,21 @@ class AppPreview:
         variant = comp.kwargs.get('variant')
         # Fundir body + estilos específicos do componente
         style   = _merge_with_body(comp_id, 'label', variant)
-        body_fg = _get_style_fg(_get_body_style())
-        fg      = _get_style_fg(style) or body_fg or '#212121'
+        # No colour of its own: the screen's (body's included), the Theme's,
+        # or the one that reads on the background -- theme.content_ink, as on
+        # the phone. It was #212121 always, black on a screen its author made
+        # dark; and body's colour, taken as the label's own, put a Theme's
+        # dark text into a dark card.
+        screen_style = getattr(self, '_screen_ink_style', None) or {}
+        own     = component_style(global_styles, 'label', comp_id, include_body=False,
+                                  variant=variant, viewport=_style_viewport)
+        fg      = _get_style_fg(own) or _content_ink(
+            global_styles.get('__theme__', {}),
+            own_bg=_get_style_bg(own) or None,
+            screen_fg=_get_style_fg(screen_style) or None,
+            screen_bg=_get_style_bg(screen_style) or None,
+            parent_bg=self._ink_parent_bg(bg_color),
+        )['text']
         mt, mr, mb, ml = _parse_margin(style)
         _body = _body_text_size()
         font    = _build_tk_font(style, default_size=_body)
@@ -8869,7 +9010,8 @@ class AppPreview:
                                min_height=0, press=None, text_transform=None,
                                text_align=None, letter_spacing=None,
                                line_height=None, icon_color=None,
-                               css_width=None, css_height=None, grow=False):
+                               css_width=None, css_height=None, grow=False,
+                               material_inset=False):
         """Botão Material Design: cinza claro, texto uppercase, flat.
 
         ``css_width``/``css_height`` are the stylesheet's size in Preview
@@ -8931,6 +9073,11 @@ class AppPreview:
         # The 2px above and below stand in for MaterialButton's inset; a size
         # the stylesheet fixed is the whole box, and the gap cut a 76px ring.
         _v_gap = 2
+        if material_inset:
+            # Material's own Button: a 36dp fill, 6dp clear above and below
+            # (the canvas is a pixel taller each side than the fill it draws).
+            _bh_px = max(38, int(_line_box) + 10)
+            _v_gap = 5
         if css_height:
             _bh_px = css_height
             _v_gap = 0
@@ -9010,10 +9157,13 @@ class AppPreview:
                 )
                 if label else ['']
             )
-            desired_height = css_height or _material_button_height(
-                _line_box * max(1, len(lines)), padding=padding,
-                compact=compact, flex=is_flex, min_height=min_height,
-            )
+            if material_inset and not css_height:
+                desired_height = max(38, int(_line_box * max(1, len(lines))) + 10)
+            else:
+                desired_height = css_height or _material_button_height(
+                    _line_box * max(1, len(lines)), padding=padding,
+                    compact=compact, flex=is_flex, min_height=min_height,
+                )
             return label, lines, desired_height
 
         _align = normalize_text_align(text_align)
@@ -9259,8 +9409,22 @@ class AppPreview:
         # label colour and nothing else. list_row has read them from the
         # beginning, which made the silence look like a rule.
         icon_fg    = style.get('icon-color') or style.get('tint') or None
+        material_inset = False
+        if not bg and variant is None and not _is_icon_button(comp):
+            # A button that names no colour is Material's own Button on the
+            # phone: filled with the primary, on_primary text at 14sp, 4dp
+            # corners, and a 36dp fill inside its 48dp touch target. The
+            # Previewer drew it grey (#E0E0E0), dark 11px text, 46px tall.
+            _tokens = global_styles.get('__theme__', {}) or {}
+            bg = _tokens.get('primary') or '#6750A4'
+            fg = fg or _tokens.get('on_primary') or '#FFFFFF'
+            material_inset = not any(
+                key.startswith('padding') or key in ('height', 'min-height')
+                for key in style)
         pressed_bg = _get_style_pressed_color(style)
         radius     = _parse_radius(style)
+        if material_inset and 'border-radius' not in style:
+            radius = 4
         bc         = _get_style_border_color(style)
         bw         = _parse_border_width(style)
         margins    = _parse_margin(style)
@@ -9268,7 +9432,11 @@ class AppPreview:
         raw_min_height = str(style.get('min-height', '')).strip()
         min_height_match = re.search(r'\d+(?:\.\d+)?', raw_min_height)
         min_height = int(float(min_height_match.group(0))) if min_height_match else 0
-        font       = _build_tk_font(style, default_size=11)
+        # 14: a button that names no size is Material's 14sp on the phone;
+        # it was 11px here, the label three-quarters of the phone's.
+        font       = _build_tk_font(
+            dict(style, **{'font-weight': style.get('font-weight') or 'bold'})
+            if material_inset else style, default_size=14)
         css_width, css_height = _button_css_size(style)
         user_cmd   = comp.kwargs.get('command')
         nav_target = comp.nav_target
@@ -9292,6 +9460,7 @@ class AppPreview:
                 padding=padding, min_height=min_height,
                 css_width=css_width, css_height=css_height,
                 grow=_number(style.get('flex-grow')) > 0,
+                material_inset=material_inset,
             )
             fill_color = bg if bg else '#e0e0e0'
             _animate_widget(_app.root, None, style, canvas=canvas,
@@ -9321,6 +9490,7 @@ class AppPreview:
                 line_height=style.get('line-height'),
                 padding=padding, min_height=min_height,
                 css_width=css_width, css_height=css_height,
+                material_inset=material_inset,
             )
 
             fill_color = bg if bg else '#e0e0e0'
@@ -11914,10 +12084,22 @@ class AppPreview:
         collection_bg = _tk_color(_get_style_bg(style), bg_color)
         item_bg = _tk_color(
             style.get('item-background-color'), collection_bg)
+        # The rows' own colour is what the phone reads too: the background
+        # the CSS or the Theme gives them, not the parent's the Previewer
+        # paints behind; then theme.content_ink picks the text that reads.
+        _ink = _content_ink(
+            theme,
+            own_bg=(style.get('item-background-color') or _get_style_bg(style)
+                    or theme.get('surface')),
+            screen_fg=_get_style_fg(getattr(self, '_screen_ink_style', None) or {}),
+            screen_bg=_get_style_bg(getattr(self, '_screen_ink_style', None) or {}),
+            parent_bg=self._ink_parent_bg(bg_color),
+        )
         title_fg = _tk_color(
-            style.get('title-color') or _get_style_fg(style), '#212121')
-        subtitle_fg = _tk_color(
-            style.get('subtitle-color'), theme.get('text_secondary', '#64748B'))
+            style.get('title-color') or _get_style_fg(component_style(
+                global_styles, 'virtual_collection', comp_id, include_body=False,
+                viewport=_style_viewport)), _ink['text'])
+        subtitle_fg = _tk_color(style.get('subtitle-color'), _ink['muted'])
         meta_fg = _tk_color(style.get('meta-color'),
                             theme.get('primary', title_fg))
         badge_bg = _tk_color(style.get('badge-background-color'),
@@ -11927,7 +12109,7 @@ class AppPreview:
         badge_end = _badge_at_end(style)
         divider = _tk_color(
             style.get('item-border-color') or _get_style_border_color(style)
-            or theme.get('border', '#E2E8F0'),
+            or _ink['border'],
             item_bg,
         )
         # One line is the list-row default. A chat message needs more, and
@@ -12112,7 +12294,7 @@ class AppPreview:
                     # Encostado ao topo: numa linha alta um circulo a flutuar
                     # a meio nao aponta para o inicio da mensagem.
                     avatar.grid(row=0, column=leading, rowspan=2, sticky='n',
-                                padx=(12, 10), pady=10)
+                                padx=(10, 10), pady=10)
                     leading += 1
                 thumb = None
                 if has_image:
@@ -12121,23 +12303,26 @@ class AppPreview:
                         bg='#1E293B', highlightthickness=0, bd=0,
                     )
                     thumb.grid(row=0, column=leading, rowspan=2,
-                               padx=(12 if leading == 0 else 0, 10), pady=10)
+                               padx=(10 if leading == 0 else 0, 10), pady=10)
                     leading += 1
+                # 10 from the edge, as the phone's row (root.setPadding(dp(10))).
                 content_column = leading
                 cell.grid_columnconfigure(content_column, weight=1)
                 text_box = tk.Frame(cell, bg=item_bg)
                 text_box.grid(
                     row=0, column=content_column, rowspan=2, sticky='nsew',
-                    padx=(12 if leading == 0 else 0, 0), pady=10,
+                    padx=(10 if leading == 0 else 0, 0), pady=10,
                 )
+                # bd and padx 0: a Tk Label adds 3px of its own, and the text
+                # sat that much further in than on the phone.
                 title = tk.Label(
-                    text_box, bg=item_bg, fg=title_fg, anchor='w',
+                    text_box, bg=item_bg, fg=title_fg, anchor='w', bd=0, padx=0,
                     font=('Segoe UI', 11, 'bold') if os.name == 'nt'
                     else ('Helvetica', 11, 'bold'),
                 )
                 title.pack(fill='x')
                 subtitle = tk.Label(
-                    text_box, bg=item_bg, fg=subtitle_fg, anchor='w',
+                    text_box, bg=item_bg, fg=subtitle_fg, anchor='w', bd=0, padx=0,
                     font=('Segoe UI', 9) if os.name == 'nt'
                     else ('Helvetica', 9),
                 )
@@ -13552,8 +13737,10 @@ class AppPreview:
                 entry.bind("<FocusOut>", on_focus_out)
 
             if input_type == "number":
-                def _validate_num(new_val):
-                    if new_val in ("", "-"):
+                def _validate_num(new_val, ph=placeholder):
+                    # The placeholder is drawn as the field's own text: refused
+                    # here, it vanished after set_value("") or a click away.
+                    if new_val in ("", "-") or (ph and new_val == ph):
                         return True
                     try:
                         float(new_val)
@@ -14771,9 +14958,48 @@ def json_get(json_str, path):
                 obj = obj[part]
             else:
                 return ""
+        if isinstance(obj, (dict, list)):
+            # What the phone's org.json writes, not Python's str(): that was
+            # {'id': 1}, which no JSON reader takes back.
+            return _android_json_text(obj)
         return str(obj)
     except Exception:
         return ""
+
+
+_ANDROID_JSON_ESCAPES = {'"': '\\"', '\\': '\\\\', '/': '\\/', '\b': '\\b',
+                         '\f': '\\f', '\n': '\\n', '\r': '\\r', '\t': '\\t'}
+
+
+def _android_json_text(value):
+    """A list or a dict as Android's org.json writes it: no spaces, keys in
+    their order, a whole float without its .0, and / escaped as \\/."""
+    if isinstance(value, dict):
+        return '{' + ','.join(_android_json_text(str(k)) + ':' + _android_json_text(v)
+                              for k, v in value.items()) + '}'
+    if isinstance(value, (list, tuple)):
+        return '[' + ','.join(_android_json_text(v) for v in value) + ']'
+    if value is None:
+        return 'null'
+    if value is True:
+        return 'true'
+    if value is False:
+        return 'false'
+    if isinstance(value, float):
+        if value == value and abs(value) < 2 ** 63 and value == int(value):
+            return str(int(value)) if value or str(value)[0] != '-' else '-0'
+        return repr(value)
+    if isinstance(value, int):
+        return str(value)
+    out = []
+    for ch in str(value):
+        if ch in _ANDROID_JSON_ESCAPES:
+            out.append(_ANDROID_JSON_ESCAPES[ch])
+        elif ord(ch) <= 0x1F:
+            out.append('\\u%04x' % ord(ch))
+        else:
+            out.append(ch)
+    return '"' + ''.join(out) + '"'
 
 
 def card_action(text, variant="text", command=None, icon=None, id=None):
@@ -16345,8 +16571,38 @@ def run(start_screen=None, theme=None, orientation=None):
         if _stored in APPEARANCE_MODES:
             _apply_appearance(_stored)
     _apply_preview_device()
-    if start_screen is not None:
+    from . import reload as _reload
+    restored = None
+    before = {}
+    if _reload.child():
+        # A save reloaded the app: the same screens, turned and sized as the
+        # window it replaces, with what was typed and chosen on them.
+        app = _app._get()
+        before = _reload.saved()
+        if before.get("turned") and app._upright is not None:
+            app._turned = True
+        if before.get("size") and _preview_device in ("responsive", "responsivo"):
+            app.root.geometry("%dx%d" % tuple(before["size"]))
+        restored = _reload.screens_to_restore(_ALL_SCREENS, start_screen)
+        _reload_note_code_values()
+        _reload_put_back(before.get("values") or {})
+    if restored is not None:
+        _app._get()._screen_stack = list(restored[0])
+        for _behind in restored[0]:
+            _behind._preview_scroll = (before.get("behind") or {}).get(_behind.id, 0)
+        _app.render_screen(restored[1], _from_back=True)
+    elif start_screen is not None:
         _app.render_screen(start_screen)
+    if _reload.child():
+        scroll = before.get("scroll") if restored is not None else None
+
+        def settle():
+            canvas = _app._get()._scroll_canvas
+            if scroll and canvas is not None:
+                _reload_scroll_to(canvas, scroll)
+
+        _reload.child_shown(_app._get().root, lambda: _reload_state(_app._get()),
+                            restyle=_reload_restyle, settle=settle)
     audio._start_ctrl_poll()   # botões de estado (audio.controls), se houver
     from .features.jobs import start_preview_pump
     start_preview_pump()       # entrega de observers de background_job na UI thread
@@ -16357,6 +16613,226 @@ def run(start_screen=None, theme=None, orientation=None):
     finally:
         from .websocket import websocket
         websocket.close_all()
+
+
+def _reload_restyle(css):
+    """A save that changed only ``style``: the open window takes the new CSS
+    and draws the screen again, keeping what was typed and the scroll."""
+    __main__.style = css
+    load_styles_now()
+    app = live_preview()
+    if app is None or app._active_screen is None:
+        return True
+    scroll = app._scroll_canvas
+    where = None
+    try:
+        where = _reload_scrolled_by(scroll) if scroll is not None else None
+    except Exception:
+        pass
+    _remember_screen_state(app._active_screen)
+    # A pager opens on its starting page when drawn: on the one it was on.
+    def keep_page(comp):
+        if comp.comp_type == 'pager' and getattr(comp, '_current_page', None) is not None:
+            comp._initial_page = comp._current_page
+        for child in getattr(comp, 'children', []):
+            keep_page(child)
+
+    for component in getattr(app._active_screen, 'components', []):
+        keep_page(component)
+    from . import reload as _reload
+    held = _reload.hold(app.root)
+    try:
+        app.render_screen(app._active_screen, _from_back=True)
+        # Chips, charts and covers draw on <Configure>, which waits in the
+        # event queue: drawn now, the screen never shows the old colours.
+        app.root.update()
+        if where and app._scroll_canvas is not None:
+            _reload_scroll_to(app._scroll_canvas, where)
+            app.root.update_idletasks()
+    except Exception:
+        pass
+    finally:
+        _reload.release(app.root, held)
+    return True
+
+
+def _reload_state(app):
+    """What a reload carries to the new window (apkpy_lib/reload.py): the
+    screens open, bottom first, with what they were opened with, what was
+    typed and chosen on them, and how far the top one was scrolled."""
+    shown = list(app._screen_stack)
+    if app._active_screen is not None:
+        shown.append(app._active_screen)
+    state = {"screens": [screen.id for screen in shown],
+             "params": {screen.id: dict(screen._params) for screen in shown if screen._params},
+             "turned": bool(getattr(app, '_turned', False))}
+    values = _reload_values(shown)
+    if values:
+        state["values"] = values
+    try:
+        if app._scroll_canvas is not None:
+            down = _reload_scrolled_by(app._scroll_canvas)
+            if down > 0:
+                state["scroll"] = round(down)
+    except Exception:
+        pass
+    # The screens behind, as far as each was scrolled: Back finds them there.
+    behind = {screen.id: round(getattr(screen, '_preview_scroll', 0) or 0)
+              for screen in app._screen_stack if getattr(screen, '_preview_scroll', 0)}
+    if behind:
+        state["behind"] = behind
+    return state
+
+
+# A scrolled screen comes back by pixels, not by a fraction of its height:
+# a save that adds a row lower down leaves the screen where it was.
+def _reload_scroll_span(canvas):
+    region = str(canvas.cget('scrollregion') or '').split()
+    if len(region) == 4:
+        return float(region[1]), float(region[3]) - float(region[1])
+    box = canvas.bbox('all')
+    return (box[1], box[3] - box[1]) if box else (0.0, 0.0)
+
+
+def _reload_scrolled_by(canvas):
+    top, _height = _reload_scroll_span(canvas)
+    return canvas.canvasy(0) - top
+
+
+def _reload_scroll_to(canvas, pixels):
+    _top, height = _reload_scroll_span(canvas)
+    if height > 0:
+        canvas.yview_moveto(float(pixels) / height)
+
+
+# What a reload keeps, by the component's id: what a person types or picks.
+# Labels are left out -- the app's code writes them, and its variables start
+# over -- and so is anything typed into a password field, which is never
+# written to disk.
+_RELOAD_FIELDS = ('inputs', 'input_field')
+_RELOAD_CHOICES = ('chips', 'segmented')
+
+
+def _reload_kept(comp):
+    """(kind, value) of one component for the next reload, or None."""
+    kind = comp.comp_type
+    if kind in _RELOAD_FIELDS:
+        if comp.kwargs.get('input_type') == 'password':
+            return None
+        value = None
+        widget = comp.widget
+        try:
+            if widget is not None and (not hasattr(widget, 'winfo_exists') or widget.winfo_exists()):
+                value = comp.get_value()
+        except Exception:
+            value = None
+        if value is None:
+            value = comp._initial_value
+        if value is None or value == "":
+            return None
+        return kind, value
+    if kind in _RELOAD_CHOICES:
+        return kind, comp.get_value()
+    if kind == 'pager':
+        page = getattr(comp, '_current_page', None)
+        return (kind, int(page)) if page else None
+    return None
+
+
+def _reload_walk(screen, visit):
+    """visit(comp, its id) for each component of a screen that has an id."""
+    def walk(comp):
+        name = comp.kwargs.get('comp_id')
+        if name:
+            visit(comp, str(name))
+        for child in getattr(comp, 'children', []):
+            walk(child)
+
+    for component in getattr(screen, 'components', []):
+        walk(component)
+
+
+def _reload_code_value(comp):
+    """What the app's code gives a component before anyone touches it."""
+    try:
+        if comp.comp_type in _RELOAD_FIELDS:
+            value = comp._initial_value
+        elif comp.comp_type in _RELOAD_CHOICES:
+            value = comp.get_value()
+        elif comp.comp_type == 'pager':
+            value = int(getattr(comp, '_initial_page', 0) or 0)
+        else:
+            return None
+        json.dumps(value)
+        return value
+    except Exception:
+        return None
+
+
+# {screen id: {component id: value}}: what this run's code gave, read before
+# anything was put back. A reload compares it with the old run's: a value
+# the code now gives differently is the code's to show, not the old one.
+_reload_code_values = {}
+
+
+def _reload_note_code_values():
+    _reload_code_values.clear()
+    for screen in _ALL_SCREENS:
+        found = {}
+        _reload_walk(screen, lambda comp, name: found.__setitem__(name, _reload_code_value(comp)))
+        if found:
+            _reload_code_values[getattr(screen, 'id', None)] = found
+
+
+def _reload_values(screens):
+    """{screen id: {component id: [kind, value, the code's value]}}."""
+    values = {}
+    for screen in screens:
+        kept = {}
+        code = _reload_code_values.get(screen.id, {})
+
+        def visit(comp, name):
+            try:
+                found = _reload_kept(comp)
+                if found is not None:
+                    json.dumps(found[1])
+                    kept[name] = [found[0], found[1], code.get(name)]
+            except Exception:
+                pass
+
+        _reload_walk(screen, visit)
+        if kept:
+            values[screen.id] = kept
+    return values
+
+
+def _reload_put_back(values):
+    """Give the new code's components what the old window held, before the
+    first screen is drawn. A component whose id or kind changed, or whose
+    value in the code changed, starts as the new code says."""
+    for screen in _ALL_SCREENS:
+        kept = values.get(getattr(screen, 'id', None))
+        if not kept:
+            continue
+
+        def visit(comp, name):
+            entry = kept.get(name)
+            if not entry or len(entry) != 3 or entry[0] != comp.comp_type:
+                return
+            if entry[2] != _reload_code_value(comp):
+                return
+            try:
+                if comp.comp_type == 'pager':
+                    comp._initial_page = int(entry[1])
+                elif comp.comp_type in _RELOAD_FIELDS:
+                    if comp.kwargs.get('input_type') != 'password':
+                        comp._initial_value = entry[1]
+                else:
+                    comp.set_value(entry[1])
+            except Exception:
+                pass
+
+        _reload_walk(screen, visit)
 
 
 def _apply_preview_device():

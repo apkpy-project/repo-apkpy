@@ -564,7 +564,9 @@ class TheLibraryClasses(unittest.TestCase):
         for namespace, name in (("ads", "ApkpyAds"), ("updates", "ApkpyUpdates"),
                                 ("home_widget", "ApkpyWidget"), ("quick_tile", "ApkpyTile"),
                                 ("health", "ApkpyHealth")):
-            source = kit.java_source(name, "p")
+            # The class as it ships: java_source() of an app that never asks
+            # for the screen that waits leaves health.ask() out on purpose.
+            source = kit._class_text(name)
             self.assertEqual(rules.SPEC[namespace]["class"], name)
             for verb in rules.verbs(namespace):
                 found = rules.verb(namespace, verb)
@@ -932,16 +934,14 @@ class OnTheDeskInThePreviewer(unittest.TestCase):
     def test_a_flexible_update_is_plays_sheet_and_then_a_download(self):
         with Previewed(self.APP, "") as p:
             p.ns["updates"].start(on_result=p.ns["answered"])
-            p.settle(0.5)
-            sheet = kit_surfaces.current()
+            sheet = p.until(kit_surfaces.current)
             self.assertEqual((sheet.kind, sheet.app_name), ("update", "Google Play"))
             sheet.choose("no")
-            p.settle(0.6)
+            p.until(lambda: p.ns["HEARD"])
             self.assertEqual(p.ns["HEARD"], [(False, "cancelled")])
             p.ns["updates"].start(on_result=p.ns["answered"])
-            p.settle(0.5)
-            kit_surfaces.current().choose("yes")
-            p.settle(2.6)
+            p.until(kit_surfaces.current).choose("yes")
+            p.until(lambda: p.ns["HEARD"][-1] == (True, "downloaded"))
             self.assertEqual(p.ns["HEARD"][-1], (True, "downloaded"))
             self.assertEqual(p.ns["updates"].install(), "ok")
 

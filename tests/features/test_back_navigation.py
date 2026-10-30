@@ -197,5 +197,95 @@ run(start_screen=home)
         self.assertIn('self.go_back', source)
 
 
+class BackFindsTheScrollItLeft(unittest.TestCase):
+    """On the phone the Activity under the one on top stays as it was, so Back
+    lands where the list was left. The Previewer drew the screen again from
+    the top, and a long feed lost its place each time a post was opened."""
+
+    BODY = '''
+feed = Screen(id="feed", scroll=True)
+detail = Screen(id="detail", scroll=True)
+other = Screen(id="other", scroll=True)
+for n in range(60):
+    label("Post number %d" % n, screen=feed)
+for n in range(40):
+    label("Detail line %d" % n, screen=detail)
+    label("Other line %d" % n, screen=other)
+'''
+
+    def setUp(self):
+        from test_real_screens import Previewed
+        self.view = Previewed(self.BODY, '', screen='feed').__enter__()
+        self.app = self.view.app
+
+    def tearDown(self):
+        self.view.__exit__()
+
+    def open(self, name):
+        self.app.render_screen(self.view.ns[name])
+        self.view.settle(0.1)
+
+    def back(self):
+        self.app.go_back()
+        self.view.settle(0.1)
+
+    def scroll(self, pixels):
+        from apkpy_lib import ui
+        ui._reload_scroll_to(self.app._scroll_canvas, pixels)
+        self.view.settle(0.1)
+
+    def where(self):
+        from apkpy_lib import ui
+        self.app.root.update_idletasks()
+        return round(ui._reload_scrolled_by(self.app._scroll_canvas))
+
+    def test_back_lands_where_the_list_was_left(self):
+        self.scroll(600)
+        self.open('detail')
+        self.assertEqual(self.where(), 0)
+        self.scroll(200)
+        self.back()
+        self.assertEqual(self.where(), 600)
+
+    def test_a_screen_opened_again_starts_at_the_top(self):
+        # A new Activity each time: the detail read before is not where the
+        # next one opens.
+        self.scroll(600)
+        self.open('detail')
+        self.scroll(200)
+        self.back()
+        self.open('detail')
+        self.assertEqual(self.where(), 0)
+        self.back()
+        self.assertEqual(self.where(), 600)
+
+    def test_the_same_screen_drawn_again_stays_put(self):
+        # A turn of the phone, a new theme or a new language draws the screen
+        # again; a ScrollView with an id keeps its place through all three.
+        self.scroll(600)
+        self.app.render_screen(self.app._active_screen)
+        self.view.settle(0.1)
+        self.assertEqual(self.where(), 600)
+
+    def test_a_screen_brought_forward_keeps_its_place(self):
+        # The bottom bar's tabs: going to a screen already behind brings it
+        # forward with its scroll, as FLAG_ACTIVITY_REORDER_TO_FRONT does.
+        self.scroll(600)
+        self.open('detail')
+        self.scroll(200)
+        self.open('other')
+        self.open('feed')
+        self.assertEqual(self.where(), 600)
+
+    def test_a_reload_carries_the_screens_behind(self):
+        from apkpy_lib import ui
+        self.scroll(600)
+        self.open('detail')
+        self.scroll(120)
+        state = ui._reload_state(self.app)
+        self.assertEqual(state['behind'], {'feed': 600})
+        self.assertEqual(state['scroll'], 120)
+
+
 if __name__ == '__main__':
     unittest.main()

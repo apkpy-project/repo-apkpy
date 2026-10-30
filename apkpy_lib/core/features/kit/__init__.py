@@ -786,6 +786,36 @@ def _native_call(verb, arguments, keywords, at):
     return ast.copy_location(call, at)
 
 
+def _homes():
+    """The classes the calls in use live in, in a steady order."""
+    homes = []
+    for namespace, name in _used_in_order():
+        klass = rules.verb(namespace, name).home or rules.SPEC[namespace]["class"]
+        if klass not in homes:
+            homes.append(klass)
+    return homes
+
+
+_LAUNCHER_PART = re.compile(
+    r"^    // apkpy:launcher --[^\n]*\n.*?^    // apkpy:launcher-end\n",
+    re.S | re.M)
+_LAUNCHER_MARK = re.compile(r"^    // apkpy:launcher(?: --[^\n]*|-end)\n", re.M)
+
+
+def _without_launcher(source):
+    """A class's Java without the methods only the launcher's calls use."""
+    return _LAUNCHER_PART.sub("", source.replace("\r\n", "\n"))
+
+
+def _class_text(class_name):
+    """A class's Java as it is shipped, before the marks are filled in."""
+    folder = _HERE / "libs" if class_name in _WITH_LIBRARY else _HERE
+    try:
+        return (folder / (class_name + ".java")).read_text(encoding="utf-8")
+    except OSError:
+        return ""
+
+
 def _needs():
     """Every requirement of the calls in use, each once, in a steady order."""
     out = {"permissions": [], "features": [], "queries": [], "application": [],
@@ -796,6 +826,20 @@ def _needs():
                 for value in values:
                     if value not in out[kind]:
                         out[kind].append(value)
+    # A class carries the code of every verb it is home to, less the methods
+    # marked as the launcher's (listen(), recorder start(), health ask()),
+    # which java_source leaves out when no call asked for the launcher: an
+    # app that only says() has no screen that waits. What is left must not
+    # name the launcher -- if it does, the launcher comes with it, or javac
+    # stops on "package ApkpyKitActivity does not exist" (it did, for
+    # speech.say() alone).
+    if "ApkpyKitActivity" not in out["classes"] and any(
+            "ApkpyKitActivity" in _without_launcher(_class_text(klass))
+            for klass in _homes() + out["classes"]):
+        for kind, values in NEEDS["launcher"].items():
+            for value in values:
+                if value not in out[kind]:
+                    out[kind].append(value)
     incoming = incoming_xml()
     if incoming:
         out["application"].append(incoming)
@@ -1320,6 +1364,10 @@ def java_source(class_name, package):
     """One of the classes, ready to compile."""
     folder = _HERE / "libs" if class_name in _WITH_LIBRARY else _HERE
     source = (folder / (class_name + ".java")).read_text(encoding="utf-8")
+    if "ApkpyKitActivity" in _needs()["classes"]:
+        source = _LAUNCHER_MARK.sub("", source.replace("\r\n", "\n"))
+    else:
+        source = _without_launcher(source)
     widget, tile, health = declared("home_widget"), declared("quick_tile"), declared("health")
     low_ms, high_ms = rules.LIMITS["vibrate_ms"]
     low_rate, high_rate = rules.LIMITS["rate"]

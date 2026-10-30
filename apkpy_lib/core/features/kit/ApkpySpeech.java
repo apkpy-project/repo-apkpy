@@ -204,6 +204,7 @@ public final class ApkpySpeech {
         }
     }
 
+    // apkpy:launcher -- left out of an app that never calls this
     /** Open the microphone. done: (true, the words) or (false, why not). */
     public static void listen(Activity activity, String prompt, String language,
                               final ApkpyKit.Done done) {
@@ -227,4 +228,5 @@ public final class ApkpySpeech {
                     }
                 });
     }
+    // apkpy:launcher-end
 }

@@ -126,7 +126,7 @@ class NumbersAgainstNumbers(unittest.TestCase):
 
     def test_text_made_a_number_on_both_sides(self):
         line = _if('if int(first.get_value()) > int(second.get_value()):\n    toast("hit")')
-        self.assertEqual(line.count("Long.parseLong("), 2)
+        self.assertEqual(line.count("ApkpyValues.toInt("), 2)
         self.assertNotIn("compareTo", line)
 
     def test_one_side_known_is_enough(self):
@@ -135,7 +135,8 @@ class NumbersAgainstNumbers(unittest.TestCase):
         self.assertIn(">= %s" % (self.NUMBER % "m"), line)
         self.assertIn("_apkpyTextLen(", line)
         line = _if('total = 2.5\nif total == float(first.get_value()):\n    toast("hit")')
-        self.assertEqual(line.count("Double.parseDouble("), 2)
+        self.assertEqual(line.count("Double.parseDouble("), 1)
+        self.assertEqual(line.count("ApkpyValues.toFloat("), 1)
 
     def test_in_a_value_and_in_a_longer_condition(self):
         java = _java('n = 3\nm = 4\nword = "big" if n > m else "small"\ntoast(word)')

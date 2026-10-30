@@ -12,6 +12,36 @@ You write the whole app in Python with a CSS-style design system, see it on your
 
 ---
 
+## ApkPy 1.14.2 — sorting, json, and a Previewer that reloads
+
+`sorted()`, `list.sort()`, `min()` and `max()` take a `key=`, and
+`json.loads()` and `json.dumps()` read and write what CPython does. Lists and
+dicts answer as CPython's: an item keeps its type wherever it goes, and two
+items compare as CPython compares them.
+
+```python
+import json
+
+SCORES = '[{"name": "Ana", "score": 9}, {"name": "Rui", "score": 12}, {"name": "Eva", "score": 10}]'
+
+
+def rank():
+    players = json.loads(SCORES)
+    players.sort(key=lambda p: p["score"], reverse=True)
+    names = [p["name"] for p in players]
+    out.set_value(f"{json.dumps(names)}, top score {players[0]['score']}")
+```
+
+On the phone the label reads `["Rui", "Eva", "Ana"], top score 12`, the same
+as in CPython.
+
+The Previewer reloads when you save, on the same screen with what was typed
+kept, and `apkpy logs` shows what the app prints on a USB-connected phone,
+with the line of `writehere.py` a crash came from.
+
+Upgrade with `python -m pip install --upgrade apkpy==1.14.2`. See the
+[1.14.2 notes](https://repo-apkpy.pages.dev/version-1.14.2/).
+
 ## ApkPy 1.14.1 — classes reach the phone
 
 A `class` in `writehere.py` or in a helper module is translated to Java, and

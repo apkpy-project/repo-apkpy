@@ -10,6 +10,12 @@ import os as _os
 
 _HEADLESS_CORE = _os.environ.get("APKPY_HEADLESS_CORE", "").strip() == "1"
 
+# python writehere.py: watch the folder and run the app in a second Python,
+# so that a save reloads the Previewer. This comes before Tk is imported, so
+# the watching Python opens no window. See apkpy_lib/reload.py.
+from . import reload as _reload
+_reload.start()
+
 if not _HEADLESS_CORE:
     from .ui import (
         Screen, ReactiveState, state, lifecycle, bottom_nav, BottomNav, mini_player, app_bar, sliver_app_bar, action, on_click_navigate, back, button, label, inputs, input_field, validate, image, view_image, video, avatar, container, card, card_action, drawer, DrawerDef, font, row, column, responsive, list_row, list_view, virtual_collection, swipe, SwipeAction, pager, tab, PagerDef, chart, ChartDef, chips, segmented, ChoiceDef, carousel, grid, spinner, skeleton, empty_state, error_state, OverlayDef, bottom_sheet, modal, menu, popup_menu, context_menu, snackbar, tooltip, date_picker, time_picker, run, toast, notify, share,

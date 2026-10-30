@@ -61,6 +61,7 @@ for the app to use at run time.
 | Debug APK, left in this folder | `apkpy run` (`--usb` also installs it through adb) |
 | Signed APK / Play Store bundle | `apkpy release` / `apkpy release --aab` |
 | Android Studio project as a ZIP | `apkpy build` |
+| What the app prints on a USB-connected phone, live | `apkpy logs` |
 | Check JDK 17-21 and the Android SDK | `apkpy doctor` |
 | Example apps | `apkpy examples` |
 
@@ -199,10 +200,17 @@ then misbehaves without a word.
 - `for` over `range()`, a list, a tuple, a dict, text, `split()`,
   `d.items()`, `enumerate()`, `zip()`, `reversed()` and `sorted()`.
 - `len`, `int`, `float`, `str`, `bool`, `round`, `list`, `tuple`, `abs`,
-  `min`, `max`, `sum`, `sorted(reverse=)`, `any`, `all`, `divmod`, `pow`,
+  `min`, `max`, `sum`, `sorted`, `any`, `all`, `divmod`, `pow`,
   `chr`, `ord`; `print` writes to Logcat. Text methods, f-strings with format
   specs (`{{x:.2f}}`), `.format()` and `%`; list and dict methods;
   `import math`, `import random`; `import re` with constant patterns.
+- `sorted()`, `list.sort()`, `min()` and `max()` with `key=` inside a
+  function: a lambda (`key=lambda r: r["price"]`), a function's name
+  (`key=len`), `str.lower` or `d.get`; `reverse=` and `default=` too.
+- `import json`: `json.loads(text)` and `json.dumps(value)` with `indent=`,
+  `sort_keys=`, `ensure_ascii=`, `separators=` and `allow_nan=`;
+  `except json.JSONDecodeError`. For a file:
+  `json.loads(files.read("data.json"))`.
 - Classes: `__init__`, methods, one parent class and `super()`, class
   attributes, `@staticmethod`, `@property`, `__str__`, `__repr__` and
   `__eq__`. Objects are shared as in Python: every name for an object sees
@@ -212,12 +220,22 @@ then misbehaves without a word.
 
 These stop the build with `U2033`, which names the line and a form that works:
 sets, generators and `yield`, `match`, `nonlocal`, `:=`, `with` and `open()`
-(use `files`), `sorted(key=...)`, a comprehension at the top of the file,
+(use `files`), `json.load()` and `json.dump()` (use `files` with
+`json.loads()` and `json.dumps()`), a comprehension, a `key=` or a
+`json` call on a value only known while the app runs at the top of the file,
 setting an attribute of a component (use `set_value()`), and, in a class,
 more than one parent, `@classmethod` or other special methods,
 `@dataclass(frozen=True)` or `order=True`, and fields or methods on an error
 class (put the detail in its message).
-`json`, `uuid` and Python's `datetime` are not translated: use ApkPy's
+
+A list or a dict is a value on the phone, not one object under two names.
+Copy on purpose (`l2 = list(l1)`, `row = rows[0].copy()`), change the
+original where it lives (`rows[0]["done"] = True`), write a default list as
+`tags=None` and make it in the body, and take back what a function changes:
+`cart = add(cart, x)`. The forms that would share one list in CPython
+(`l2 = l1` then `l2.append(x)`, `def f(tags=[])` that changes `tags`) stop
+the build with `U2033`.
+`uuid` and Python's `datetime` are not translated: use ApkPy's
 `datetime` and its APIs.
 
 Never available on the phone: `requests`, `numpy`, `pandas`, `os`,

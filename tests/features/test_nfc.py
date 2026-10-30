@@ -112,11 +112,16 @@ run(start_screen=home)''')
         source = (_layout.examples() / '29_nfc_tags.py').read_text(encoding='utf-8')
         files = generate(source)
         self.assertIn('_nfc.write(', files['java/Screen_homeActivity.java'])
+        from unittest import mock
         runner = CliRunner()
         with runner.isolated_filesystem():
             Path('writehere.py').write_text(source, encoding='utf-8')
             Path('apkpy.toml').write_text('[app]\nname="NFC Lab"\napplication_id="com.apkpy.nfctest"\n', encoding='utf-8')
-            result = runner.invoke(main, ['build'])
+            # The build keeps its map of lines for apkpy logs in ~/.apkpy:
+            # here, in the throwaway folder instead.
+            with mock.patch('apkpy_lib.native_build.apkpy_home',
+                            return_value=str(Path('home').resolve())):
+                result = runner.invoke(main, ['build'])
             self.assertEqual(result.exit_code, 0, result.output + str(result.exception))
             archives = list(Path('.').glob('*.zip'))
             self.assertEqual(len(archives), 1)

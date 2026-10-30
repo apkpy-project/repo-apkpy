@@ -38,6 +38,9 @@ import ast
 import copy
 
 _PREFIX = "_apkpy_c"
+# _apkpy_c2 -> x: the name in the source, for a message about the loop
+# that stands for the comprehension (unsupported.as_written).
+SHOWN = {}
 
 
 def _loc(node, like):
@@ -105,6 +108,7 @@ class _Rewriter:
             for node in ast.walk(gen.target):
                 if isinstance(node, ast.Name):
                     renames[node.id] = self.fresh()
+                    SHOWN[renames[node.id]] = node.id
             target = _Rename(renames).visit(copy.deepcopy(gen.target))
             ifs = [_Rename(dict(renames)).visit(copy.deepcopy(test)) for test in gen.ifs]
             plan.append((target, iterable, ifs))
@@ -260,6 +264,7 @@ class _Rewriter:
 
 def desugar(tree):
     """Rewrite comprehensions, any() and all() in every function body."""
+    SHOWN.clear()
     rewriter = _Rewriter()
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):

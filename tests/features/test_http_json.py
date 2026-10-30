@@ -324,11 +324,14 @@ run(start_screen=home)
 
     def test_a_piece_declared_later_is_reported_and_not_swallowed(self):
         # Isto lê o módulo de cima para baixo, como o Python o executaria.
+        # Desde a 1.14.2 é o E1201 que o apanha primeiro: o NameError que o
+        # Python daria, com a linha que usa e a que faz o nome.
         out = translate_python_to_android(self.APP.replace(
             'MODEL = "some-model"\nURL = BASE + MODEL + ":generate"',
             'URL = BASE + MODEL + ":generate"\nMODEL = "some-model"'))
         self.assertIn('error.txt', out)
-        self.assertIn('U2027', out['error.txt'])
+        self.assertIn('E1201', out['error.txt'])
+        self.assertIn("name 'MODEL' is not defined", out['error.txt'])
 
     def test_joining_things_that_are_not_text_is_left_alone(self):
         # `A + B` entre duas listas continua a ser assunto de outra pessoa.
