@@ -1,0 +1,32 @@
+{
+ "id": "pebblit",
+ "name": "Pebblit",
+ "types": [
+  "stone"
+ ],
+ "base": {
+  "hp": 38,
+  "attack": 38,
+  "defense": 50,
+  "special": 28,
+  "speed": 20
+ },
+ "learnset": [
+  {
+   "level": 1,
+   "move": "bump"
+  },
+  {
+   "level": 4,
+   "move": "pebble_toss"
+  },
+  {
+   "level": 8,
+   "move": "hunker"
+  }
+ ],
+ "catch_rate": 150,
+ "exp_yield": 45,
+ "ev_stat": "defense",
+ "description": "It rolls downhill on purpose."
+}

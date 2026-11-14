@@ -1,0 +1,42 @@
+{
+ "id": "mossup",
+ "name": "Mossup",
+ "types": [
+  "moss"
+ ],
+ "base": {
+  "hp": 45,
+  "attack": 49,
+  "defense": 49,
+  "special": 65,
+  "speed": 45
+ },
+ "learnset": [
+  {
+   "level": 1,
+   "move": "bump"
+  },
+  {
+   "level": 1,
+   "move": "glare"
+  },
+  {
+   "level": 5,
+   "move": "vine_snap"
+  },
+  {
+   "level": 10,
+   "move": "spore_puff"
+  },
+  {
+   "level": 14,
+   "move": "mend"
+  }
+ ],
+ "catch_rate": 45,
+ "exp_yield": 64,
+ "ev_stat": "special",
+ "description": "Moss with opinions. It wakes at dawn and stays cross.",
+ "evolves_to": "mossmane",
+ "evolve_level": 7
+}

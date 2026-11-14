@@ -1,0 +1,30 @@
+# Saltmere: the village. North is the Cape Road.
+tiles:
+cccccccccc,ccccccccc
+c.........,........c
+c.........,........c
+c.........,........c
+c.........,........c
+c....,....,.....,..c
+c....,,,,,,,,,,,,..c
+c.........,........c
+c.........,.....rr.c
+c..~~~~...,.....rr.c
+c..~~~~...,.....rr.c
+c.........,........c
+c.........,..,,,...c
+c.........,,,,.....c
+c..................c
+cccccccccccccccccccc
+objects:
+marker 10 13 start
+link 10 0 route
+house_red 3 2 inside=house
+house_blue 14 2 event=village.locked
+trigger 10 1 north event=village.gate unless=got_partner
+person 15 7 stall look=vendor event=village.vendor
+person 7 11 helper look=villager facing=right event=village.villager
+sign 8 5 sign event=village.sign
+tree 2 7
+tree 18 12
+tree 3 13

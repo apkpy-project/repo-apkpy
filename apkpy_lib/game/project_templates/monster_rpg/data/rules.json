@@ -1,0 +1,20 @@
+[
+ {
+  "id": "main",
+  "critical_percent": 6,
+  "critical_factor": 1.5,
+  "same_type_factor": 1.5,
+  "max_moves": 4,
+  "max_level": 100,
+  "team_size": 6,
+  "stage_limit": 4,
+  "exp_factor": 1.0,
+  "exp_share_percent": 50,
+  "ev_gain": 2,
+  "lost_money_percent": 50,
+  "flee_speed_factor": 2,
+  "flee_per_try": 30,
+  "nature_percent": 10,
+  "status_damage_minimum": 1
+ }
+]

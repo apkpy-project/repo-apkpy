@@ -1,0 +1,5 @@
+[app]
+name = "Star Guard"
+application_id = "com.example.starguard"
+version_name = "0.1.0"
+version_code = 1

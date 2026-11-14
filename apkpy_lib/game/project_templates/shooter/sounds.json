@@ -1,0 +1,18 @@
+{
+ "assets/shoot.wav": {
+  "sound": "laser"
+ },
+ "assets/boom.wav": {
+  "sound": "explosion"
+ },
+ "assets/hit.wav": {
+  "sound": "hit"
+ },
+ "assets/life.wav": {
+  "sound": "power up"
+ },
+ "assets/theme.wav": {
+  "music": "adventure",
+  "seed": 3
+ }
+}

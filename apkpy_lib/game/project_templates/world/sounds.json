@@ -1,0 +1,18 @@
+{
+ "assets/chime.wav": {
+  "sound": "power up",
+  "seed": 4
+ },
+ "assets/step.wav": {
+  "sound": "step"
+ },
+ "assets/win.wav": {
+  "sound": "win",
+  "seed": 3
+ },
+ "assets/theme.wav": {
+  "music": "calm",
+  "seed": 7,
+  "speed": 0.95
+ }
+}

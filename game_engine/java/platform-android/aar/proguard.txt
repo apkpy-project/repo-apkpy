@@ -1,0 +1,4 @@
+# The glue in writehere.py calls these by name.
+-keep class apkpygame.android.Host { public *; }
+-keep interface apkpygame.android.Host$Listener { *; }
+-keep class apkpygame.android.GameActivity

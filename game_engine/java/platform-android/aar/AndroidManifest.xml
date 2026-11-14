@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="apkpygame.engine">
+    <uses-sdk android:minSdkVersion="24" />
+    <application>
+        <!-- Orientation comes from game.json at run time (setRequestedOrientation). -->
+        <activity
+            android:name="apkpygame.android.GameActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|smallestScreenSize|keyboard|keyboardHidden|screenLayout|uiMode|density"
+            android:hardwareAccelerated="true"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+    </application>
+</manifest>

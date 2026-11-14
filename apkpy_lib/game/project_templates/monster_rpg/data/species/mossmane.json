@@ -1,0 +1,41 @@
+{
+ "id": "mossmane",
+ "name": "Mossmane",
+ "types": [
+  "moss",
+  "gale"
+ ],
+ "base": {
+  "hp": 60,
+  "attack": 62,
+  "defense": 63,
+  "special": 80,
+  "speed": 60
+ },
+ "learnset": [
+  {
+   "level": 1,
+   "move": "bump"
+  },
+  {
+   "level": 1,
+   "move": "vine_snap"
+  },
+  {
+   "level": 10,
+   "move": "spore_puff"
+  },
+  {
+   "level": 14,
+   "move": "mend"
+  },
+  {
+   "level": 18,
+   "move": "gale_cut"
+  }
+ ],
+ "catch_rate": 45,
+ "exp_yield": 142,
+ "ev_stat": "special",
+ "description": "Its mane sways although there is no wind."
+}

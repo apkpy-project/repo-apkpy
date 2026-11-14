@@ -1,0 +1,38 @@
+[
+ {
+  "id": "steady",
+  "name": "Steady",
+  "up": "",
+  "down": ""
+ },
+ {
+  "id": "bold",
+  "name": "Bold",
+  "up": "defense",
+  "down": "attack"
+ },
+ {
+  "id": "brash",
+  "name": "Brash",
+  "up": "attack",
+  "down": "defense"
+ },
+ {
+  "id": "hasty",
+  "name": "Hasty",
+  "up": "speed",
+  "down": "defense"
+ },
+ {
+  "id": "calm",
+  "name": "Calm",
+  "up": "special",
+  "down": "attack"
+ },
+ {
+  "id": "stern",
+  "name": "Stern",
+  "up": "attack",
+  "down": "special"
+ }
+]

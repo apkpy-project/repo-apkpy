@@ -1,0 +1,342 @@
+[
+ {
+  "id": "wild_appears",
+  "text": "A wild {name} comes out of the reeds!"
+ },
+ {
+  "id": "wants_fight",
+  "text": "{name} wants a fight!"
+ },
+ {
+  "id": "sends_out",
+  "text": "{name} sends out {monster}!"
+ },
+ {
+  "id": "go",
+  "text": "Go, {name}!"
+ },
+ {
+  "id": "nothing_to_do",
+  "text": "{name} has nothing left to do."
+ },
+ {
+  "id": "uses",
+  "text": "{name} uses {move}!"
+ },
+ {
+  "id": "missed",
+  "text": "It missed!"
+ },
+ {
+  "id": "no_effect",
+  "text": "It does nothing at all."
+ },
+ {
+  "id": "hits_hard",
+  "text": "It hits hard!"
+ },
+ {
+  "id": "barely",
+  "text": "It barely hurts."
+ },
+ {
+  "id": "critical",
+  "text": "A clean hit!"
+ },
+ {
+  "id": "got_away",
+  "text": "You got away safely."
+ },
+ {
+  "id": "no_escape",
+  "text": "You could not get away!"
+ },
+ {
+  "id": "feels_better",
+  "text": "{name} feels better."
+ },
+ {
+  "id": "itself_again",
+  "text": "{name} is itself again."
+ },
+ {
+  "id": "tie_knot",
+  "text": "You tie a {item}..."
+ },
+ {
+  "id": "bonded",
+  "text": "{name} is bonded to you!"
+ },
+ {
+  "id": "slips",
+  "text": "{name} slips the knot!"
+ },
+ {
+  "id": "to_box",
+  "text": "{name} goes to the box."
+ },
+ {
+  "id": "faints",
+  "text": "{name} faints!"
+ },
+ {
+  "id": "next_comes",
+  "text": "Next comes {name}!"
+ },
+ {
+  "id": "gained",
+  "text": "{name} gained {count} experience."
+ },
+ {
+  "id": "level_up",
+  "text": "{name} reached level {level}!"
+ },
+ {
+  "id": "learned",
+  "text": "{name} learned {move}!"
+ },
+ {
+  "id": "changing",
+  "text": "What? {name} is changing..."
+ },
+ {
+  "id": "became",
+  "text": "{name} became {monster}!"
+ },
+ {
+  "id": "trainer_says",
+  "text": "{name}: {words}"
+ },
+ {
+  "id": "earned",
+  "text": "You earned {count} {currency}."
+ },
+ {
+  "id": "what_will",
+  "text": "What will {name} do?"
+ },
+ {
+  "id": "which_one",
+  "text": "Which one?"
+ },
+ {
+  "id": "who_goes",
+  "text": "Who goes in?"
+ },
+ {
+  "id": "team_list",
+  "text": "Team:"
+ },
+ {
+  "id": "fight",
+  "text": "Fight"
+ },
+ {
+  "id": "bag",
+  "text": "Bag"
+ },
+ {
+  "id": "team",
+  "text": "Team"
+ },
+ {
+  "id": "run",
+  "text": "Run"
+ },
+ {
+  "id": "back",
+  "text": "Back"
+ },
+ {
+  "id": "level_short",
+  "text": "Lv"
+ },
+ {
+  "id": "menu",
+  "text": "Menu"
+ },
+ {
+  "id": "yes",
+  "text": "Yes"
+ },
+ {
+  "id": "no",
+  "text": "No"
+ },
+ {
+  "id": "close",
+  "text": "Close"
+ },
+ {
+  "id": "encyclopedia",
+  "text": "Encyclopedia"
+ },
+ {
+  "id": "save",
+  "text": "Save"
+ },
+ {
+  "id": "options",
+  "text": "Options"
+ },
+ {
+  "id": "nobody_here",
+  "text": "Nobody here yet."
+ },
+ {
+  "id": "hp_short",
+  "text": "HP"
+ },
+ {
+  "id": "attack_short",
+  "text": "Atk"
+ },
+ {
+  "id": "defense_short",
+  "text": "Def"
+ },
+ {
+  "id": "special_short",
+  "text": "Spc"
+ },
+ {
+  "id": "speed_short",
+  "text": "Spd"
+ },
+ {
+  "id": "next_level",
+  "text": "Next level: {count} exp"
+ },
+ {
+  "id": "variant_is",
+  "text": "Variant: {name}"
+ },
+ {
+  "id": "default_variant",
+  "text": "default"
+ },
+ {
+  "id": "lead",
+  "text": "Lead"
+ },
+ {
+  "id": "team_box",
+  "text": "Team <> Box"
+ },
+ {
+  "id": "tap_to_use",
+  "text": "Tap an item to use it."
+ },
+ {
+  "id": "not_enough",
+  "text": "Not enough {currency}."
+ },
+ {
+  "id": "price",
+  "text": "Price: {count} {currency}"
+ },
+ {
+  "id": "in_bag",
+  "text": "In your bag: {count}"
+ },
+ {
+  "id": "thanks",
+  "text": "Thanks!"
+ },
+ {
+  "id": "tap_to_read",
+  "text": "Tap an item to read about it."
+ },
+ {
+  "id": "buy",
+  "text": "Buy"
+ },
+ {
+  "id": "seen_count",
+  "text": "Seen {count}"
+ },
+ {
+  "id": "bonded_count",
+  "text": "Bonded {count}"
+ },
+ {
+  "id": "of_count",
+  "text": "of {count}"
+ },
+ {
+  "id": "not_seen",
+  "text": "Not seen yet."
+ },
+ {
+  "id": "tap_one",
+  "text": "Tap one to read about it."
+ },
+ {
+  "id": "music",
+  "text": "Music"
+ },
+ {
+  "id": "sound",
+  "text": "Sound"
+ },
+ {
+  "id": "text_speed",
+  "text": "Text speed"
+ },
+ {
+  "id": "save_question",
+  "text": "Save your journey?"
+ },
+ {
+  "id": "saved",
+  "text": "Saved."
+ },
+ {
+  "id": "and",
+  "text": "and"
+ },
+ {
+  "id": "of_type",
+  "text": "{name} type"
+ },
+ {
+  "id": "choose_partner",
+  "text": "Choose your partner"
+ },
+ {
+  "id": "take_this",
+  "text": "Take this one"
+ },
+ {
+  "id": "look_another",
+  "text": "Look at another"
+ },
+ {
+  "id": "touch_screen",
+  "text": "Touch the screen"
+ },
+ {
+  "id": "new_journey",
+  "text": "New journey"
+ },
+ {
+  "id": "continue",
+  "text": "Continue"
+ },
+ {
+  "id": "your_name",
+  "text": "What is your name?"
+ },
+ {
+  "id": "got_item",
+  "text": "You got {item} x{count}."
+ },
+ {
+  "id": "got_money",
+  "text": "You got {count} {currency}."
+ },
+ {
+  "id": "joins",
+  "text": "{name} joins you."
+ }
+]

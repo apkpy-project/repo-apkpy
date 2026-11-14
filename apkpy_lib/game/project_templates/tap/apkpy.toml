@@ -1,0 +1,5 @@
+[app]
+name = "Quick Pop"
+application_id = "com.example.quickpop"
+version_name = "0.1.0"
+version_code = 1

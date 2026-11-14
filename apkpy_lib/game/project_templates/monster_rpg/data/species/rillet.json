@@ -1,0 +1,38 @@
+{
+ "id": "rillet",
+ "name": "Rillet",
+ "types": [
+  "tide"
+ ],
+ "base": {
+  "hp": 44,
+  "attack": 48,
+  "defense": 65,
+  "special": 50,
+  "speed": 43
+ },
+ "learnset": [
+  {
+   "level": 1,
+   "move": "bump"
+  },
+  {
+   "level": 1,
+   "move": "hunker"
+  },
+  {
+   "level": 5,
+   "move": "drizzle_jet"
+  },
+  {
+   "level": 12,
+   "move": "brine_lash"
+  }
+ ],
+ "catch_rate": 45,
+ "exp_yield": 63,
+ "ev_stat": "defense",
+ "description": "It carries a little of the sea on its back.",
+ "evolves_to": "rillback",
+ "evolve_level": 7
+}

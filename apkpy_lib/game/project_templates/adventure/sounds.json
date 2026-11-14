@@ -1,0 +1,27 @@
+{
+ "assets/key.wav": {
+  "sound": "coin",
+  "seed": 3
+ },
+ "assets/door.wav": {
+  "sound": "power up",
+  "seed": 2
+ },
+ "assets/gem.wav": {
+  "sound": "coin",
+  "pitch": 1.3
+ },
+ "assets/hit.wav": {
+  "sound": "hit",
+  "seed": 1
+ },
+ "assets/win.wav": {
+  "sound": "win",
+  "seed": 1
+ },
+ "assets/theme.wav": {
+  "music": "adventure",
+  "seed": 8,
+  "speed": 0.9
+ }
+}

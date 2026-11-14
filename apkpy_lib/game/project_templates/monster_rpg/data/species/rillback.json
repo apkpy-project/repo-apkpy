@@ -1,0 +1,37 @@
+{
+ "id": "rillback",
+ "name": "Rillback",
+ "types": [
+  "tide",
+  "stone"
+ ],
+ "base": {
+  "hp": 62,
+  "attack": 63,
+  "defense": 85,
+  "special": 65,
+  "speed": 58
+ },
+ "learnset": [
+  {
+   "level": 1,
+   "move": "bump"
+  },
+  {
+   "level": 1,
+   "move": "drizzle_jet"
+  },
+  {
+   "level": 12,
+   "move": "brine_lash"
+  },
+  {
+   "level": 16,
+   "move": "pebble_toss"
+  }
+ ],
+ "catch_rate": 45,
+ "exp_yield": 142,
+ "ev_stat": "defense",
+ "description": "The shell on its back is older than it is."
+}

@@ -1,0 +1,32 @@
+{
+ "id": "brinepod",
+ "name": "Brinepod",
+ "types": [
+  "tide"
+ ],
+ "base": {
+  "hp": 42,
+  "attack": 36,
+  "defense": 50,
+  "special": 38,
+  "speed": 25
+ },
+ "learnset": [
+  {
+   "level": 1,
+   "move": "bump"
+  },
+  {
+   "level": 5,
+   "move": "drizzle_jet"
+  },
+  {
+   "level": 9,
+   "move": "brine_lash"
+  }
+ ],
+ "catch_rate": 120,
+ "exp_yield": 50,
+ "ev_stat": "hp",
+ "description": "It closes when you look at it."
+}

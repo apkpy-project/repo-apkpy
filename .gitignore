@@ -14,3 +14,7 @@ __pycache__/
 /build/
 /dist/
 *.egg-info/
+
+# What building and playing a game leaves beside it (apkpy game build, the tests).
+/game_engine/build/
+/examples/games/*/build/

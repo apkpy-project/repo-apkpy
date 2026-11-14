@@ -1,4 +1,7 @@
 ApkPy was created and is maintained by Martim.
 
+Games (apkpy_lib/game, game_engine/: the engine, its build, its tools and its
+templates) were written by Rúben Rego, as ApkPyGame.
+
 "The ApkPy Authors" in the copyright notices means Martim and everyone whose
 contribution has been merged into this repository.

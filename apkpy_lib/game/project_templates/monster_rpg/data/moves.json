@@ -1,0 +1,144 @@
+[
+ {
+  "id": "bump",
+  "name": "Bump",
+  "type": "plain",
+  "kind": "physical",
+  "power": 40,
+  "accuracy": 100,
+  "pp": 30,
+  "description": "A plain shove."
+ },
+ {
+  "id": "nibble",
+  "name": "Nibble",
+  "type": "plain",
+  "kind": "physical",
+  "power": 30,
+  "accuracy": 100,
+  "pp": 35,
+  "description": "Small, quick bites."
+ },
+ {
+  "id": "spark_spit",
+  "name": "Spark Spit",
+  "type": "ember",
+  "kind": "special",
+  "power": 40,
+  "accuracy": 100,
+  "pp": 25,
+  "description": "Spits a hot spark."
+ },
+ {
+  "id": "scald_wave",
+  "name": "Scald Wave",
+  "type": "ember",
+  "kind": "special",
+  "power": 60,
+  "accuracy": 90,
+  "pp": 15,
+  "effect": "burn",
+  "chance": 30,
+  "description": "A wave of heat. May burn."
+ },
+ {
+  "id": "drizzle_jet",
+  "name": "Drizzle Jet",
+  "type": "tide",
+  "kind": "special",
+  "power": 40,
+  "accuracy": 100,
+  "pp": 25,
+  "description": "A thin jet of water."
+ },
+ {
+  "id": "brine_lash",
+  "name": "Brine Lash",
+  "type": "tide",
+  "kind": "physical",
+  "power": 60,
+  "accuracy": 90,
+  "pp": 15,
+  "effect": "poison",
+  "chance": 30,
+  "description": "Salty and stinging. May poison."
+ },
+ {
+  "id": "vine_snap",
+  "name": "Vine Snap",
+  "type": "moss",
+  "kind": "physical",
+  "power": 40,
+  "accuracy": 100,
+  "pp": 25,
+  "description": "A whip of green."
+ },
+ {
+  "id": "spore_puff",
+  "name": "Spore Puff",
+  "type": "moss",
+  "kind": "status",
+  "power": 0,
+  "accuracy": 75,
+  "pp": 15,
+  "effect": "sleep",
+  "chance": 100,
+  "description": "Sends the target to sleep."
+ },
+ {
+  "id": "gale_cut",
+  "name": "Gale Cut",
+  "type": "gale",
+  "kind": "special",
+  "power": 45,
+  "accuracy": 100,
+  "pp": 25,
+  "description": "A sharp little wind."
+ },
+ {
+  "id": "pebble_toss",
+  "name": "Pebble Toss",
+  "type": "stone",
+  "kind": "physical",
+  "power": 45,
+  "accuracy": 95,
+  "pp": 25,
+  "description": "Throws what is at hand."
+ },
+ {
+  "id": "hunker",
+  "name": "Hunker",
+  "type": "plain",
+  "kind": "status",
+  "power": 0,
+  "accuracy": 100,
+  "pp": 20,
+  "effect": "defense_up",
+  "chance": 100,
+  "description": "Raises its own Defense."
+ },
+ {
+  "id": "glare",
+  "name": "Glare",
+  "type": "plain",
+  "kind": "status",
+  "power": 0,
+  "accuracy": 100,
+  "pp": 20,
+  "effect": "attack_down",
+  "chance": 100,
+  "description": "Lowers the target's Attack."
+ },
+ {
+  "id": "mend",
+  "name": "Mend",
+  "type": "moss",
+  "kind": "status",
+  "power": 0,
+  "accuracy": 100,
+  "pp": 10,
+  "effect": "heal",
+  "chance": 100,
+  "description": "Restores half of its own HP."
+ }
+]

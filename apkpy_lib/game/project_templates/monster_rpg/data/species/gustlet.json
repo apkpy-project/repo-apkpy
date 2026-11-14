@@ -1,0 +1,29 @@
+{
+ "id": "gustlet",
+ "name": "Gustlet",
+ "types": [
+  "gale",
+  "plain"
+ ],
+ "base": {
+  "hp": 34,
+  "attack": 34,
+  "defense": 32,
+  "special": 34,
+  "speed": 60
+ },
+ "learnset": [
+  {
+   "level": 1,
+   "move": "nibble"
+  },
+  {
+   "level": 5,
+   "move": "gale_cut"
+  }
+ ],
+ "catch_rate": 150,
+ "exp_yield": 44,
+ "ev_stat": "speed",
+ "description": "Nobody has seen it land."
+}

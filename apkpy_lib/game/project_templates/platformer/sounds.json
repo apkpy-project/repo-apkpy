@@ -1,0 +1,23 @@
+{
+ "assets/jump.wav": {
+  "sound": "jump"
+ },
+ "assets/coin.wav": {
+  "sound": "coin"
+ },
+ "assets/stomp.wav": {
+  "sound": "hit",
+  "seed": 2
+ },
+ "assets/hurt.wav": {
+  "sound": "hit",
+  "pitch": 0.7
+ },
+ "assets/win.wav": {
+  "sound": "win"
+ },
+ "assets/theme.wav": {
+  "music": "happy",
+  "seed": 1
+ }
+}

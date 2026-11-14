@@ -1,0 +1,5 @@
+[app]
+name = "demo"
+application_id = "com.example.demo"
+version_name = "0.1.0"
+version_code = 1

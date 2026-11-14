@@ -1,0 +1,38 @@
+{
+ "id": "cindlet",
+ "name": "Cindlet",
+ "types": [
+  "ember"
+ ],
+ "base": {
+  "hp": 39,
+  "attack": 52,
+  "defense": 43,
+  "special": 60,
+  "speed": 65
+ },
+ "learnset": [
+  {
+   "level": 1,
+   "move": "bump"
+  },
+  {
+   "level": 1,
+   "move": "glare"
+  },
+  {
+   "level": 5,
+   "move": "spark_spit"
+  },
+  {
+   "level": 12,
+   "move": "scald_wave"
+  }
+ ],
+ "catch_rate": 45,
+ "exp_yield": 62,
+ "ev_stat": "special",
+ "description": "A coal that learned to walk. It sleeps in warm ash.",
+ "evolves_to": "cinderhorn",
+ "evolve_level": 7
+}
