@@ -1,0 +1,15 @@
+{
+ "format": 1,
+ "name": "Stress",
+ "size": [
+  360,
+  640
+ ],
+ "scale": "fit",
+ "orientation": "portrait",
+ "background": "#000000",
+ "start_scene": "main",
+ "fixed_hz": 60,
+ "debug": true,
+ "seed": 1
+}

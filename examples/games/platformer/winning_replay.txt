@@ -1,0 +1,1 @@
+5:right:down,112:jump:down,126:jump:up,196:jump:down,210:jump:up,268:jump:down,282:jump:up,339:jump:down,353:jump:up,374:jump:down,388:jump:up,417:jump:down,431:jump:up,477:jump:down,491:jump:up

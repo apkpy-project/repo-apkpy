@@ -1,0 +1,37 @@
+{
+ "id": "cinderhorn",
+ "name": "Cinderhorn",
+ "types": [
+  "ember",
+  "stone"
+ ],
+ "base": {
+  "hp": 58,
+  "attack": 74,
+  "defense": 66,
+  "special": 80,
+  "speed": 80
+ },
+ "learnset": [
+  {
+   "level": 1,
+   "move": "bump"
+  },
+  {
+   "level": 1,
+   "move": "spark_spit"
+  },
+  {
+   "level": 12,
+   "move": "scald_wave"
+  },
+  {
+   "level": 16,
+   "move": "pebble_toss"
+  }
+ ],
+ "catch_rate": 45,
+ "exp_yield": 142,
+ "ev_stat": "attack",
+ "description": "Its horn glows when the tide is out."
+}

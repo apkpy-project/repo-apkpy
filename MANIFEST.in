@@ -3,5 +3,13 @@ recursive-include apkpy_lib/templates *
 recursive-include apkpy_lib/core *
 recursive-include apkpy_lib/assets *
 recursive-include apkpy_lib/icon_data *
+# Games: the engine (built from game_engine/java), the schema, and the templates
+# that `apkpy start NAME --game` copies.
+recursive-include apkpy_lib/game *
+# What building, testing or opening the Studio leaves in a template.
+prune apkpy_lib/game/project_templates/*/build
+prune apkpy_lib/game/project_templates/*/.studio_backups
+prune apkpy_lib/game/project_templates/*/.pytest_cache
+global-exclude *.apk *.aab .studio_release.json
 global-exclude __pycache__
 global-exclude *.py[cod]

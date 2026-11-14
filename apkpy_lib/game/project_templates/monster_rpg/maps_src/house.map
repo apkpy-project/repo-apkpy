@@ -1,0 +1,12 @@
+# The Keeper's house, inside.
+tiles:
+wwwwwwww
+wffffffw
+wffuuffw
+wffuuffw
+wffuuffw
+wffffffw
+wwwffwww
+objects:
+person 4 2 ona look=keeper event=house.keeper
+exit 3 6 width=2

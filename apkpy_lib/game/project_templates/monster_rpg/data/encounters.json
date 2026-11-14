@@ -1,0 +1,50 @@
+[
+ {
+  "id": "route.reeds",
+  "rate": 9,
+  "rows": [
+   {
+    "species": "reedling",
+    "min": 2,
+    "max": 3,
+    "weight": 40
+   },
+   {
+    "species": "gustlet",
+    "min": 2,
+    "max": 3,
+    "weight": 30
+   },
+   {
+    "species": "pebblit",
+    "min": 2,
+    "max": 3,
+    "weight": 20
+   },
+   {
+    "species": "lumoth",
+    "min": 3,
+    "max": 3,
+    "weight": 8
+   }
+  ]
+ },
+ {
+  "id": "village.reeds",
+  "rate": 7,
+  "rows": [
+   {
+    "species": "reedling",
+    "min": 2,
+    "max": 3,
+    "weight": 70
+   },
+   {
+    "species": "brinepod",
+    "min": 2,
+    "max": 3,
+    "weight": 30
+   }
+  ]
+ }
+]

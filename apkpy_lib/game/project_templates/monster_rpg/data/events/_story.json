@@ -1,0 +1,344 @@
+[
+ {
+  "id": "trainer.tess",
+  "steps": [
+   {
+    "do": "jump_if",
+    "flag": "beat_tess",
+    "to": "L1"
+   },
+   {
+    "do": "say",
+    "text": "Halt! Road's closed to anyone who can't fight."
+   },
+   {
+    "do": "battle",
+    "trainer": "tess"
+   },
+   {
+    "do": "set_flag",
+    "flag": "beat_tess"
+   },
+   {
+    "do": "give_money",
+    "count": 50
+   },
+   {
+    "do": "end"
+   },
+   {
+    "do": "label",
+    "to": "L1"
+   },
+   {
+    "do": "say",
+    "text": "Road's open. The reeds aren't friendly, though."
+   }
+  ]
+ },
+ {
+  "id": "trainer.bram",
+  "steps": [
+   {
+    "do": "jump_if",
+    "flag": "beat_bram",
+    "to": "L1"
+   },
+   {
+    "do": "say",
+    "text": "So you are Ona's new pet. That lighthouse should have been mine."
+   },
+   {
+    "do": "say",
+    "text": "Let's see what your partner can do."
+   },
+   {
+    "do": "battle",
+    "trainer": "bram"
+   },
+   {
+    "do": "set_flag",
+    "flag": "beat_bram"
+   },
+   {
+    "do": "say",
+    "text": "Go on, then. See if the door opens for you."
+   },
+   {
+    "do": "end"
+   },
+   {
+    "do": "label",
+    "to": "L1"
+   },
+   {
+    "do": "say",
+    "text": "Don't look at me. Go and light it."
+   }
+  ]
+ },
+ {
+  "id": "route.knot",
+  "steps": [
+   {
+    "do": "say",
+    "text": "A knot, half buried in the sand."
+   },
+   {
+    "do": "give_item",
+    "item": "true_knot",
+    "count": 1
+   },
+   {
+    "do": "set_flag",
+    "flag": "found_knot"
+   }
+  ]
+ },
+ {
+  "id": "route.sign",
+  "steps": [
+   {
+    "do": "say",
+    "text": "CAPE ROAD. Keep to the path. The reeds keep what they find."
+   }
+  ]
+ },
+ {
+  "id": "route.lighthouse",
+  "steps": [
+   {
+    "do": "jump_unless",
+    "flag": "beat_bram",
+    "to": "L1"
+   },
+   {
+    "do": "say",
+    "text": "You push the Keeper's letter under the door."
+   },
+   {
+    "do": "say",
+    "text": "Far above you, something clicks. Then, slowly, a light."
+   },
+   {
+    "do": "say",
+    "text": "The sea, somewhere out in the dark, turns over in its sleep."
+   },
+   {
+    "do": "say",
+    "text": "END OF THE TEMPLATE. Your game starts here."
+   },
+   {
+    "do": "set_flag",
+    "flag": "lit"
+   },
+   {
+    "do": "jump",
+    "to": "L2"
+   },
+   {
+    "do": "label",
+    "to": "L1"
+   },
+   {
+    "do": "say",
+    "text": "The door is shut. Somebody on the road may know more."
+   },
+   {
+    "do": "label",
+    "to": "L2"
+   }
+  ]
+ },
+ {
+  "id": "intro",
+  "steps": [
+   {
+    "do": "say",
+    "text": "The tide went out nine days ago."
+   },
+   {
+    "do": "say",
+    "text": "It did not come back."
+   },
+   {
+    "do": "say",
+    "text": "You came to Saltmere on the last boat, to be apprentice to the Keeper of the lighthouse."
+   },
+   {
+    "do": "say",
+    "text": "The Keeper's house is the one with the red roof. Better not keep her waiting."
+   }
+  ]
+ },
+ {
+  "id": "village.gate",
+  "steps": [
+   {
+    "do": "say",
+    "text": "Reeds grow wild past this point, and the creatures in them bite."
+   },
+   {
+    "do": "say",
+    "text": "Nobody walks the road without a partner. Ask the Keeper."
+   },
+   {
+    "do": "step_back"
+   }
+  ]
+ },
+ {
+  "id": "village.vendor",
+  "steps": [
+   {
+    "do": "say",
+    "text": "Harbour stall. Everything is half salt, but it works."
+   },
+   {
+    "do": "shop",
+    "shop": "harbour"
+   }
+  ]
+ },
+ {
+  "id": "village.villager",
+  "steps": [
+   {
+    "do": "jump_if",
+    "flag": "gift_knots",
+    "to": "L1"
+   },
+   {
+    "do": "say",
+    "text": "A new Warden? Take these. A knot only holds on something tired."
+   },
+   {
+    "do": "give_item",
+    "item": "bond_knot",
+    "count": 5
+   },
+   {
+    "do": "give_item",
+    "item": "tonic",
+    "count": 3
+   },
+   {
+    "do": "set_flag",
+    "flag": "gift_knots"
+   },
+   {
+    "do": "jump",
+    "to": "L2"
+   },
+   {
+    "do": "label",
+    "to": "L1"
+   },
+   {
+    "do": "say",
+    "text": "Wear them down first. Then the knot."
+   },
+   {
+    "do": "label",
+    "to": "L2"
+   }
+  ]
+ },
+ {
+  "id": "village.sign",
+  "steps": [
+   {
+    "do": "say",
+    "text": "SALTMERE. North: Cape Road and the lighthouse."
+   }
+  ]
+ },
+ {
+  "id": "village.locked",
+  "steps": [
+   {
+    "do": "say",
+    "text": "Locked. The owner is at the stall."
+   }
+  ]
+ },
+ {
+  "id": "house.keeper",
+  "steps": [
+   {
+    "do": "jump_if",
+    "flag": "got_partner",
+    "to": "L1"
+   },
+   {
+    "do": "say",
+    "text": "So you are the one they sent. I am Ona. I kept the light for forty years."
+   },
+   {
+    "do": "say",
+    "text": "Driftlings came in with the last tide, and they will not leave an unlit shore. So we need the light."
+   },
+   {
+    "do": "say",
+    "text": "Nobody walks the Cape alone. Choose one: it will choose you back, in time."
+   },
+   {
+    "do": "open",
+    "screen": "starter"
+   },
+   {
+    "do": "give_item",
+    "item": "keeper_letter",
+    "count": 1
+   },
+   {
+    "do": "say",
+    "text": "Take this letter to the lighthouse door. And mind Bram, on the road. He thinks the job was his."
+   },
+   {
+    "do": "set_flag",
+    "flag": "got_partner"
+   },
+   {
+    "do": "jump",
+    "to": "L2"
+   },
+   {
+    "do": "label",
+    "to": "L1"
+   },
+   {
+    "do": "ask",
+    "text": "Tired? Sleep here a while.",
+    "to": "L3"
+   },
+   {
+    "do": "say",
+    "text": "Go on, then."
+   },
+   {
+    "do": "jump",
+    "to": "L4"
+   },
+   {
+    "do": "label",
+    "to": "L3"
+   },
+   {
+    "do": "heal"
+   },
+   {
+    "do": "say",
+    "text": "You wake up rested. Your partners too."
+   },
+   {
+    "do": "label",
+    "to": "L4"
+   },
+   {
+    "do": "label",
+    "to": "L2"
+   }
+  ]
+ }
+]

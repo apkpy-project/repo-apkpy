@@ -1,0 +1,37 @@
+{
+ "id": "lumoth",
+ "name": "Lumoth",
+ "types": [
+  "gale",
+  "ember"
+ ],
+ "base": {
+  "hp": 42,
+  "attack": 30,
+  "defense": 44,
+  "special": 30,
+  "speed": 70
+ },
+ "learnset": [
+  {
+   "level": 1,
+   "move": "nibble"
+  },
+  {
+   "level": 6,
+   "move": "gale_cut"
+  },
+  {
+   "level": 8,
+   "move": "spark_spit"
+  },
+  {
+   "level": 10,
+   "move": "spore_puff"
+  }
+ ],
+ "catch_rate": 30,
+ "exp_yield": 120,
+ "ev_stat": "special",
+ "description": "It flies towards any light. The lighthouse is dark, so it wanders."
+}

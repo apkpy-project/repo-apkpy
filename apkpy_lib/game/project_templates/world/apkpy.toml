@@ -1,0 +1,5 @@
+[app]
+name = "Gem Valley"
+application_id = "com.example.gemvalley"
+version_name = "0.1.0"
+version_code = 1

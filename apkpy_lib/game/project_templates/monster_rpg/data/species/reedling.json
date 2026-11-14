@@ -1,0 +1,28 @@
+{
+ "id": "reedling",
+ "name": "Reedling",
+ "types": [
+  "moss"
+ ],
+ "base": {
+  "hp": 32,
+  "attack": 32,
+  "defense": 32,
+  "special": 30,
+  "speed": 50
+ },
+ "learnset": [
+  {
+   "level": 1,
+   "move": "nibble"
+  },
+  {
+   "level": 4,
+   "move": "vine_snap"
+  }
+ ],
+ "catch_rate": 190,
+ "exp_yield": 40,
+ "ev_stat": "speed",
+ "description": "It looks like a reed until you step on it."
+}

@@ -81,3 +81,20 @@ jobs:
         run: python -W ignore -m unittest discover -s .
       - name: Core tests
         run: python -m unittest discover -s tests -q
+      # Games (apkpy_lib.game). Their tests run with pytest; the slow ones open
+      # Java and Tk windows for seconds each and stay out of here. The engine's
+      # own tests (Java) need only the JDK.
+      - name: Game tests (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          python -m pip install pytest
+          xvfb-run -a python -m pytest tests/game -m "not slow" -q -p no:cacheprovider
+      - name: Game tests (Windows)
+        if: runner.os == 'Windows'
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          python -m pip install pytest
+          python -m pytest tests/game -m "not slow" -q -p no:cacheprovider
+      - name: Game engine tests (Java)
+        run: python tools/game/test_engine.py

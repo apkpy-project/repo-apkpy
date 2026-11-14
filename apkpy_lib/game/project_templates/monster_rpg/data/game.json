@@ -1,0 +1,20 @@
+[
+{
+ "id": "main",
+ "start_map": "village",
+ "start_at": "start",
+ "first_event": "intro",
+ "money": 500,
+ "heal_map": "house",
+ "heal_at": "from_village",
+ "starters": ["cindlet", "rillet", "mossup"],
+ "starter_level": 5,
+ "title_giant": "lumoth",
+ "title_visitors": ["reedling", "gustlet", "pebblit", "cindlet", "rillet", "mossup", "brinepod"],
+ "fair_fights": ["route.reeds", "tess", "bram"],
+ "currency": "shells",
+ "no_flee_text": "You cannot turn your back on a Warden.",
+ "owned_text": "That one already has a Warden.",
+ "lost_text": "You drop {money} {currency} and run for the Keeper."
+}
+]

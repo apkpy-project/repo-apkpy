@@ -1,0 +1,38 @@
+# Where battles happen: the backdrop of the 2.5D battle scene.
+a = arena
+, = path
+tiles:
+aaaa..aaaaaaaa....aaaaaa
+aaa..aaaaaaaaaaaa.aaaaaa
+aaaa.aaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaa,,aaaaaaa
+aaaaaaaaa.aaaa,,,,aaaaaa
+aaa.aaaaa...aa,,,,aaaaaa
+aa..aaaaaa..aaa,,aaaaaaa
+aa..aaaaaaaaaaaaaaaaaaaa
+aa.aaaaaaaaaaaaaaaaaaaaa
+aaaaaaa,,aaaaaaaaaaaaaaa
+aaaaaa,,,,aaaaaaaaa..aaa
+aaaaaa,,,,aaaaaaaa..aaaa
+aaaaaaa,,aaaaaaaa....aaa
+aaa.aaaaaaaaaaaaa...aaaa
+aa..aaaaaaaaaaaaaa.aaaaa
+aa..aaaaaaaaaaaaaaaaaaaa
+aa.aaaaaaaaaaaaaaaaaaaaa
+aaaaaaa....aaaaaaaaaaaaa
+aaaaaaaaa...aaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaa
+aaaaaaaaaaaaaaaaaaaaaaaa
+objects:

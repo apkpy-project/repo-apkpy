@@ -1,0 +1,39 @@
+# The Cape Road: reeds on both sides, two Wardens, a knot in the sand, and the lighthouse.
+tiles:
+~~~~~~~~~~~~~~
+~~~~~SSSS~~~~~
+~~~~~SSSS~~~~~
+~~ssssssssss~~
+~ssssssssssss~
+~ssssssssssss~
+cc....ss....cc
+c.....ss.....c
+c..rrrssrrr..c
+c..rrrssrrr..c
+c..rrrssrrr..c
+c.....ss.....c
+c.....ss.....c
+c.rrrrssrrrr.c
+c.rrrrssrrrr.c
+c.rrrrssrrrr.c
+c.....ss.....c
+c.....ss.....c
+c..rrrssrrr..c
+c..rrrssrrr..c
+c.....ss.....c
+c.....ss.....c
+c.....ss.....c
+c.....ss.....c
+c.....ss.....c
+ccccccsscccccc
+objects:
+link 6 25 village width=2
+sign 8 22 cape_sign event=route.sign
+trainer 5 17 tess look=villager facing=right
+trainer 8 7 bram look=rival facing=left
+knot 12 12 found event=route.knot hide_if=found_knot
+tree 2 21
+tree 11 21
+tree 1 7
+lighthouse 7 2 tower
+trigger 6 3 door event=route.lighthouse width=2

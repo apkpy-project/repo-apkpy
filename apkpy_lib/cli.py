@@ -982,10 +982,30 @@ def examples():
     click.echo(f'Build it with:    apkpy build')
 
 
+GAME_TEMPLATES = ("menus", "blank", "monster-rpg", "tutorial", "platformer", "shooter", "runner", "bricks", "adventure",
+                  "tap", "puzzle", "world")
+
+
 @main.command()
 @click.argument('name')
-def start(name):
-    """Creates a new project: apkpy start my_project"""
+@click.option('--game', 'game_template', is_flag=False, flag_value='menus', default=None,
+              type=click.Choice(GAME_TEMPLATES),
+              help="An app with a game. menus (the default): start, shop, pause and results screens; "
+                   "blank: one screen; monster-rpg: the start of a monster-catching RPG to build on; "
+                   "tutorial: a red square that follows your finger, explained step by step. "
+                   "A whole short game of a kind, to make your own: platformer, shooter, runner, bricks, "
+                   "adventure, tap, puzzle, world (2.5D).")
+def start(name, game_template):
+    """Creates a new project: apkpy start my_project (with a game: --game)"""
+    if game_template:
+        from .game import cli as game_cli
+        from .game.errors import GameError
+        try:
+            folder = game_cli.new(name, game_template, say=click.echo)
+        except GameError as error:
+            raise click.ClickException("\n" + str(error))
+        _write_agent_files(folder)
+        return
     click.echo(f"Creating project: {name}...")
 
     current_dir  = os.getcwd()
@@ -1253,6 +1273,18 @@ def _generate_android_project(python_code, build_dir, app_name, config=None, sig
                 "works, but tokens, topics and real messages stay disabled."
             )
 
+    # ── A game (enable_game()): the engine's AAR and the game's go into app/libs/,
+    # where the Gradle lines of the glue read them, so the project needs nothing
+    # outside it (the zip of `apkpy build` opens on any machine).
+    extra_gradle = (multi_files or {}).get("native/gradle.txt", "")
+    if "libs/apkpygame-engine.aar" in extra_gradle:
+        from .game import glue as game_glue
+        for rel_path, source in game_glue.android_libs().items():
+            out = os.path.join(build_dir, *rel_path.split("/"))
+            os.makedirs(os.path.dirname(out), exist_ok=True)
+            shutil.copyfile(source, out)
+            click.echo(f"   [OK]  {os.path.basename(out)} (the game)")
+
     # ── App config (apkpy.toml): nome, ícone, applicationId, versão ──────────
     config = config or appconfig.default_config()
     has_icon = _apply_app_icon(build_dir, config["icon"]) if config.get("icon") else False
@@ -1297,7 +1329,14 @@ def _read_writehere():
         click.echo(format_exception(error, context="Project source"), err=True)
         return None
     with open("writehere.py", "r", encoding="utf-8") as f:
-        return f.read()
+        text = f.read()
+    # An app with a game (apkpy_lib.game): enable_game() builds game/ and becomes the
+    # native.* declarations that open it. None, after saying why, when the game does not build.
+    if "enable_game" in text or "apkpygame:glue" in text:
+        from .game import glue as game_glue
+        if game_glue.wants_game(text):
+            return game_glue.prepare_for_apkpy(text)
+    return text
 
 
 def _load_or_prompt_config(name=None):
@@ -1650,6 +1689,49 @@ def logs(package, everything, device):
                             lines=applogs.load_lines(package)))
 
 
+@main.group()
+def game():
+    """A game in this app (game/main.py): add one, play it alone, build it."""
+
+
+def _game_errors(call):
+    from .game.errors import GameError
+    try:
+        return call()
+    except GameError as error:
+        raise click.ClickException("\n" + str(error))
+
+
+@game.command("init")
+def game_init():
+    """Add a game to the ApkPy project in this folder (game/main.py and enable_game())."""
+    from .game import cli as game_cli
+    _game_errors(lambda: game_cli.init(say=click.echo))
+
+
+@game.command("play")
+@click.option('--scene', default="", help="The scene to start in (default: the game's start scene).")
+@click.option('--args', 'args_json', default="{}", help="JSON handed to the game, as game_play() does.")
+def game_play(scene, args_json):
+    """The game alone, in a window: the same engine as the phone."""
+    from .game import cli as game_cli
+    sys.exit(_game_errors(lambda: game_cli.play(scene, args_json, say=click.echo)) or 0)
+
+
+@game.command("build")
+def game_build():
+    """Only the game: game/ read and translated (the Java is in build/apkpygame/java/)."""
+    from .game import cli as game_cli
+    _game_errors(lambda: game_cli.build_game(say=click.echo))
+
+
+@game.command("studio")
+def game_studio():
+    """The Studio: play, draw and change the game in one window. In a folder with no project, it starts a new game."""
+    from .game import cli as game_cli
+    _game_errors(lambda: game_cli.studio(say=click.echo))
+
+
 @main.command()
 def doctor():
     """Check whether this machine can build APKs with 'apkpy run'."""
@@ -1676,6 +1758,12 @@ def doctor():
         )
 
     ready = all((tc['jdk_home'], tc['sdk'], tc['gradle']))
+    if os.path.isfile(os.path.join("game", "main.py")):
+        from .game import cli as game_cli
+        click.echo("")
+        for good, text in game_cli.doctor_lines():
+            click.echo(f"   {'Game' if good else 'Game (!)'}        : {text}")
+            ready = ready and good
     click.echo("\n   => " + ("READY — run 'apkpy run' to build an APK."
                              if ready else "NOT READY — run 'apkpy setup' to install what's missing."))
 

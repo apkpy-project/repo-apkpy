@@ -1,0 +1,29 @@
+[
+ {
+  "id": "burn",
+  "name": "burn",
+  "apply_text": "{name} was burned!",
+  "turn_share": 8,
+  "turn_text": "{name} suffers from its burn.",
+  "attack_factor": 0.5,
+  "capture_bonus": 1.5
+ },
+ {
+  "id": "poison",
+  "name": "poison",
+  "apply_text": "{name} was poisoned!",
+  "turn_share": 8,
+  "turn_text": "{name} suffers from its poison.",
+  "capture_bonus": 1.5
+ },
+ {
+  "id": "sleep",
+  "name": "sleep",
+  "apply_text": "{name} fell asleep!",
+  "min_turns": 1,
+  "max_turns": 3,
+  "still_text": "{name} is fast asleep.",
+  "wake_text": "{name} woke up!",
+  "capture_bonus": 2.0
+ }
+]

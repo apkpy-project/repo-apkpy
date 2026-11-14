@@ -1,0 +1,5 @@
+[app]
+name = "Rooftop Run"
+application_id = "com.example.rooftoprun"
+version_name = "0.1.0"
+version_code = 1

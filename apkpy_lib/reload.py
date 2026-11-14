@@ -53,6 +53,9 @@ _SPARE_BOOT = ("import os, sys; sys.path[0] = os.environ.get('APKPY_RELOAD_HOME'
 # what apkpy build writes.
 _NOT_THE_APP = {"__pycache__", "venv", "env", "build", "dist", "node_modules",
                 "site-packages"}
+# Folders of the app the reload looks into however deep they go (the rest: one
+# folder deep). game/ holds a game (apkpy_lib.game), in as many folders as it likes.
+DEEP_FOLDERS = ("game",)
 
 _STATE = "state.json"
 _ERROR = "error.json"
@@ -590,7 +593,7 @@ def _script():
 
 def snapshot(folder):
     """{path: (mtime, size)} of the .py files in the folder and in the
-    folders directly inside it."""
+    folders directly inside it, and anywhere under game/."""
     files = {}
     inside = []
     try:
@@ -615,6 +618,17 @@ def snapshot(folder):
                     files[entry.path] = (info.st_mtime_ns, info.st_size)
         except OSError:
             pass
+    for name in DEEP_FOLDERS:
+        for where, dirs, names in os.walk(os.path.join(folder, name)):
+            dirs[:] = sorted(d for d in dirs if not d.startswith(".") and d not in _NOT_THE_APP)
+            for file_name in names:
+                if file_name.endswith(".py"):
+                    path = os.path.join(where, file_name)
+                    try:
+                        info = os.stat(path)
+                    except OSError:
+                        continue
+                    files[path] = (info.st_mtime_ns, info.st_size)
     return files
 
 

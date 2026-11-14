@@ -1,0 +1,40 @@
+[
+ {
+  "id": "burn",
+  "name": "Burns",
+  "status": "burn"
+ },
+ {
+  "id": "poison",
+  "name": "Poisons",
+  "status": "poison"
+ },
+ {
+  "id": "sleep",
+  "name": "Puts to sleep",
+  "status": "sleep"
+ },
+ {
+  "id": "attack_down",
+  "name": "Lowers Attack",
+  "stat": "attack",
+  "amount": -1,
+  "target": "foe",
+  "text": "{name} loses heart: its Attack fell."
+ },
+ {
+  "id": "defense_up",
+  "name": "Raises Defense",
+  "stat": "defense",
+  "amount": 1,
+  "target": "self",
+  "text": "{name} braces: its Defense rose."
+ },
+ {
+  "id": "heal",
+  "name": "Heals half",
+  "target": "self",
+  "heal_percent": 50,
+  "text": "{name} recovers."
+ }
+]

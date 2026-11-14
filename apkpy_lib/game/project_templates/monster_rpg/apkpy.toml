@@ -1,0 +1,8 @@
+[app]
+name = "Saltmere"
+application_id = "com.example.saltmere"
+version_name = "0.1.0"
+version_code = 1
+
+[game]
+before_build = ["tools/prepare.py"]

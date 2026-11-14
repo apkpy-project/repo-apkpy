@@ -1,0 +1,49 @@
+[
+ {
+  "id": "tonic",
+  "name": "Tonic",
+  "kind": "heal",
+  "price": 100,
+  "description": "Restores 20 HP.",
+  "heal": 20
+ },
+ {
+  "id": "big_tonic",
+  "name": "Big Tonic",
+  "kind": "heal",
+  "price": 300,
+  "description": "Restores 60 HP.",
+  "heal": 60
+ },
+ {
+  "id": "clearwater",
+  "name": "Clearwater",
+  "kind": "cure",
+  "price": 120,
+  "description": "Cures any status.",
+  "cures_all": true
+ },
+ {
+  "id": "bond_knot",
+  "name": "Bond Knot",
+  "kind": "capture",
+  "price": 120,
+  "description": "Tied around a tired creature. Wardens swear by it.",
+  "capture": 10
+ },
+ {
+  "id": "true_knot",
+  "name": "True Knot",
+  "kind": "capture",
+  "price": 400,
+  "description": "Tied by an old hand. It holds better.",
+  "capture": 20
+ },
+ {
+  "id": "keeper_letter",
+  "name": "Keeper's Letter",
+  "kind": "key",
+  "price": 0,
+  "description": "For whoever keeps the lighthouse now."
+ }
+]

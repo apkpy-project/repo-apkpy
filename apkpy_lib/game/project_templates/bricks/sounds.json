@@ -1,0 +1,18 @@
+{
+ "assets/paddle.wav": {
+  "sound": "click",
+  "pitch": 0.8
+ },
+ "assets/brick.wav": {
+  "sound": "coin",
+  "seed": 2,
+  "length": 0.6
+ },
+ "assets/lost.wav": {
+  "sound": "lose"
+ },
+ "assets/theme.wav": {
+  "music": "calm",
+  "seed": 2
+ }
+}

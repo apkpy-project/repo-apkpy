@@ -58,6 +58,8 @@ if not _HEADLESS_CORE:
     )
     from .maps import LocationSample, map_view
     from .routes import RouteAPI, route_points, routes
+    # A game in game/ (apkpy_lib.game): enable_game() gives the app game_play() and the rest.
+    from .game.app import enable_game
 
     # A job body that reaches a screen call is refused here with the same
     # words the build uses -- see apkpy_lib/job_rules.py.
@@ -96,7 +98,8 @@ if not _HEADLESS_CORE:
         'camera_view',
         'DataCoreError', 'FieldDef', 'IndexDef', 'FilterDef', 'OrderDef',
         'ModelDef', 'SchemaDef', 'MigrationDef', 'MigrationOperation',
-        'TransactionContext', 'RelationDef', 'QuerySubscription'
+        'TransactionContext', 'RelationDef', 'QuerySubscription',
+        'enable_game',
     ]
 
     # Compiler hosts manage a structured error channel of their own and skip

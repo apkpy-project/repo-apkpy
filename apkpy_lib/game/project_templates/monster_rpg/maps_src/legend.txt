@@ -1,0 +1,16 @@
+# What each letter in a map's drawing is. A tile name is a file in assets/tiles/.
+# solid: it cannot be walked on. height=N: it stands N blocks tall. zone=NAME: wild monsters can come out of it
+# (from the row <map>.<zone> in data/encounters.json). edges: its corners are cut where it meets other flat ground.
+# A map can add or change letters above its "tiles:" line.
+. = grass
+, = path edges
+s = sand edges
+f = floor
+u = rug
+a = arena
+r = reeds zone=reeds
+R = reeds
+~ = water solid zone=water edges
+c = cliff solid height=1
+w = wall solid height=2
+S = stone solid

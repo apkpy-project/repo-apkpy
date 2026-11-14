@@ -1,0 +1,13 @@
+{
+ "assets/click.wav": {
+  "sound": "click"
+ },
+ "assets/solved.wav": {
+  "sound": "win",
+  "seed": 2
+ },
+ "assets/theme.wav": {
+  "music": "calm",
+  "seed": 4
+ }
+}

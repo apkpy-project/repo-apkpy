@@ -1,0 +1,79 @@
+[
+ {
+  "id": "plain",
+  "name": "Plain",
+  "color": "#b0a890",
+  "strong": [],
+  "weak": [],
+  "immune": []
+ },
+ {
+  "id": "ember",
+  "name": "Ember",
+  "color": "#e0683c",
+  "strong": [
+   "moss"
+  ],
+  "weak": [
+   "tide",
+   "stone",
+   "ember"
+  ],
+  "immune": []
+ },
+ {
+  "id": "tide",
+  "name": "Tide",
+  "color": "#4c88d8",
+  "strong": [
+   "ember",
+   "stone"
+  ],
+  "weak": [
+   "moss",
+   "tide"
+  ],
+  "immune": []
+ },
+ {
+  "id": "moss",
+  "name": "Moss",
+  "color": "#5cae58",
+  "strong": [
+   "tide",
+   "stone"
+  ],
+  "weak": [
+   "ember",
+   "gale",
+   "moss"
+  ],
+  "immune": []
+ },
+ {
+  "id": "gale",
+  "name": "Gale",
+  "color": "#9cc4d8",
+  "strong": [
+   "moss"
+  ],
+  "weak": [
+   "stone"
+  ],
+  "immune": []
+ },
+ {
+  "id": "stone",
+  "name": "Stone",
+  "color": "#9a8a70",
+  "strong": [
+   "ember",
+   "gale"
+  ],
+  "weak": [
+   "moss",
+   "tide"
+  ],
+  "immune": []
+ }
+]

@@ -1,0 +1,5 @@
+[app]
+name = "menus"
+application_id = "com.example.menus"
+version_name = "0.1.0"
+version_code = 1

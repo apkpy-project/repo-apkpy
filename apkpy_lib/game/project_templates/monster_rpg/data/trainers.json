@@ -1,0 +1,31 @@
+[
+ {
+  "id": "bram",
+  "name": "Bram",
+  "reward": 300,
+  "team": [
+   {
+    "species": "reedling",
+    "level": 3
+   },
+   {
+    "species": "gustlet",
+    "level": 3
+   }
+  ],
+  "lose_text": "Fine. The tide can't stay out forever, and neither can you.",
+  "expect_level": 6
+ },
+ {
+  "id": "tess",
+  "name": "Warden Tess",
+  "reward": 150,
+  "team": [
+   {
+    "species": "gustlet",
+    "level": 2
+   }
+  ],
+  "lose_text": "You tie a good knot."
+ }
+]
