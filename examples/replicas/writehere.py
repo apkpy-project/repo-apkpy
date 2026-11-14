@@ -971,7 +971,7 @@ st_bars { position: absolute; left: 8px; right: 8px; top: 8px; display: flex; fl
           gap: 4px; background-color: #00000000; padding: 0px; }
 st_seg_on, st_seg_on2 { flex-grow: 1; height: 3px; background-color: #FFFFFF; border-radius: 2px;
                         padding: 0px; }
-st_seg_off, st_seg_off2 { flex-grow: 1; height: 3px; background-color: #66FFFFFF; border-radius: 2px;
+st_seg_off, st_seg_off2 { flex-grow: 1; height: 3px; background-color: #FFFFFF66; border-radius: 2px;
                           padding: 0px; }
 st_who { position: absolute; left: 12px; top: 22px; display: flex; flex-direction: row;
          align-items: center; gap: 8px; background-color: #00000000; padding: 0px; }
@@ -990,7 +990,7 @@ cam_close { position: absolute; left: 10px; top: 14px; width: 48px; height: 48px
 shutter { position: absolute; bottom: 44px; left: 150px; width: 78px; height: 78px;
           background-color: #00000000; border-color: #FFFFFF; border-width: 5px; border-radius: 39px; }
 flip { position: absolute; bottom: 58px; right: 36px; width: 50px; height: 50px; border-radius: 25px;
-       background-color: #55000000; icon-color: #FFFFFF; }
+       background-color: #00000055; icon-color: #FFFFFF; }
 
 /* Ride */
 ride { background-color: #FFFFFF; padding: 0px; }

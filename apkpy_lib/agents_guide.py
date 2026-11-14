@@ -428,6 +428,13 @@ draws a plain circle (`U2015`). ApkPy's own short names also work: {icons}.
   `on_change=lambda value: greeting.set_value("Hello, " + value)` -- one
   parameter, the new value: the text, `"true"`/`"false"` from a switch or a
   checkbox, a slider's number as text.
+- The keyboard: `type="email"`, `"phone"` or `"url"` opens the keyboard for
+  it, and `autofill="email"` (or `"password"`, `"otp"`, `"name"`...) lets
+  password managers fill it. `inputs("Message", action="send", on_submit=send)`
+  calls `send(text)` from the keyboard's corner key (Enter in the Previewer);
+  `action=` is "send", "next", "done", "search" or "go". `hide_keyboard()`
+  closes the keyboard and `field.focus()` opens it on a field. No
+  InputMethodManager of your own.
 
 ## When the guide is not enough
 

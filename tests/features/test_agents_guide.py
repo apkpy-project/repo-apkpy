@@ -104,6 +104,8 @@ class TheSiteFilesAreTrue(unittest.TestCase):
         for path in paths:
             path = path.rstrip("/")
             page = DOCS_DIR / (path if path.endswith(".txt") else path + ".md")
+            if not page.exists() and not path.endswith(".txt"):
+                page = DOCS_DIR / path / "index.md"     # games/ is games/index.md
             self.assertTrue(page.exists(), path)
 
     def test_llms_txt_names_the_release_the_package_is(self):

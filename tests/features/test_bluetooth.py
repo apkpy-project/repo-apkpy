@@ -314,7 +314,10 @@ class TheLinkBelongsToOneScreenTests(unittest.TestCase):
         self.assertEqual(len(activities), 2)
         for body in activities:
             self.assertNotIn("private java.io.OutputStream", body)
-            self.assertIn("ApkpyBluetooth.send(", body)
+        # The screen that talks writes through the shared class; the other
+        # one sends nothing.
+        self.assertIn("ApkpyBluetooth.send(", files["java/Screen_homeActivity.java"])
+        self.assertNotIn("ApkpyBluetooth.send(", files["java/Screen_otherActivity.java"])
 
     def test_reconnecting_to_the_same_device_adopts_the_new_listener(self):
         # How a link survives a navigation: the next screen calls connect()

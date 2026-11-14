@@ -12,7 +12,7 @@ place: the name is given the changed text instead. That is the same thing for
 a name of the function. A list or dict of the module is different: Python
 changes the one object every function sees, so the function is read as if it
 said ``global NAME`` -- the module name then lives in the app's shared store,
-which is what ``global`` already does (see _prescan_globals in compiler.py).
+which is what ``global`` already does (see _prescan_globals in compiler/prescan.py).
 
 A missing key or a position past the end stops the app, as KeyError and
 IndexError stop CPython; a slice (``lista[1:3] = ...``) and an attribute

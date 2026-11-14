@@ -184,8 +184,14 @@ class WhatIsBuilt(unittest.TestCase):
                 if not found.home:
                     continue
                 source = kit.java_source(found.home, "p")
-                self.assertRegex(source, r"public static String %s\(Context context" % found.java,
-                                 rules.label(namespace, name))
+                if found.mode == rules.LATER:
+                    # An answer that comes later: the screen, and where it goes.
+                    self.assertRegex(source, r"public static void %s\(final Activity activity,"
+                                             r"[^)]*ApkpyKit\.Done done\)" % found.java,
+                                     rules.label(namespace, name))
+                else:
+                    self.assertRegex(source, r"public static String %s\(Context context" % found.java,
+                                     rules.label(namespace, name))
 
 
 class WhatStopsTheBuild(unittest.TestCase):

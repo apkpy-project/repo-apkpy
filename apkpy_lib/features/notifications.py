@@ -2,12 +2,17 @@
 from collections import OrderedDict
 import time
 from ..core.features.notifications import IMPORTANCE, STYLES, MAX_ACTIONS, REASONS, DEFAULT_CHANNEL, validate
+from ..core.features.notifications import AT_HELP, REPEAT_HELP, EXACT_HELP
 
 
 class NotificationsAPI:
     def __init__(self):
         self.channels = {}
         self.items = OrderedDict()
+        # notify(at=): id -> {"title", "due", "repeat"}, while it waits.
+        self.scheduled = OrderedDict()
+        self._waiting = {}          # id -> the token of the wait that counts
+        self._exact_asked = False   # notify(exact=True): the Settings page, once
         self._allowed = True
         self._drawer = None
 
@@ -27,13 +32,102 @@ class NotificationsAPI:
         if drawer:
             drawer.permission()
 
+    def _ask_exact(self):
+        """The page of Settings the phone opens the first time: "Alarms &
+        reminders". The desk's timers are to the minute either way."""
+        from .. import ui
+        from . import kit as _kit
+        if self._exact_asked or _kit._root() is None:
+            return
+        self._exact_asked = True
+        from . import kit_surfaces
+
+        def answered(choice):
+            if choice != "deny":
+                ui.permissions._granted.add("SCHEDULE_EXACT_ALARM")
+
+        kit_surfaces.Handover(
+            "permission", "alarm", "Settings",
+            "Allow %s to set alarms and reminders?" % _kit._app_name(),
+            choices=[("Allow", "always"), ("Don\u2019t allow", "deny")],
+            note="On the phone this is the Alarms & reminders page of Settings, "
+                 "opened the first time. Without it Android may post a reminder "
+                 "up to an hour late.",
+            on_choice=answered, on_close=lambda: answered("deny")).open()
+
     def cancel(self, id):
         self.items.pop(str(id), None)
+        self.scheduled.pop(str(id), None)
+        self._waiting.pop(str(id), None)
         self._refresh()
 
     def cancel_all(self):
         self.items.clear()
+        self.scheduled.clear()
+        self._waiting.clear()
         self._refresh()
+
+    def _remind(self, title, message, id, at, repeat, kw, exact=False):
+        """notify(at=): posted when the time comes, while the Previewer is
+        open; a repeated one comes back the next day or week. Without a
+        Previewer it is only said."""
+        import datetime
+        from .. import kit_rules
+        from .. import ui
+        from . import kit as _kit
+        if not isinstance(exact, bool):
+            raise ValueError(EXACT_HELP + "; got %r" % (exact,))
+        if exact and at is None:
+            raise ValueError('notify(exact=True) is for a reminder, and needs its '
+                             'time: at="09:00"')
+        if repeat is not None and (not isinstance(repeat, str)
+                                   or kit_rules.reminder_repeat(repeat) in (None, "")):
+            raise ValueError(REPEAT_HELP + "; got %r" % (repeat,))
+        if at is None:
+            raise ValueError('notify(repeat=) repeats a reminder, and needs the time '
+                             'of the first: at="09:00"')
+        now = datetime.datetime.now()
+        due = kit_rules.reminder_at(at, now) if isinstance(at, str) else None
+        if due is None:
+            raise ValueError(AT_HELP + "; got %r" % (at,))
+        validate(kw["style"], kw["picture"], kw["lines"], kw["actions"], kw["progress"])
+        id = str(id)
+        token = object()
+        self._waiting[id] = token
+        self.scheduled[id] = {"title": str(title), "due": due, "repeat": repeat or ""}
+        shown = due.strftime("%H:%M") if due.date() == now.date() \
+            else due.strftime("%d %b, %H:%M")
+        live = ui.live_preview()
+        if _kit._root() is None:
+            print("[ApkPy notify] %s at %s%s" % (title, due.strftime("%Y-%m-%d %H:%M"),
+                                                (", " + repeat) if repeat else ""))
+            return
+        if live is not None:
+            live._status_say("Reminder set for %s" % shown)
+        if exact:
+            self._ask_exact()
+
+        def wait_for(moment):
+            seconds = max(0.0, (moment - datetime.datetime.now()).total_seconds())
+            # Tk counts in milliseconds that run out after 24 days.
+            _kit._later(min(seconds, 20 * 86400.0), lambda: fire(moment))
+
+        def fire(moment):
+            if self._waiting.get(id) is not token:
+                return              # cancelled, or set again since
+            if datetime.datetime.now() < moment:
+                wait_for(moment)    # a wait that was cut short at 20 days
+                return
+            following = kit_rules.reminder_next(moment, repeat, datetime.datetime.now())
+            if following is None:
+                self._waiting.pop(id, None)
+                self.scheduled.pop(id, None)
+            else:
+                self.scheduled[id]["due"] = following
+                wait_for(following)
+            self._post(title, message, id, **kw)
+
+        wait_for(due)
 
     def _ensure(self):
         from .. import ui
@@ -675,8 +769,21 @@ notifications=NotificationsAPI()
 def notify(title, message, id="apkpy_notification", *, channel=DEFAULT_CHANNEL,
            icon="notifications", style="none", picture=None, lines=None,
            actions=None, on_tap=None, on_dismiss=None, ongoing=False,
-           progress=None, group=None, when=None):
-    """Post/update a persistent notification; Android uses the system drawer."""
-    notifications._post(title,message,id,channel=channel,icon=icon,style=style,
-        picture=picture,lines=lines,actions=actions,on_tap=on_tap,
-        on_dismiss=on_dismiss,ongoing=ongoing,progress=progress,group=group,when=when)
+           progress=None, group=None, when=None, at=None, repeat=None, exact=False):
+    """Post/update a persistent notification; Android uses the system drawer.
+
+    ``at="09:00"`` (the next 09:00) or ``at="2026-11-07 09:00"`` posts it at
+    that time instead, even with the app closed; ``repeat="daily"`` or
+    ``"weekly"`` posts it again. Give each reminder its own ``id``:
+    ``notifications.cancel(id)`` takes it away before it is due.
+
+    Android may post a reminder up to an hour late to save battery;
+    ``exact=True`` asks the person, once, to let the app set it to the
+    minute (a page in Settings on the phone)."""
+    kw = dict(channel=channel, icon=icon, style=style, picture=picture, lines=lines,
+              actions=actions, on_tap=on_tap, on_dismiss=on_dismiss, ongoing=ongoing,
+              progress=progress, group=group, when=when)
+    if at is not None or repeat is not None or exact is not False:
+        notifications._remind(title, message, id, at, repeat, kw, exact=exact)
+        return
+    notifications._post(title, message, id, **kw)

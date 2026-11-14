@@ -1,170 +1,586 @@
-"""Northline — a clear, editorial travel companion built with ApkPy."""
+"""Northline -- a travel planner written in Python with ApkPy."""
 
-from apkpy_lib import (
-    Screen, Theme, action, app_bar, bottom_nav, button, container, device,
-    label, run, toast,
-)
-
-
-device("Pixel 9")
+from apkpy_lib import *
 
 theme = Theme(
     mode="light",
-    primary="#0B3B60",
-    secondary="#E4573D",
-    background="#F5F3EE",
+    primary="#0F4C81",
+    secondary="#C2410C",
+    background="#F6F7F9",
     surface="#FFFFFF",
-    text="#14202A",
-    text_secondary="#68727A",
-    border="#DCD8CF",
-    radius=18,
-    spacing=14,
-    font_family="sans-serif",
+    text="#101828",
+    text_secondary="#5B6577",
+    border="#E4E7EC",
+    radius=20,
 )
 
-trip = Screen(id="northline_trip", scroll=True)
-discover = Screen(id="northline_discover", scroll=True)
-saved = Screen(id="northline_saved", scroll=True)
-account = Screen(id="northline_account", scroll=True)
+discover = Screen(id="discover", scroll=True)
+trips = Screen(id="trips", scroll=True)
+saved = Screen(id="saved", scroll=True)
+me = Screen(id="me", scroll=True)
 
-app_bar(
-    "Northline",
-    leading="menu",
-    actions=[action("notifications", label="Travel alerts", command=lambda: toast("No new travel alerts"))],
-    screen=trip,
-)
 
-label("NEXT JOURNEY", id="journey_kicker", screen=trip)
-label("Lisbon to Copenhagen", id="journey_title", screen=trip)
-label("Thursday, 18 July · 4 nights", id="journey_meta", screen=trip)
+def place_card(art, name, meta, parent):
+    card = container(id="place", parent=parent)
+    image(art, id="place_art", parent=card, describe="")
+    label(name, id="place_name", parent=card)
+    label(meta, id="place_meta", parent=card)
 
-ticket = container(id="flight_ticket", screen=trip)
-ticket_top = container(id="ticket_top", parent=ticket)
-origin = container(id="origin", parent=ticket_top)
-label("LIS", id="origin_code", parent=origin)
-label("07:15", id="origin_time", parent=origin)
-route = container(id="route", parent=ticket_top)
-label("DIRECT", id="route_type", parent=route)
-label("3h 35m", id="route_time", parent=route)
-destination = container(id="destination", parent=ticket_top)
-label("CPH", id="destination_code", parent=destination)
-label("11:50", id="destination_time", parent=destination)
-label("SK 891 · Gate 42 · Seat 8A", id="flight_details", parent=ticket)
-button("Open boarding pass", id="boarding_pass", icon="arrow_forward", variant="filled", parent=ticket,
-       command=lambda: toast("Boarding pass ready"))
 
-section = container(id="plan_header", screen=trip)
-label("Thursday plan", id="plan_title", parent=section)
-label("LOCAL TIME", id="plan_timezone", parent=section)
+# ── Discover ─────────────────────────────────────────────────────────────────
 
-timeline = container(id="trip_timeline", screen=trip)
-morning = container(id="timeline_morning", parent=timeline)
-label("12:30", id="morning_time", parent=morning)
-morning_copy = container(id="morning_copy", parent=morning)
-label("Check in at Hotel Sanders", id="morning_title", parent=morning_copy)
-label("Tordenskjoldsgade 15", id="morning_meta", parent=morning_copy)
-afternoon = container(id="timeline_afternoon", parent=timeline)
-label("15:00", id="afternoon_time", parent=afternoon)
-afternoon_copy = container(id="afternoon_copy", parent=afternoon)
-label("Architecture walk", id="afternoon_title", parent=afternoon_copy)
-label("Meet Liv outside BLOX", id="afternoon_meta", parent=afternoon_copy)
-evening = container(id="timeline_evening", parent=timeline)
-label("19:30", id="evening_time", parent=evening)
-evening_copy = container(id="evening_copy", parent=evening)
-label("Dinner at Barr", id="evening_title", parent=evening_copy)
-label("Table for two · Ref. 4J7P", id="evening_meta", parent=evening_copy)
+top = container(id="top", screen=discover)
+words = container(id="top_words", parent=top)
+label("Good afternoon, Kai", id="top_hello", parent=words)
+label("Where to next?", id="top_title", parent=words)
+container(id="spacer", parent=top)
+avatar("art/face_kai.png", size=44, id="me_face", parent=top, describe="Kai")
 
-button("Add to itinerary", id="add_itinerary", icon="add", variant="outlined", screen=trip,
-       command=lambda: toast("New itinerary item"))
+inputs("Search places, stays, flights", type="search", id="find", screen=discover)
+chips(["Cities", "Coast", "Peaks", "Food"], selected="Cities", id="kinds", screen=discover)
 
-for page, title, copy in [
-    (discover, "Discover", "Places selected for pace, craft and character."),
-    (saved, "Saved", "Trips, stays and ideas worth returning to."),
-    (account, "Account", "Documents, travellers and notification settings."),
-]:
-    label(title, id=page.id + "_title", screen=page)
-    label(copy, id=page.id + "_copy", screen=page)
+hero = container(id="hero", screen=discover)
+image("art/place_porto.jpg", id="hero_art", parent=hero, describe="")
+button("", id="hero_save", icon="favorite_border", describe="Save Porto", parent=hero, command=lambda: toast("Saved"))
+hero_words = container(id="hero_words", parent=hero)
+label("EDITOR'S PICK", id="hero_kicker", parent=hero_words)
+label("Porto", id="hero_title", parent=hero_words)
+label("Golden hour on the Douro · from €129", id="hero_meta", parent=hero_words)
 
-bottom_nav(
-    [trip, discover, saved, account],
-    labels=["Trip", "Discover", "Saved", "Account"],
-    icons=["local_shipping", "search", "heart", "person"],
-)
+popular_head = container(id="section", screen=discover)
+label("Popular now", id="section_title", parent=popular_head)
+container(id="spacer", parent=popular_head)
+label("See all", id="section_link", parent=popular_head)
+
+pair = container(id="pair", screen=discover)
+place_card("art/place_kyoto.jpg", "Kyoto", "Japan · 4.9", pair)
+place_card("art/place_banff.jpg", "Banff", "Canada · 4.8", pair)
+
+label("Weekend escapes", id="heading", screen=discover)
+
+ESCAPES = [
+    {"id": "1", "art": "art/place_lisbon.jpg", "name": "Lisbon", "when": "2 nights · Fri – Sun", "price": "€189"},
+    {"id": "2", "art": "art/place_copenhagen.jpg", "name": "Copenhagen", "when": "3 nights · Thu – Sun", "price": "€312"},
+    {"id": "3", "art": "art/place_marrakech.jpg", "name": "Marrakech", "when": "3 nights · Fri – Mon", "price": "€245"},
+    {"id": "4", "art": "art/place_santorini.jpg", "name": "Santorini", "when": "4 nights · Wed – Sun", "price": "€398"},
+]
+
+
+def escape(row):
+    image("{art}", id="escape_art", parent=row, describe="")
+    texts = container(id="escape_words", parent=row)
+    label("{name}", id="escape_name", parent=texts)
+    label("{when}", id="escape_when", parent=texts)
+    label("{price}", id="escape_price", parent=row)
+
+
+virtual_collection(ESCAPES, row=escape, id="escapes", screen=discover, on_click=lambda item: toast(item["name"]))
+container(id="bottom_room", screen=discover)
+
+
+# ── Trips ────────────────────────────────────────────────────────────────────
+
+label("Trips", id="page_title", screen=trips)
+segmented(["Upcoming", "Past"], selected="Upcoming", id="when", screen=trips)
+
+trip = container(id="trip", screen=trips)
+image("art/place_reykjavik.jpg", id="trip_art", parent=trip, describe="")
+label("In 21 days", id="trip_count", parent=trip)
+trip_words = container(id="trip_words", parent=trip)
+label("Reykjavík, Iceland", id="trip_title", parent=trip_words)
+label("6 – 11 December · 2 travellers", id="trip_meta", parent=trip_words)
+
+flight = container(id="flight", screen=trips)
+route = container(id="route", parent=flight)
+start = container(id="end_left", parent=route)
+label("LIS", id="code", parent=start)
+label("Lisbon · 10:40", id="city", parent=start)
+container(id="spacer", parent=route)
+button("", id="plane", icon="flight", describe="Flight", parent=route, command=lambda: toast("Flight NL 204"))
+container(id="spacer", parent=route)
+finish = container(id="end_right", parent=route)
+label("KEF", id="code", parent=finish)
+label("Keflavík · 14:05", id="city", parent=finish)
+facts = container(id="facts", parent=flight)
+for value, name in [("B12", "Gate"), ("14A", "Seat"), ("09:50", "Boarding")]:
+    fact = container(id="fact", parent=facts)
+    label(name, id="fact_name", parent=fact)
+    label(value, id="fact_value", parent=fact)
+
+label("The plan", id="heading", screen=trips)
+plan = container(id="plan", screen=trips)
+list_row("Northern lights by the bay", subtitle="Day 1 · 22:00", icon="nights_stay", trailing_icon="chevron_right", id="step", parent=plan, command=lambda: toast("Day 1"))
+list_row("Hot springs at Sky Lagoon", subtitle="Day 2 · 16:00", icon="hot_tub", trailing_icon="chevron_right", id="step", parent=plan, command=lambda: toast("Day 2"))
+list_row("The Golden Circle by car", subtitle="Day 3 · 09:00", icon="directions_car", trailing_icon="chevron_right", id="step", parent=plan, command=lambda: toast("Day 3"))
+list_row("Hótel Viðey, 5 nights", subtitle="Check in 15:00", icon="hotel", trailing_icon="chevron_right", id="step", parent=plan, command=lambda: toast("Stay"))
+container(id="bottom_room", screen=trips)
+
+
+# ── Saved ────────────────────────────────────────────────────────────────────
+
+label("Saved", id="page_title", screen=saved)
+label("8 places in 7 countries", id="page_note", screen=saved)
+row = container(id="pair", screen=saved)
+place_card("art/place_santorini.jpg", "Santorini", "Greece · €398", row)
+place_card("art/place_banff.jpg", "Banff", "Canada · €720", row)
+row = container(id="pair", screen=saved)
+place_card("art/place_marrakech.jpg", "Marrakech", "Morocco · €245", row)
+place_card("art/place_lisbon.jpg", "Lisbon", "Portugal · €189", row)
+row = container(id="pair", screen=saved)
+place_card("art/place_copenhagen.jpg", "Copenhagen", "Denmark · €312", row)
+place_card("art/place_reykjavik.jpg", "Reykjavík", "Iceland · €540", row)
+container(id="bottom_room", screen=saved)
+
+
+# ── Me ───────────────────────────────────────────────────────────────────────
+
+who = container(id="who", screen=me)
+avatar("art/face_kai.png", size=88, id="who_face", parent=who, describe="Kai")
+label("Kai Oliveira", id="who_name", parent=who)
+label("Exploring since 2019", id="who_note", parent=who)
+
+stats = container(id="stats", screen=me)
+for number, word in [("23", "countries"), ("41", "trips"), ("86k", "km flown")]:
+    stat = container(id="stat", parent=stats)
+    label(number, id="stat_number", parent=stat)
+    label(word, id="stat_word", parent=stat)
+
+alerts = container(id="alerts", screen=me)
+label("Alerts", id="alerts_title", parent=alerts)
+prices = inputs("Price drops on saved places", type="switch", id="alert", parent=alerts)
+inputs("Gate and boarding changes", type="switch", id="alert", parent=alerts)
+prices.set_value("true")
+
+more = container(id="more", screen=me)
+list_row("Passport and visas", icon="badge", trailing_icon="chevron_right", id="more_row", parent=more, command=lambda: toast("Documents"))
+list_row("Payment methods", icon="credit_card", trailing_icon="chevron_right", id="more_row", parent=more, command=lambda: toast("Payments"))
+list_row("Help", icon="help", trailing_icon="chevron_right", id="more_row", parent=more, command=lambda: toast("Help"))
+container(id="bottom_room", screen=me)
+
+
+bottom_nav([discover, trips, saved, me], labels=["Discover", "Trips", "Saved", "Me"], icons=["explore", "luggage", "favorite", "person"])
 
 style = """
-body { font-family: var(--font-family); }
-northline_trip, northline_discover, northline_saved, northline_account {
-    background-color: var(--background); padding: 20px;
+discover, trips, saved, me {
+    background-color: var(--background);
+    padding: 20px;
 }
-label { color: var(--text); }
-journey_kicker {
-    color: var(--secondary); font-size: 10px; font-weight: bold;
-    letter-spacing: 1.5px; margin-top: 8px; margin-bottom: 8px;
+spacer {
+    flex-grow: 1;
+    background-color: #00000000;
+    padding: 0px;
 }
-journey_title { color: var(--text); font-size: 27px; font-weight: bold; margin-bottom: 4px; }
-journey_meta { color: var(--text-secondary); font-size: 13px; margin-bottom: 17px; }
-flight_ticket {
-    width: 100%; background-color: #0B3B60; border-width: 0px;
-    border-radius: 22px; padding: 18px; margin-bottom: 17px;
-    box-shadow: 0 8px 18px #0B3B602E;
+bottom_room {
+    height: 88px;
+    background-color: #00000000;
 }
-ticket_top {
-    display: flex; flex-direction: row; align-items: center; width: 100%;
-    background-color: #0B3B60; border-width: 0px; padding: 0px; margin-bottom: 14px;
+
+top {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    background-color: #00000000;
+    padding: 4px 0px 16px 0px;
 }
-origin, destination, route { background-color: #0B3B60; border-width: 0px; padding: 0px; }
-origin, destination { flex-grow: 1; }
-destination { align-items: flex-end; }
-route { align-items: center; }
-origin_code, destination_code { color: #FFFFFF; font-size: 30px; font-weight: bold; }
-origin_time, destination_time { color: #C6D9E7; font-size: 12px; margin-top: 2px; }
-route_type { color: #F3AE9F; font-size: 9px; font-weight: bold; letter-spacing: 1px; }
-route_time { color: #C6D9E7; font-size: 11px; margin-top: 3px; }
-flight_details {
-    color: #D7E4EC; border-top-color: #3D6684; border-top-width: 1px;
-    padding-top: 11px; font-size: 12px; margin-bottom: 12px;
+top_words {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    background-color: #00000000;
+    padding: 0px;
 }
-boarding_pass {
-    width: 100%; background-color: #FFFFFF; color: #0B3B60;
-    border-radius: 13px; padding: 12px; font-weight: bold;
+top_hello {
+    font-size: 13px;
+    color: var(--text-secondary);
 }
-plan_header {
-    display: flex; flex-direction: row; align-items: center; width: 100%;
-    background-color: var(--background); border-width: 0px; padding: 0px;
+top_title {
+    font-size: 26px;
+    font-weight: bold;
+    color: var(--text);
+}
+find {
+    background-color: #FFFFFF;
+    border-radius: 16px;
+    margin-bottom: 12px;
+}
+kinds {
+    accent-color: var(--primary);
+}
+
+hero {
+    position: relative;
+    height: 300px;
+    padding: 0px;
+    margin-top: 16px;
+    background-color: #00000000;
+}
+hero_art {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 28px;
+}
+hero_save {
+    position: absolute;
+    bottom: 18px;
+    right: 18px;
+    width: 48px;
+    height: 48px;
+    border-radius: 24px;
+    background-color: #FFFFFF;
+    icon-color: #C2410C;
+}
+hero_words {
+    position: absolute;
+    left: 22px;
+    top: 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    background-color: #00000000;
+}
+hero_kicker {
+    font-size: 11px;
+    font-weight: bold;
+    letter-spacing: 1.5px;
+    color: #FFE3C8;
+}
+hero_title {
+    font-size: 30px;
+    font-weight: bold;
+    color: #FFFFFF;
+}
+hero_meta {
+    font-size: 13px;
+    color: #F3EEFF;
+}
+
+section {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    background-color: #00000000;
+    padding: 22px 0px 10px 0px;
+}
+section_title {
+    font-size: 18px;
+    font-weight: bold;
+    color: var(--text);
+}
+section_link {
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--primary);
+}
+heading {
+    padding: 22px 0px 10px 0px;
+    font-size: 18px;
+    font-weight: bold;
+    color: var(--text);
+}
+
+pair {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    background-color: #00000000;
+    padding: 0px;
+    margin-bottom: 12px;
+}
+place {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    background-color: #FFFFFF;
+    border-radius: 22px;
+    padding: 8px 8px 14px 8px;
+}
+place_art {
+    width: 100%;
+    height: 130px;
+    object-fit: cover;
+    border-radius: 16px;
     margin-bottom: 8px;
 }
-plan_title { color: var(--text); font-size: 18px; font-weight: bold; flex-grow: 1; }
-plan_timezone { color: var(--text-secondary); font-size: 9px; font-weight: bold; letter-spacing: 1px; }
-trip_timeline {
-    width: 100%; background-color: #FFFFFF; border-color: var(--border);
-    border-width: 1px; border-radius: 18px; padding: 6px 14px; margin-bottom: 12px;
+place_name {
+    font-size: 16px;
+    font-weight: bold;
+    color: var(--text);
+    margin-left: 6px;
 }
-timeline_morning, timeline_afternoon, timeline_evening {
-    display: flex; flex-direction: row; align-items: center; gap: 12px;
-    width: 100%; background-color: #FFFFFF; border-width: 0px;
-    border-bottom-color: #E4E0D8; border-bottom-width: 1px; border-radius: 0px;
-    padding: 11px 0px;
+place_meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-left: 6px;
 }
-timeline_evening { border-bottom-width: 0px; }
-morning_time, afternoon_time, evening_time { color: var(--secondary); font-size: 11px; font-weight: bold; }
-morning_copy, afternoon_copy, evening_copy {
-    flex-grow: 1; background-color: #FFFFFF; border-width: 0px; padding: 0px;
+
+escapes {
+    height: auto;
+    background-color: #FFFFFF;
+    border-radius: 24px;
+    padding: 6px 0px;
 }
-morning_title, afternoon_title, evening_title { color: var(--text); font-size: 13px; font-weight: bold; }
-morning_meta, afternoon_meta, evening_meta { color: var(--text-secondary); font-size: 10px; margin-top: 3px; }
-add_itinerary {
-    width: 100%; color: #0B3B60; background-color: var(--background);
-    border-color: #0B3B60; border-width: 1px; border-radius: 14px;
-    padding: 12px; font-weight: bold; margin-bottom: 10px;
+escapes_row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 16px;
+    background-color: #00000000;
 }
-northline_discover_title, northline_saved_title, northline_account_title {
-    color: var(--text); font-size: 28px; font-weight: bold; margin-top: 30px;
+escape_art {
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: 16px;
 }
-northline_discover_copy, northline_saved_copy, northline_account_copy {
-    color: var(--text-secondary); font-size: 14px; margin-top: 8px;
+escape_words {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    background-color: #00000000;
+    padding: 0px;
+}
+escape_name {
+    font-size: 16px;
+    font-weight: bold;
+    color: var(--text);
+}
+escape_when {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+escape_price {
+    font-size: 16px;
+    font-weight: bold;
+    color: var(--secondary);
+}
+
+page_title {
+    padding: 0px;
+    font-size: 30px;
+    font-weight: bold;
+    color: var(--text);
+    margin: 8px 0px 14px 0px;
+}
+page_note {
+    padding: 0px;
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+}
+when {
+    margin-bottom: 16px;
+}
+
+trip {
+    position: relative;
+    height: 220px;
+    padding: 0px;
+    background-color: #00000000;
+}
+trip_art {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 26px;
+}
+trip_count {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    font-size: 12px;
+    font-weight: bold;
+    color: #0F4C81;
+    background-color: #FFFFFF;
+    border-radius: 14px;
+    padding: 6px 12px;
+}
+trip_words {
+    position: absolute;
+    left: 20px;
+    bottom: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    background-color: #00000000;
+}
+trip_title {
+    font-size: 24px;
+    font-weight: bold;
+    color: #FFFFFF;
+}
+trip_meta {
+    font-size: 13px;
+    color: #D7F5EE;
+}
+
+flight {
+    background-color: #FFFFFF;
+    border-radius: 24px;
+    padding: 20px;
+    margin-top: 14px;
+}
+route {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    background-color: #00000000;
+    padding: 0px;
+}
+end_left {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    background-color: #00000000;
+    padding: 0px;
+}
+end_right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    background-color: #00000000;
+    padding: 0px;
+}
+code {
+    font-size: 28px;
+    font-weight: bold;
+    color: var(--text);
+}
+city {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+plane {
+    width: 48px;
+    height: 48px;
+    border-radius: 24px;
+    background-color: #E8F0F8;
+    icon-color: var(--primary);
+}
+facts {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    background-color: #F6F7F9;
+    border-radius: 16px;
+    padding: 12px 16px;
+    margin-top: 16px;
+}
+fact {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    background-color: #00000000;
+    padding: 0px;
+}
+fact_name {
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+fact_value {
+    font-size: 16px;
+    font-weight: bold;
+    color: var(--text);
+}
+plan {
+    background-color: #FFFFFF;
+    border-radius: 24px;
+    padding: 6px 0px;
+    divider-color: #EEF0F3;
+}
+step {
+    icon-color: var(--primary);
+    color: var(--text);
+}
+
+who {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    background-color: #00000000;
+    padding: 20px 0px 22px 0px;
+}
+who_name {
+    font-size: 22px;
+    font-weight: bold;
+    color: var(--text);
+    margin-top: 10px;
+}
+who_note {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+stats {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    background-color: #00000000;
+    padding: 0px;
+}
+stat {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    background: linear-gradient(135deg, #0F4C81 0%, #2B6CB0 100%);
+    border-radius: 20px;
+    padding: 16px;
+}
+stat_number {
+    font-size: 24px;
+    font-weight: bold;
+    color: #FFFFFF;
+}
+stat_word {
+    font-size: 12px;
+    color: #DCE8F5;
+}
+alerts {
+    background-color: #FFFFFF;
+    border-radius: 24px;
+    padding: 20px;
+    margin-top: 16px;
+}
+alerts_title {
+    padding: 0px;
+    font-size: 17px;
+    font-weight: bold;
+    color: var(--text);
+}
+alert {
+    font-size: 15px;
+    color: var(--text);
+    accent-color: var(--primary);
+}
+more {
+    background-color: #FFFFFF;
+    border-radius: 24px;
+    padding: 6px 0px;
+    margin-top: 16px;
+    divider-color: #EEF0F3;
+}
+more_row {
+    icon-color: var(--primary);
+    color: var(--text);
+}
+
+bottom_nav {
+    margin: 16px;
+    border-radius: 28px;
+    background-color: #FFFFFF;
+    color: #8A93A3;
+    active-color: #0F4C81;
+    indicator-color: #E8F0F8;
 }
 """
 
-if __name__ == "__main__":
-    run(start_screen=trip, theme=theme)
-
+run(start_screen=discover, theme=theme)

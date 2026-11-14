@@ -87,6 +87,22 @@ def _plain_names(target):
     return False
 
 
+def _pairs(target, value):
+    """[(target, value)] down to the leaves where *value* is written out in the
+    shape of *target*, or None when the top level does not match. A leaf may
+    still be a tuple target, when its value is not written out."""
+    if not isinstance(target, (ast.Tuple, ast.List)):
+        return [(target, value)]
+    if (not isinstance(value, (ast.Tuple, ast.List)) or len(value.elts) != len(target.elts)
+            or any(isinstance(e, ast.Starred) for e in target.elts + value.elts)):
+        return None
+    out = []
+    for t, v in zip(target.elts, value.elts):
+        inner = _pairs(t, v)
+        out.extend(inner if inner is not None else [(t, v)])
+    return out
+
+
 class _Rewriter:
     def __init__(self):
         self.count = 0
@@ -103,14 +119,16 @@ class _Rewriter:
             return [_assign(_name(target.id, like, ast.Store()), value, like)]
         elts = target.elts
         star = next((i for i, e in enumerate(elts) if isinstance(e, ast.Starred)), None)
-        if (isinstance(value, (ast.Tuple, ast.List)) and star is None
-                and not any(isinstance(e, ast.Starred) for e in value.elts)
-                and len(value.elts) == len(elts)):
-            # a, b = b, a: every value is read before any name changes.
-            temps = [self.fresh() for _ in elts]
+        pairs = _pairs(target, value) if star is None else None
+        if pairs is not None:
+            # a, b = b, a: every value is read before any name changes. A value
+            # written in the target's own shape, (a, b), c = (1, 2), 7, pairs
+            # leaf by leaf: through a list, 1 and 2 came back as items of
+            # unknown kind and a + b joined them as text ("12").
+            temps = [self.fresh() for _ in pairs]
             out = [_assign(_name(t, like, ast.Store()), v, like)
-                   for t, v in zip(temps, value.elts)]
-            for elt, temp in zip(elts, temps):
+                   for t, (_elt, v) in zip(temps, pairs)]
+            for (elt, _v), temp in zip(pairs, temps):
                 out.extend(self.assign(elt, _name(temp, like), like))
             return out
         holder = self.fresh()

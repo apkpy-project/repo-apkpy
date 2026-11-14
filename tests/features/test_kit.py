@@ -62,6 +62,8 @@ OBJECTS = {
     "timer": apkpy_lib.timer, "network": apkpy_lib.network,
     "display": apkpy_lib.display,
     "app_lock": apkpy_lib.app_lock,
+    "clock": apkpy_lib.clock, "gallery": apkpy_lib.gallery,
+    "clipboard": apkpy_lib.clipboard,
 }
 
 
@@ -106,7 +108,7 @@ class TheTable(unittest.TestCase):
 
     def test_the_desk_has_no_call_the_table_lacks(self):
         for namespace, api in OBJECTS.items():
-            if namespace == "files":
+            if namespace in rules.SHARED_FAMILIES:
                 continue            # older than the table, with verbs of its own
             public = {name for name, value in vars(type(api)).items()
                       if callable(value) and not name.startswith("_")}
@@ -212,8 +214,12 @@ class WhatIsWritten(unittest.TestCase):
         self.assertNotIn("_apkpyNative", files["java/Screen_homeActivity.java"])
 
     def test_every_screen_can_make_the_call(self):
-        files = _built("haptics.tap()", top='other = Screen(id="other")\n')
+        # The screen with the button has the helper; the one without has
+        # neither go() nor the helper (06-11-2026).
+        files = _files("haptics.tap()", top='other = Screen(id="other")\n',
+                       tail=TAIL.replace("screen=home", "screen=other"))
         self.assertIn("_apkpyNative_haptics_tap()", files["java/Screen_otherActivity.java"])
+        self.assertNotIn("_apkpyNative_haptics_tap", files["java/Screen_homeActivity.java"])
 
     def test_beside_an_apps_own_block(self):
         java = _java("out.set_value(battery())\nhaptics.tap()",

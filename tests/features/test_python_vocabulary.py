@@ -10,6 +10,7 @@ ran, and was simply missing a piece nobody was told about.
 
 import unittest
 
+from apkpy_lib.core import dead_methods
 from apkpy_lib.core.compiler import translate_python_to_android
 
 
@@ -25,7 +26,9 @@ def _files(body, extra_imports="", module_lines=""):
         'button("Go", id="b", screen=home, command=go)\n'
         'run(start_screen=home)\n'
     ) % (extra_imports, module_lines, body)
-    return translate_python_to_android(source)
+    # These tests read how a function is translated, called or not.
+    with dead_methods.everything_kept():
+        return translate_python_to_android(source)
 
 
 def _java(body, **kw):
@@ -728,7 +731,7 @@ class TheConditionTests(unittest.TestCase):
 
     def test_a_condition_with_no_translation_stops_the_build(self):
         text = _error('    q = field.get_value()\n'
-                      '    if {q}:\n'
+                      '    if divmod(q, 2):\n'
                       '        out.set_value("never")')
         self.assertIn('U2033', text)
         self.assertIn('This condition is not translated', text)
@@ -758,7 +761,7 @@ class TheConditionTests(unittest.TestCase):
 
     def test_a_ternary_with_no_translation_stops_the_build(self):
         text = _error('    q = field.get_value()\n'
-                      '    out.set_value("a" if {q} else "b")')
+                      '    out.set_value("a" if q @ q else "b")')
         self.assertIn('U2033', text)
 
     def test_a_ternary_on_none_is_translated(self):
@@ -789,7 +792,7 @@ class TheQuietFailuresTests(unittest.TestCase):
 
     def test_a_module_level_comprehension_stops_the_build(self):
         text = _error('    out.set_value("x")',
-                      module_lines='SQUARES = [n * n for n in range(5)]')
+                      module_lines='SQUARES = [n * n for n in range(len(field.get_value()))]')
         self.assertIn('U2033', text)
         self.assertIn('module level', text)
 
@@ -1044,8 +1047,10 @@ class TheVanishingLineTests(unittest.TestCase):
         self._says('    out.text = "x"', 'set_value(')
 
     def test_a_set_comprehension_in_a_function(self):
-        # A list comprehension is translated now; a set has nothing to become.
-        self._says('    x = {p for p in field.get_value().split(",")}', 'no sets on the phone')
+        # A set is the list of its items now (features/sets.py, test_sets.py).
+        java = _java('    x = {p for p in field.get_value().split(",")}\n    out.set_value(str(x))')
+        self.assertIn('_apkpySetOf(', java)
+        self.assertIn('_apkpySetShow(', java)
 
     def test_changing_a_tuple_still_says_so(self):
         # x = (1, 2) is translated since 1.14 (TheTupleTests); changing it is not.
@@ -1071,8 +1076,9 @@ class TheVanishingLineTests(unittest.TestCase):
         self.assertIn('_apkpyChars(String.valueOf("abc"))', java)
         self.assertIn('_apkpyKeys(String.valueOf(', java)
 
-    def test_looping_over_a_set_still_says_so(self):
-        self._says('    for size in {1, 2}:\n        out.set_value(str(size))', 'set')
+    def test_looping_over_a_set_walks_its_items(self):
+        java = _java('    for size in {1, 2}:\n        out.set_value(str(size))')
+        self.assertIn('_apkpySetOf(', java)
 
     def test_the_suggestions_compile(self):
         java = _java('    parts = field.get_value().split(",")\n'
@@ -1303,7 +1309,7 @@ class TheBasicsThatAnsweredWrongTests(unittest.TestCase):
 
     def test_a_global_needs_a_starting_value_written_out(self):
         text = _error('    global TOTAL\n    TOTAL += 1',
-                      module_lines=MODULE + 'TOTAL = len(ITEMS)\n')
+                      module_lines=MODULE + 'TOTAL = int(storage.get("t") or 0)\n')
         self.assertIn('U2033', text)
         self.assertIn('starting value', text)
 
@@ -1735,7 +1741,7 @@ class TheSortKeyTests(unittest.TestCase):
 
     def test_at_the_top_of_the_file_it_says_where(self):
         text = _flat(_error('    out.set_value(str(TOP))',
-                            module_lines='TOP = sorted(["b", "a"], key=len)\n'))
+                            module_lines='TOP = sorted(field.get_value().split(), key=len)\n'))
         self.assertIn('U2033', text)
         self.assertIn('sorted() with key= works the key out for each item', text)
         self.assertIn('here it is at the top of the file', text)

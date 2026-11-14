@@ -9,6 +9,7 @@ walks to the next screen -- and neither shows up as a build failure.
 
 import unittest
 
+from apkpy_lib.core import dead_methods
 from apkpy_lib.core.features import flashlight as codegen
 from apkpy_lib.core.compiler import translate_python_to_android
 
@@ -88,12 +89,13 @@ def _java(source):
 def _method(source, name):
     """One generated method's body.
 
-    Every user function is written TWICE into an Activity: once as
-    ``pythonCallback_x``, and once inlined into the click listener that calls
-    it. Counting across the whole file therefore counts everything twice,
-    which says nothing about the shape of either copy.
+    A user function a button calls is written in its click listener; the
+    copy of it as ``pythonCallback_x`` is written only when something calls
+    that, or when kept on purpose as here. Counting across the whole file
+    would count both copies, which says nothing about the shape of either.
     """
-    java = _build(source)["java/Screen_homeActivity.java"]
+    with dead_methods.everything_kept():
+        java = _build(source)["java/Screen_homeActivity.java"]
     head = java.index("private void pythonCallback_%s(" % name)
     depth = 0
     for index in range(java.index("{", head), len(java)):

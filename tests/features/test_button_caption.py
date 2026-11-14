@@ -13,6 +13,7 @@ import unittest
 
 from test_kit import HEAD, TAIL
 from test_real_screens import Previewed
+from apkpy_lib.core import dead_methods
 from apkpy_lib.core.compiler import translate_python_to_android
 
 APP = ('home = Screen(id="home")\n'
@@ -36,7 +37,9 @@ class OnThePhone(unittest.TestCase):
                          'def go():\n'
                          '    out.set_value(start.get_value())\n'
                          '    start.set_value("Pause")\n') + TAIL
-        files = translate_python_to_android(source)
+        # go() as a method of its own, where the button is found by its id.
+        with dead_methods.everything_kept():
+            files = translate_python_to_android(source)
         self.assertNotIn("error.txt", files)
         java = files["java/Screen_homeActivity.java"]
         self.assertRegex(java, r'findViewById\(R\.id\.btn\d+\)\)\.getText\(\)\.toString\(\)')

@@ -33,6 +33,7 @@ import tempfile
 import types
 import unittest
 
+from apkpy_lib.core import dead_methods
 from apkpy_lib.core.compiler import translate_python_to_android
 
 from test_data_rules import TOOLING
@@ -116,6 +117,8 @@ class TheTranslationTests(unittest.TestCase):
     def test_a_field_given_two_kinds_is_not_claimed(self):
         top = ('class Box:\n    def __init__(self):\n        self.v = 0\n'
                '    def text(self):\n        self.v = "a"\n')
+        # 0 * 2 or "a" * 2: the text "0" cannot say whether it is the number
+        # or the str, so the build stops rather than guess.
         text = _error(top, "    b = Box()\n    out.set_value(str(b.v * 2))\n")
         self.assertIn("U2033", text)
         self.assertIn("could not tell that the values in this arithmetic are numbers", text)
@@ -152,7 +155,8 @@ class TheTranslationTests(unittest.TestCase):
 
     def test_an_object_of_the_module_is_made_once(self):
         top = TASK + "\ncurrent = Task('first')\n"
-        java = _java(top, "    current.toggle()\n")["java/Screen_homeActivity.java"]
+        with dead_methods.everything_kept():
+            java = _java(top, "    current.toggle()\n")["java/Screen_homeActivity.java"]
         self.assertIn("private void pythonCallback__apkpy_init()", java)
         go = java[java.index("private void pythonCallback_go()"):]
         self.assertTrue(go.split("\n")[1].strip().startswith("pythonCallback__apkpy_ensure();"), go[:200])

@@ -199,7 +199,7 @@ class TheCrashNamesThePythonLine(unittest.TestCase):
         files, lines = _built()
         java = files["java/Screen_homeActivity.java"]
         self.assertIsNone(applogs.python_line(
-            lines, "Screen_homeActivity.java", _java_line(java, "private long _apkpyTrunc(")))
+            lines, "Screen_homeActivity.java", _java_line(java, "private void _apkpyApplyAppearance(")))
         self.assertIsNone(applogs.python_line(
             lines, "Screen_homeActivity.java", _java_line(java, "setContentView(")))
         self.assertIsNone(applogs.python_line(lines, "ApkpyValues.java", 10))

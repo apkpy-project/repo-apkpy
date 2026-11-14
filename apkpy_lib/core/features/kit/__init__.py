@@ -87,6 +87,20 @@ NEEDS = {
     "app_lock": {"permissions": ("android.permission.USE_BIOMETRIC",),
                  "classes": ("ApkpyAppLockStart",),
                  "application": (_APP_LOCK_XML,)},
+    # Asked of the person; a tablet with no mobile radio still installs the app.
+    "call_phone": {"permissions": ("android.permission.CALL_PHONE",),
+                   "features": ("android.hardware.telephony",)},
+    "read_calendar": {"permissions": ("android.permission.READ_CALENDAR",)},
+    # The clock app's own permission, and a normal one: nobody is asked. Its
+    # name is not android.permission.*, so it is written as it stands.
+    "set_alarm": {"beside": (
+        '<uses-permission android:name="com.android.alarm.permission.SET_ALARM" />',)},
+    # Android 10 and later put a file in the gallery with no permission at all.
+    "gallery_write": {"beside": (
+        '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" '
+        'android:maxSdkVersion="28" />',)},
+    # A normal permission (Android 14): nobody is asked.
+    "screen_capture": {"permissions": ("android.permission.DETECT_SCREEN_CAPTURE",)},
 }
 
 # Classes that are compiled against a library the family brings, not against
@@ -101,6 +115,7 @@ _DECLARED = [{}]    # (namespace, verb) -> {argument: what was written}
 _HEALTH = [[]]      # the kinds of health record the app names
 _TIMED = [{}]       # function -> the first timer call that names it
 _WATCHED = [{}]     # function -> the first network.on_change() that names it
+_SHOT = [{}]        # function -> the first display.on_screenshot() that names it
 _TOP = [{}]         # the functions written at the top level of the module
 
 
@@ -112,6 +127,7 @@ def reset():
     _HEALTH[0] = []
     _TIMED[0] = {}
     _WATCHED[0] = {}
+    _SHOT[0] = {}
     _TOP[0] = {}
 
 
@@ -280,7 +296,8 @@ def _arguments(node, namespace, name, found, functions):
             value = ast.Constant(value=_default_text(default))
         elif kind == "function":
             value = _function_named(node, label, value, functions,
-                                    _WATCHED[0] if namespace == "network" else _TIMED[0])
+                                    {"network": _WATCHED[0], "display": _SHOT[0]}
+                                    .get(namespace, _TIMED[0]))
         else:
             if isinstance(value, ast.Name) and value.id in _TOP[0] \
                     and any(other == "function" for _name, other, _default in found.params):
@@ -363,6 +380,7 @@ def _literal(node, label, argument, value):
 _NEEDS_A_SCREEN = (("timer", "after"), ("timer", "every"), ("network", "on_change"),
                    ("display", "keep_on"), ("display", "brightness"),
                    ("display", "immersive"), ("display", "orientation"),
+                   ("display", "on_screenshot"),
                    ("app_lock", "after"), ("app_lock", "now"), ("app_lock", "off"),
                    ("app_lock", "locked"))
 
@@ -713,8 +731,10 @@ def rewrite(tree):
     bound = _bound_names(tree)
     for node in ast.walk(tree):
         ours = _is_ours(node, bound)
-        # files is older than this table and has verbs of its own.
-        if ours is not None and ours[0] != "files" and rules.verb(*ours) is None:
+        # files, gallery and clipboard are older than this table and have
+        # verbs of their own.
+        if ours is not None and ours[0] not in rules.SHARED_FAMILIES \
+                and rules.verb(*ours) is None:
             _unknown_verb(node, *ours)
 
     _declarations(tree, bound)
@@ -1307,7 +1327,9 @@ def activity_members():
             (_TIMED[0], "ApkpyTimers", "_apkpyTimerCalls",
              "timer.after() and timer.every() call these"),
             (_WATCHED[0], "ApkpyNetwork", "_apkpyNetworkCalls",
-             "network.on_change() calls these")):
+             "network.on_change() calls these"),
+            (_SHOT[0], "ApkpyDisplay", "_apkpyScreenshotCalls",
+             "display.on_screenshot() calls these")):
         if not functions:
             continue
         lines += [
@@ -1349,6 +1371,12 @@ def _health_arms():
         '        if ("%s".equals(kind)) return "android.permission.health.%s";'
         % (kind, permission) for kind, (permission, _unit, _icon, _sample)
         in rules.HEALTH_KINDS.items())
+
+
+def _gallery_arms():
+    """The cases of ApkpyKitRules.galleryType(), from kit_rules.GALLERY_TYPES."""
+    return "\n".join('            case "%s": return "%s";' % (ending, kind)
+                     for ending, kind in sorted(rules.GALLERY_TYPES.items()))
 
 
 def _feedback_arms():
@@ -1394,6 +1422,10 @@ def java_source(class_name, package):
             ("__MIN_RATE__", repr(float(low_rate))), ("__MAX_RATE__", repr(float(high_rate))),
             ("__MIN_PITCH__", repr(float(low_pitch))),
             ("__TIMER_SHORTEST__", str(int(rules.TIMER_SHORTEST))),
+            ("__CLOCK_SHORTEST__", str(int(rules.LIMITS["clock_seconds"][0]))),
+            ("__CLOCK_LONGEST__", str(int(rules.LIMITS["clock_seconds"][1]))),
+            ("__CALENDAR_DAYS__", str(int(rules.CALENDAR_DAYS))),
+            ("__GALLERY_TYPES__", _gallery_arms()),
             ("__TIMER_LONGEST__", str(int(rules.TIMER_LONGEST))),
             ("__MAX_PITCH__", repr(float(high_pitch)))):
         source = source.replace(mark, value)

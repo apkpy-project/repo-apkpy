@@ -459,10 +459,41 @@ def render_markdown(text_widget, source, copy_code=False):
     _render_markdown(text_widget, source, copy_code=copy_code)
 
 
+def _code_tags(text_widget):
+    """The colours of a fenced block's words (core/code_highlight.py), from
+    the dark palette on light text and the light one on dark text."""
+    from ..core import code_highlight as _code
+    try:
+        colour = str(text_widget.cget("foreground"))
+        rgb = text_widget.winfo_rgb(colour)
+        colour = "#%02X%02X%02X" % tuple(v >> 8 for v in rgb)
+    except Exception:
+        colour = "#000000"
+    palette = _code.palette(colour)
+    for kind in _code.KINDS:
+        text_widget.tag_configure("code_" + kind, foreground=palette[kind])
+    text_widget.tag_configure("code_lineno", foreground=palette["lineno"])
+
+
+def _insert_code_line(text_widget, line, lang, number):
+    from ..core import code_highlight as _code
+    if number:
+        text_widget.insert("end", "%2d  " % number, ("code_block", "code_lineno"))
+    at = 0
+    for start, end, kind in _code.tokens(line, lang) if lang else []:
+        if start > at:
+            text_widget.insert("end", line[at:start], ("code_block",))
+        text_widget.insert("end", line[start:end], ("code_block", "code_" + kind))
+        at = end
+    text_widget.insert("end", line[at:] + "\n", ("code_block",))
+
+
 def _render_markdown(text_widget, source, copy_code=False):
+    from ..core import code_highlight as _code
     in_code = False
     block = []
     copies = 0
+    lang, numbers, line_number = None, False, 0
     for raw_line in str(source).splitlines():
         stripped = raw_line.strip()
         if stripped.startswith("```"):
@@ -475,10 +506,20 @@ def _render_markdown(text_widget, source, copy_code=False):
                 )
             in_code = not in_code
             block = []
+            if in_code:
+                info = stripped[3:]
+                lang, numbers, line_number = _code.language(info), _code.numbered(info), 0
+                if lang or numbers:
+                    _code_tags(text_widget)
             continue
         if in_code:
             block.append(raw_line)
-            text_widget.insert("end", raw_line + "\n", ("code_block",))
+            line_number += 1
+            if lang or numbers:
+                _insert_code_line(text_widget, raw_line, lang,
+                                  line_number if numbers else 0)
+            else:
+                text_widget.insert("end", raw_line + "\n", ("code_block",))
             continue
         heading = re.match(r"^(#{1,6})\s+(.*)$", raw_line)
         if heading:

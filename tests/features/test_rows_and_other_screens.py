@@ -21,12 +21,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from apkpy_lib.core import dead_methods
 from apkpy_lib.core.compiler import translate_python_to_android
 from apkpy_lib.core.features import pending_views
 
 
 def _files(source):
-    files = translate_python_to_android(source)
+    # These tests read go() and its kind as methods of their own.
+    with dead_methods.everything_kept():
+        files = translate_python_to_android(source)
     if "error.txt" in files:
         raise AssertionError(files["error.txt"][:500])
     return files

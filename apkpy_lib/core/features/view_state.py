@@ -52,8 +52,9 @@ def used_by(components, functions, module_commands=None):
 def remember(lines, indent, component, java_var, field=None):
     if field is None and not needs_text_state(component):
         return
-    if component.get("comp_type") == "chart":
-        # A ring's value is a number the chart draws, not text to restore.
+    if component.get("comp_type") in ("chart", "web_page"):
+        # A ring's value is a number the chart draws, and a page is the
+        # WebView's: neither is text to restore.
         return
     target = java_var
     if field is not None:

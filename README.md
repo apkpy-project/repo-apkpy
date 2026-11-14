@@ -14,11 +14,15 @@
 [Can ApkPy build this?](https://repo-apkpy.pages.dev/can-apkpy-build-this/) ·
 [Changelog](CHANGELOG.md)
 
+![writehere.py in an editor next to the same app on an Android phone: each tap on the phone highlights the Python function it runs.](assets/python-to-android.gif)
+
+<sub>Recorded on a real Android phone. The file in the recording is
+[`examples/replicas/chat.py`](examples/replicas/chat.py).</sub>
+
 <p>
-  <img src="assets/lumen-finance.png" width="200" alt="Lumen, a personal finance app written in Python with ApkPy">
-  <img src="assets/replica-chat-list.png" width="200" alt="A chat list rebuilt in Python with ApkPy">
-  <img src="assets/replica-music-home.png" width="200" alt="A music app home screen rebuilt in Python with ApkPy">
-  <img src="assets/northline-travel.png" width="200" alt="Northline, a travel app written in Python with ApkPy">
+  <img src="assets/lumen-finance.png" width="250" alt="Lumen, a personal finance app written in Python with ApkPy">
+  <img src="assets/replica-music-home.png" width="250" alt="A music app home screen rebuilt in Python with ApkPy">
+  <img src="assets/northline-travel.png" width="250" alt="Northline, a travel app written in Python with ApkPy">
 </p>
 
 Your Python is read at build time and turned into ordinary Android source —
@@ -29,6 +33,22 @@ shrunk with R8, and starts with no interpreter to boot.
 You write the whole app in Python with a CSS-style stylesheet, see it on your
 desktop in a live Previewer, and then build an installable `.apk` — or a
 project to open in Android Studio. No Java, no Kotlin, no Android Studio needed.
+
+## How big an app can be
+
+The first app below is a short task list because it is easy to read, not
+because that is the limit. [`examples/replicas`](examples/replicas/writehere.py)
+is one app of 17 screens and about 1,150 lines of Python: a chat you type into,
+a music app that plays, a photo feed with stories, a profile whose tabs swipe
+over a photo grid, settings that remember, a ride sheet over a map, a mail
+inbox you swipe to archive (with Undo) and a task list you reorder by holding
+a row. Its release APK is about 8 MB, pictures and music included.
+
+A bigger app splits into its own Python files ([`import money`](examples/modules)),
+long lists scroll through recycled rows, data lives in SQLite or the reactive
+data core, and work carries on in background jobs with an offline queue.
+[What ApkPy reaches](https://repo-apkpy.pages.dev/coverage/) lists the 60
+capabilities real applications use, with the evidence for each.
 
 ## Quick start
 

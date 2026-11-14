@@ -168,10 +168,15 @@ class Theme:
             "surface_low": surface_low, "surface_high": surface_high,
             "border_subtle": border_subtle,
         }
-        # Kept so counterpart() can rebuild this theme in the other mode with
-        # the author's own colours and nothing else.
+        # The colours read as the stylesheet reads them: Theme(primary=
+        # "rgba(103, 80, 164, 0.9)") or CSS's "#6750A4E6" (core/css_colors.py).
+        from .core.css_colors import normalize_value
+        # Kept as the author wrote them, so counterpart() can rebuild this
+        # theme in the other mode with their own colours and nothing else
+        # (read twice, an alpha colour would be turned round twice).
         self._supplied = dict(supplied)
-        palette.update({k: str(v) for k, v in supplied.items() if v is not None})
+        palette.update({k: normalize_value(str(v)) for k, v in supplied.items()
+                        if v is not None})
         # A cor de um botao cheio tem de ser legivel SOBRE a primary escolhida.
         # O default da paleta e' um roxo-escuro do Material: quem trocou a
         # primary por um laranja ficava com texto azul-escuro por cima, e a
@@ -669,6 +674,41 @@ def nav_colors(tokens):
     return bar, active, inactive, pill
 
 
+def _nav_px(value):
+    import re as _re
+    match = _re.match(r"\s*(-?[\d.]+)", str(value or ""))
+    return float(match.group(1)) if match else 0.0
+
+
+def nav_look(styles):
+    """The bottom bar as the stylesheet styles it, for both runtimes.
+
+    ``bottom_nav { ... }`` takes background-color, color (the items at rest),
+    active-color, indicator-color (the pill), and -- what makes it float --
+    margin and border-radius, with an optional border. With a margin or a
+    radius the bar is a card over the content, which runs on under it; with
+    neither it is the bar it always was, in the colours given.
+    """
+    styles = styles or {}
+    bar, active, inactive, pill = nav_colors(styles.get("__theme__", {}))
+    own = dict(styles.get("bottom_nav") or {})
+    margin = _nav_px(str(own.get("margin") or "").split()[0] if own.get("margin") else
+                     own.get("margin-bottom") or own.get("margin-left"))
+    radius = _nav_px(own.get("border-radius"))
+    border = own.get("border-color")
+    return {
+        "bar": own.get("background-color") or bar,
+        "active": own.get("active-color") or active,
+        "inactive": own.get("color") or inactive,
+        "pill": own.get("indicator-color") or pill,
+        "margin": margin,
+        "radius": radius,
+        "border": border,
+        "border_width": _nav_px(own.get("border-width")) if border else 0.0,
+        "floating": margin > 0 or radius > 0,
+    }
+
+
 # Above this weighted luminance a surface is light and wants dark ink. The
 # Activity applies the same number to its status bar icons at run time
 # (_apkpySystemIconsFollowBackground), so keep the two in step.
@@ -733,6 +773,22 @@ def _contrast(front, back):
     return (hi + 0.05) / (lo + 0.05)
 
 
+def _seen_background(layers):
+    """The colour under content: the first of ``layers`` (top first) that
+    paints, with a see-through one (rgba(), #RRGGBBAA in a stylesheet) laid
+    over the ones below it. A glass card on a red screen is pink, not white."""
+    from .core.css_colors import over
+    for index, candidate in enumerate(layers):
+        if not candidate:
+            continue
+        if _is_light(candidate) is not None:
+            return candidate
+        flat = over(candidate, _seen_background(layers[index + 1:]))
+        if flat != candidate and _is_light(flat) is not None:
+            return flat
+    return LIGHT_BACKGROUND
+
+
 def content_ink(tokens, own_bg=None, screen_fg=None, screen_bg=None, parent_bg=None):
     """The text, muted text and divider colours of content that names none of
     its own: a label, markdown, rich_text, a tree_view, the rows of a
@@ -751,14 +807,9 @@ def content_ink(tokens, own_bg=None, screen_fg=None, screen_bg=None, parent_bg=N
     made dark, and the screen's light `color` into a white card.
     """
     tokens = tokens or {}
-    under, light = LIGHT_BACKGROUND, True
-    for candidate in (own_bg, parent_bg, screen_bg, tokens.get("background"),
-                      LIGHT_BACKGROUND):
-        found = _is_light(candidate) if candidate else None
-        if found is not None:
-            under, light = candidate, found
-            break
-    ink = _CONTENT_INK[light]
+    under = _seen_background((own_bg, parent_bg, screen_bg, tokens.get("background"),
+                              LIGHT_BACKGROUND))
+    ink = _CONTENT_INK[_is_light(under) is not False]
 
     def reads(colour):
         ratio = _contrast(colour, under)
@@ -1110,6 +1161,31 @@ def collection_bubbles(styles, comp_id, variant_names):
     return table, shape
 
 
+_SHORTHAND_PARTS = {
+    "padding": ("padding-top", "padding-right", "padding-bottom", "padding-left"),
+    "margin": ("margin-top", "margin-right", "margin-bottom", "margin-left"),
+    "border-radius": ("border-top-left-radius", "border-top-right-radius",
+                      "border-bottom-right-radius", "border-bottom-left-radius"),
+    "border": ("border-width", "border-color", "border-style"),
+}
+
+
+class _Cascade(dict):
+    """A merged style where a later block's shorthand resets the longhands an
+    earlier one set, as in CSS: ``label { padding-left: 0 }`` and then
+    ``badge { padding: 6px 12px }`` gives the badge 12px at the left. The
+    longhand stayed in the dict and won wherever it was read first."""
+
+    def update(self, values=(), **more):
+        values = dict(values, **more)
+        for shorthand, parts in _SHORTHAND_PARTS.items():
+            if shorthand in values:
+                for part in parts:
+                    if part not in values:
+                        self.pop(part, None)
+        super().update(values)
+
+
 def component_style(styles, comp_type=None, comp_id=None, include_body=True,
                     variant=None, viewport=None, row_variant=None):
     """Resolve the shared cascade: body -> type -> variant -> component id.
@@ -1123,7 +1199,7 @@ def component_style(styles, comp_type=None, comp_id=None, include_body=True,
         "input_field": "inputs", "list_view": "list", "image": "image",
     }
     kind = aliases.get(comp_type, comp_type)
-    merged = dict(styles.get("body", {})) if include_body else {}
+    merged = _Cascade(styles.get("body", {})) if include_body else _Cascade()
     if kind:
         merged.update(styles.get(kind, {}))
     if kind == "button" and variant is not None:
@@ -1165,7 +1241,7 @@ def component_style(styles, comp_type=None, comp_id=None, include_body=True,
             condition, selector = parsed
             if selector.lstrip('.') in eligible and media_matches(condition, viewport):
                 merged.update(values)
-    return merged
+    return dict(merged)
 
 
 def input_accent_color(styles, comp_id=None, fallback="#4CAF50"):

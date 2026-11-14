@@ -298,12 +298,21 @@ def _tokenise(data):
     out = []
     index = 0
     total = len(data)
+    arc = False          # inside an A command: its two flags are one digit each
+    argument = 0
     while index < total:
         char = data[index]
         if char in _COMMANDS:
             out.append(char)
+            arc = char in 'Aa'
+            argument = 0
             index += 1
         elif char in ' ,\t\r\n':
+            index += 1
+        elif arc and argument % 7 in (3, 4) and char in '01':
+            # Minified SVG writes "a2 2 0 013 5" for the flags 0, 1 and x=3.
+            out.append(float(char))
+            argument += 1
             index += 1
         else:
             end = index
@@ -328,6 +337,7 @@ def _tokenise(data):
                 raise ValueError(
                     "icon path data has an unexpected character %r" % char)
             out.append(float(data[index:end]))
+            argument += 1
             index = end
     return out
 
@@ -390,7 +400,7 @@ def _elliptical_arc(x0, y0, rx, ry, phi, large, sweep, x1, y1, segments):
     return points
 
 
-def flatten(path_data, segments=16):
+def flatten(path_data, segments=16, keep_lines=False):
     """Path data -> list of subpaths, each a list of ``(x, y)`` points.
 
     Curves become polylines.  Both backends consume the same output, so the
@@ -488,7 +498,7 @@ def flatten(path_data, segments=16):
             last_cubic = last_quad = None
     if len(current) > 1:
         subpaths.append(current)
-    return [sub for sub in subpaths if len(sub) > 2]
+    return [sub for sub in subpaths if len(sub) > (1 if keep_lines else 2)]
 
 
 def rasterize(subpaths, size, supersample=4, viewport=ICON_VIEWPORT):
@@ -597,7 +607,6 @@ def to_path_data(subpaths, epsilon=0.02):
 
 _SVG_NS = '{http://www.w3.org/2000/svg}'
 _TRANSFORM_RE = re.compile(r'(\w+)\s*\(([^)]*)\)')
-_STROKE_ONLY = re.compile(r'stroke\s*[:=]', re.IGNORECASE)
 
 
 def is_file_reference(value):
@@ -659,6 +668,84 @@ def _signed_area(points):
         x1, y1 = points[index + 1]
         total += x0 * y1 - x1 * y0
     return total / 2.0
+
+
+def _svg_number(value, default):
+    try:
+        return float(re.sub(r'[a-zA-Z%]+$', '', str(value).strip()))
+    except (TypeError, ValueError):
+        return default
+
+
+_PRESENTATION = ('fill', 'stroke', 'stroke-width')
+
+
+def _presentation(element, inherited):
+    """fill, stroke and stroke-width as SVG cascades them: an element's own
+    attribute or style, else its parent's. An icon set that writes
+    ``fill="none" stroke="currentColor"`` once on <svg> means every path."""
+    found = dict(inherited)
+    for name in _PRESENTATION:
+        if element.get(name) is not None:
+            found[name] = element.get(name).strip().lower()
+    for name, value in re.findall(r'(fill|stroke-width|stroke)\s*:\s*([^;]+)',
+                                  element.get('style') or '', re.IGNORECASE):
+        found[name.lower()] = value.strip().lower()
+    return found
+
+
+def _stroke_outline(points, width, steps=10):
+    """The band a polyline of this width covers, as filled shapes all wound
+    the same way (nonZero then unites them): a quad per segment and a round
+    piece at each end and at each corner that turns."""
+    import math
+    half = width / 2.0
+    if half <= 0 or len(points) < 2:
+        return []
+    closed = (len(points) > 2 and abs(points[0][0] - points[-1][0]) < 1e-6
+              and abs(points[0][1] - points[-1][1]) < 1e-6)
+    if closed:
+        points = points[:-1]
+    pieces = []
+
+    def wound(shape):
+        area = sum(shape[i - 1][0] * shape[i][1] - shape[i][0] * shape[i - 1][1]
+                   for i in range(len(shape)))
+        return shape if area >= 0 else list(reversed(shape))
+
+    def disc(cx, cy):
+        return wound([(cx + half * math.cos(2 * math.pi * k / steps),
+                       cy + half * math.sin(2 * math.pi * k / steps)) for k in range(steps)])
+
+    # one segment per pair of points, with its normal
+    segments = []
+    pairs = list(zip(points, points[1:] + ([points[0]] if closed else [])))
+    for (ax, ay), (bx, by) in pairs:
+        length = math.hypot(bx - ax, by - ay)
+        if length < 1e-9:
+            continue
+        nx, ny = -(by - ay) / length * half, (bx - ax) / length * half
+        segments.append(((ax, ay), (bx, by), (nx, ny)))
+        pieces.append(wound([(ax + nx, ay + ny), (bx + nx, by + ny),
+                             (bx - nx, by - ny), (ax - nx, ay - ny)]))
+    if not segments:
+        return [disc(*points[0])]
+    # where two segments meet: a round join when it turns hard, a thin wedge
+    # on the outside when it barely turns (the bends of a curve)
+    joins = list(zip(segments, segments[1:] + ([segments[0]] if closed else [])))
+    for (_, (x, y), (n1x, n1y)), (_, _, (n2x, n2y)) in joins:
+        cross = n1x * n2y - n1y * n2x
+        dot = (n1x * n2x + n1y * n2y) / (half * half)
+        if dot < math.cos(math.radians(35)):
+            pieces.append(disc(x, y))
+        elif abs(cross) > 1e-12:
+            side = 1 if cross < 0 else -1
+            pieces.append(wound([(x, y), (x + side * n1x, y + side * n1y),
+                                 (x + side * n2x, y + side * n2y)]))
+    if not closed:
+        pieces.append(disc(*segments[0][0]))
+        pieces.append(disc(*segments[-1][1]))
+    return pieces
 
 
 def _fill_from_style(style):
@@ -741,6 +828,17 @@ def _shape_to_path(element, tag):
         pairs = ['%s,%s' % (values[i], values[i + 1])
                  for i in range(0, len(values) - 1, 2)]
         return 'M' + 'L'.join(pairs) + 'Z'
+    if tag == 'line':
+        return 'M%g,%gL%g,%g' % (_float_attr(element, 'x1'), _float_attr(element, 'y1'),
+                                 _float_attr(element, 'x2'), _float_attr(element, 'y2'))
+    if tag == 'polyline':
+        raw = (element.get('points') or '').strip()
+        values = [v for v in re.split(r'[\s,]+', raw) if v]
+        if len(values) < 4:
+            return ''
+        pairs = ['%s,%s' % (values[i], values[i + 1])
+                 for i in range(0, len(values) - 1, 2)]
+        return 'M' + 'L'.join(pairs)
     return ''
 
 
@@ -782,18 +880,18 @@ def load_svg(path, base_dir=None, segments=10):
            offset_x - min_x * ratio, offset_y - min_y * ratio)
 
     subpaths = []
-    saw_stroke_only = [False]      # list, so the nested walk can set it
     unsupported = set()
 
-    def walk(element, matrix):
+    def walk(element, matrix, inherited=None):
         group_matrix = _matrix_multiply(
             matrix, _parse_transform(element.get('transform')))
+        inherited = _presentation(element, inherited or {})
         for child in element:
             tag = child.tag
             if tag.startswith(_SVG_NS):
                 tag = tag[len(_SVG_NS):]
             if tag in ('g', 'svg'):
-                walk(child, group_matrix)
+                walk(child, group_matrix, inherited)
                 continue
             if tag in ('defs', 'title', 'desc', 'metadata', 'style'):
                 continue
@@ -802,32 +900,32 @@ def load_svg(path, base_dir=None, segments=10):
                 continue
             data = child.get('d') if tag == 'path' else _shape_to_path(child, tag)
             if not data:
-                if tag in ('line', 'polyline'):
-                    unsupported.add(tag)
                 continue
-            fill = (child.get('fill') or '').strip().lower()
-            style = child.get('style') or ''
-            if fill == 'none' or 'fill:none' in style.replace(' ', ''):
-                if child.get('stroke') or _STROKE_ONLY.search(style):
-                    saw_stroke_only[0] = True
-                continue
+            own = _presentation(child, inherited)
+            fill = own.get('fill', '')
+            stroke = own.get('stroke', '')
             child_matrix = _matrix_multiply(
                 group_matrix, _parse_transform(child.get('transform')))
             combined = _matrix_multiply(fit, child_matrix)
+            stroked = stroke not in ('', 'none') and _svg_number(own.get('stroke-width'), 1.0) > 0
+            if stroked:
+                # A stroke (Lucide, Feather, Tabler...): the band it covers,
+                # as filled shapes, so both sides draw it as they draw a fill.
+                scale = abs(combined[0] * combined[3] - combined[1] * combined[2]) ** 0.5
+                width = _svg_number(own.get('stroke-width'), 1.0) * scale
+                for line in flatten(data, segments=segments, keep_lines=True):
+                    points = [_apply(combined, point) for point in line]
+                    for outline in _stroke_outline(points, width):
+                        subpaths.append((outline, fill if fill not in ('', 'none') else stroke))
+            if fill == 'none' or tag == 'line':
+                continue
             for sub in flatten(data, segments=segments):
-                subpaths.append(([_apply(combined, point) for point in sub],
-                                 fill or _fill_from_style(style)))
+                subpaths.append(([_apply(combined, point) for point in sub], fill))
 
     walk(root, (1.0, 0.0, 0.0, 1.0, 0.0, 0.0))
     subpaths = _resolve_two_tone(subpaths)
 
     if not subpaths:
-        if saw_stroke_only[0]:
-            raise ValueError(
-                "icon file %s draws with strokes and no fill; ApkPy renders "
-                "filled shapes. Export it with the strokes outlined "
-                "('Outline stroke' in Figma, 'Object > Path > Outline Stroke' "
-                "in Illustrator)." % path)
         if unsupported:
             raise ValueError(
                 "icon file %s uses <%s>, which ApkPy cannot convert to a "

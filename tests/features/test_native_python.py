@@ -565,7 +565,8 @@ class JavacAgreesTests(unittest.TestCase):
         self.assertIn("/** @native def battery -- writehere.py:6 */", java)
         self.assertIn("private String _apkpyNative_battery() {", java)
         self.assertIn('"Battery: " + _apkpyNativeText(_apkpyNative_battery()) + "%"', java)
-        self.assertIn("private static int _apkpyNativeInt(String text, String name) {", java)
+        # battery() takes no argument, so nothing reads one.
+        self.assertNotIn("_apkpyNativeInt(", java)
 
     def test_the_two_languages_read_an_argument_alike(self):
         texts = ["12", " 12 ", "+12", "-7", "12.0", "12.5", "1e3", "1e400", "",

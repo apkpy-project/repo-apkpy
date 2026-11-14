@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import inspect
 import os
+import re
 import sys
 import threading
 import time
@@ -44,6 +45,7 @@ __all__ = [
     "HomeWidgetAPI", "home_widget", "QuickTileAPI", "quick_tile", "AdsAPI", "ads",
     "UpdatesAPI", "updates", "HealthAPI", "health", "TimerAPI", "timer",
     "NetworkAPI", "network", "DisplayAPI", "display", "AppLockAPI", "app_lock",
+    "ClockAPI", "clock", "gallery_save", "clipboard_paste", "clipboard_has_text",
 ]
 
 
@@ -140,6 +142,34 @@ def _hand_over(kind, icon, app_name, title, rows=(), quote="", note="", on_close
     from . import kit_surfaces
     return kit_surfaces.Handover(kind, icon, app_name, title, rows=rows, quote=quote,
                                  note=note, on_close=on_close).open()
+
+
+def _with_permission(permission, icon, question, on_result, go):
+    """Android's own dialog, the first time: ``go()`` once allowed, else
+    ``on_result(False, "permission_denied")``. With no Previewer there is
+    nobody to ask, and a script runs as an app that was allowed."""
+    from .. import ui
+    if ui.permissions.has(permission):
+        go()
+        return
+    if _root() is None:
+        ui.permissions._granted.add(permission)
+        go()
+        return
+
+    def answered(choice):
+        if choice == "deny":
+            _answer(on_result, False, "permission_denied")
+            return
+        ui.permissions._granted.add(permission)
+        go()
+
+    from . import kit_surfaces
+    kit_surfaces.Handover(
+        "permission", icon, "Permission", question,
+        choices=[("Allow", "always"), ("Don\u2019t allow", "deny")],
+        note="Android asks this the first time, in a dialog of its own.",
+        on_choice=answered, on_close=lambda: answered("deny")).open()
 
 
 class _NoSuchCall(ApkpyError, AttributeError):
@@ -711,6 +741,55 @@ class CalendarAPI(_Api):
                         "filled in, and the person saves it.")
         return "ok"
 
+    def events(self, start="", end="", on_result=None):
+        """The events between two times, as JSON text; a week from today when
+        no time is given. A desk has no calendar of the person's: the
+        Previewer answers a few made-up events that fall inside the window,
+        in the shape the phone answers."""
+        self._guard("events")
+        import datetime
+        import json
+        window = rules.calendar_window(start, end, datetime.datetime.now())
+        if window is None:
+            _answer(on_result, False, "invalid")
+            return
+
+        def read():
+            rows = _calendar_sample(*window)
+            _answer(on_result, True, json.dumps(rows, ensure_ascii=False, separators=(",", ":")))
+
+        _with_permission("READ_CALENDAR", "event",
+                         "Allow %s to access your calendar?" % _app_name(), on_result, read)
+
+
+def _calendar_sample(begin, finish):
+    """Four made-up events placed from the start of the window, the ones that
+    fall inside it, shaped as ApkpyCalendar answers them."""
+    import datetime
+    day = begin.replace(hour=0, minute=0, second=0, microsecond=0)
+    made_up = (
+        ("Team meeting", 0, (10, 0), 45, "Room 2", "", "Work"),
+        ("Dentist", 1, (15, 30), 60, "Rua Augusta 21", "Bring the card", "Personal"),
+        ("Ana's birthday", 3, None, 0, "", "", "Birthdays"),
+        ("Gym", 5, (19, 0), 60, "", "", "Personal"),
+    )
+    rows = []
+    for title, days, at, minutes, place, notes, calendar_name in made_up:
+        if at is None:
+            starts = day + datetime.timedelta(days=days)
+            ends = starts + datetime.timedelta(days=1)
+            shown = (starts.strftime("%Y-%m-%d"), starts.strftime("%Y-%m-%d"))
+        else:
+            starts = day + datetime.timedelta(days=days, hours=at[0], minutes=at[1])
+            ends = starts + datetime.timedelta(minutes=minutes)
+            shown = (starts.strftime("%Y-%m-%d %H:%M"), ends.strftime("%Y-%m-%d %H:%M"))
+        if ends <= begin or starts >= finish:
+            continue
+        rows.append({"title": title, "start": shown[0], "end": shown[1],
+                     "all_day": at is None, "location": place, "notes": notes,
+                     "calendar": calendar_name})
+    return rows
+
 
 calendar = CalendarAPI()
 
@@ -760,6 +839,26 @@ class PhoneAPI(_Api):
                    note="On the phone the messages app opens with this written, "
                         "and the person presses send.")
         return "ok"
+
+    def call(self, number, on_result=None):
+        """Call this number now; Android asks the first time whether the app
+        may make calls. ``on_result(ok, why)`` once the call is placed."""
+        self._guard("call")
+        digits = rules.phone_number(number)
+        if not digits:
+            _answer(on_result, False, "invalid")
+            return
+
+        def ring():
+            self.last = ("call", digits)
+            _hand_over("call", "call", "Phone", _spaced(digits), rows=[("call", "Calling\u2026")],
+                       note="On the phone the call is placed at once, with no button "
+                            "for the person to press.")
+            _answer(on_result, True, "ok")
+
+        _with_permission("CALL_PHONE", "call",
+                         "Allow %s to make and manage phone calls?" % _app_name(),
+                         on_result, ring)
 
 
 phone = PhoneAPI()
@@ -2118,6 +2217,7 @@ class DisplayAPI(_Api):
 
     def __init__(self):
         self._asked = {}        # screen -> _Asked
+        self._shots = {}        # screen -> {name: function}, for on_screenshot()
         self._window = None
 
     # -- what a screen has asked for ----------------------------------------
@@ -2165,7 +2265,31 @@ class DisplayAPI(_Api):
         mine.orientation = known
         return self._changed()
 
+    def on_screenshot(self, run):
+        """Call the function when the person takes a screenshot of this
+        screen. In the Previewer that is Ctrl+Shift+S. Answers ``"ok"``."""
+        self._guard("on_screenshot")
+        label = rules.label(self.namespace, "on_screenshot")
+        name = _function_name(label, run)
+        if sys._getframe(1).f_code.co_name == "<module>":
+            rules.refuse(**rules.display_at_the_top(label))
+        self._shots.setdefault(TimerAPI._screen(), {})[name] = run
+        return "ok"
+
     # -- the Previewer's own ------------------------------------------------
+
+    def _screenshot(self):
+        """Ctrl+Shift+S: a screenshot of the screen on show. Its functions
+        are called, as Android 14 calls them; answers how many there were."""
+        runs = list(self._shots.get(TimerAPI._screen(), {}).values())
+        from .. import ui
+        live = ui.live_preview()
+        if live is not None:
+            live._status_say("Screenshot: this screen was told" if runs
+                             else "Screenshot: this screen does not listen for one")
+        for run in runs:
+            run()
+        return len(runs)
 
     def _changed(self):
         self._draw()
@@ -2203,12 +2327,14 @@ class DisplayAPI(_Api):
         """``screen`` was left with Back: on the phone it is gone, and what it
         asked for went with it."""
         self._asked.pop(screen, None)
+        self._shots.pop(screen, None)
 
     def _screen_shown(self, screen):
         # A second Previewer in one process -- a test run -- starts clean.
         root = _root()
         if self._window is not None and root is not self._window:
             self._asked = {}
+            self._shots = {}
             _LIT.pop("awake", None)
             _LIT.pop("brightness", None)
         self._window = root
@@ -2216,6 +2342,130 @@ class DisplayAPI(_Api):
 
 
 display = DisplayAPI()
+
+
+# ── the clock app ────────────────────────────────────────────────────────────
+
+class ClockAPI(_Api):
+    """An alarm or a countdown, set in the phone's clock app.
+
+        clock.alarm(7, 30, "Wake up")       # rings at 07:30, with the app closed
+        clock.timer(300, "Pasta")           # five minutes, counting at once
+
+    The clock app keeps them, so they ring after this app has closed. On the
+    desk the clock app is a sheet that shows what it was given.
+    """
+
+    namespace = "clock"
+
+    def __init__(self):
+        self.last = None
+
+    def alarm(self, hour, minute=0, label=""):
+        """An alarm at this time, set in the clock app. Answers ``"ok"`` or
+        ``"invalid"``."""
+        self._guard("alarm")
+        time_of_day = rules.clock_alarm(hour, minute)
+        if time_of_day is None:
+            return "invalid"
+        said = "" if label is None else str(label).strip()
+        self.last = ("alarm", time_of_day[0], time_of_day[1], said)
+        _hand_over("alarm", "alarm", "Clock", "%02d:%02d" % time_of_day,
+                   rows=[("label", said)],
+                   note="On the phone the clock app opens with this alarm set. It "
+                        "rings with this app closed.")
+        return "ok"
+
+    def timer(self, seconds, label=""):
+        """A countdown of this many seconds, started in the clock app.
+        Answers ``"ok"`` or ``"invalid"``."""
+        self._guard("timer")
+        length = rules.clock_seconds(seconds)
+        if length is None:
+            return "invalid"
+        said = "" if label is None else str(label).strip()
+        self.last = ("timer", length, said)
+        hours, rest = divmod(length, 3600)
+        shown = ("%d:%02d:%02d" % (hours, rest // 60, rest % 60) if hours
+                 else "%d:%02d" % (rest // 60, rest % 60))
+        _hand_over("timer", "timer", "Clock", shown, rows=[("label", said)],
+                   note="On the phone the clock app starts this countdown and shows "
+                        "it; it rings with this app closed.")
+        return "ok"
+
+
+clock = ClockAPI()
+
+
+# ── the gallery and the clipboard: calls of two older families ──────────────
+
+def _gallery_folder(album):
+    """Where the desk keeps what the phone puts in the gallery."""
+    named = "" if album is None else str(album).strip()
+    folder = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", named or _app_name()).strip().lstrip(".")
+    path = os.path.join(os.path.expanduser("~"), ".apkpy", "gallery", folder or "ApkPy")
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
+def gallery_save(path, album="", on_result=None):
+    """Put a picture or a video of the app in the gallery. ``on_result(ok,
+    name)``. On the desk the gallery is ``~/.apkpy/gallery/<album>``."""
+    job_rules.guard("screen_api", "gallery.save()")
+    from .. import ui
+    given = str(path or "").strip()
+    source = given if os.path.isabs(given) else ui.files.path(given)
+    if not given or not os.path.isfile(source):
+        _answer(on_result, False, "not_found")
+        return
+    name = os.path.basename(source)
+    if not rules.gallery_type(name):
+        _answer(on_result, False, "invalid")
+        return
+    try:
+        import shutil
+        folder = _gallery_folder(album)
+        stem, ending = os.path.splitext(name)
+        target = os.path.join(folder, name)
+        copy = 2
+        while os.path.exists(target):
+            target = os.path.join(folder, "%s-%d%s" % (stem, copy, ending))
+            copy += 1
+        shutil.copyfile(source, target)
+    except OSError:
+        _answer(on_result, False, "failed")
+        return
+    live = ui.live_preview()
+    if live is None:
+        print("[ApkPy gallery] %s saved to %s" % (name, target))
+    else:
+        live._status_say("Saved to the gallery")
+    _answer(on_result, True, os.path.basename(target))
+
+
+def clipboard_paste():
+    """The text on the clipboard -- the computer's -- or ``""``."""
+    job_rules.guard("screen_api", "clipboard.paste()")
+    root = _root()
+    if root is None:
+        return ""
+    try:
+        text = root.clipboard_get()
+    except Exception:
+        return ""
+    return "" if text is None else str(text)
+
+
+def clipboard_has_text():
+    """Whether there is text to paste."""
+    job_rules.guard("screen_api", "clipboard.has_text()")
+    root = _root()
+    if root is None:
+        return False
+    try:
+        return bool(root.clipboard_get())
+    except Exception:
+        return False
 
 
 # ── the app's own lock ───────────────────────────────────────────────────────

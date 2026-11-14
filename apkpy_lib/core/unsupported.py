@@ -132,11 +132,8 @@ NO_RUNTIME = {
 }
 
 # Builtins with no translation. The value is a workaround that compiles today.
+# print, any, all, zip and enumerate were here; they are translated now.
 BUILTINS = {
-    'any': 'a for loop with a flag',
-    'all': 'a for loop with a flag',
-    'zip': 'a for over range(len(items)) and index both lists',
-    'enumerate': 'a for over range(len(items))',
     'map': 'a for loop',
     'filter': 'a for loop with an if',
     'set': 'a list, checking with in before appending',
@@ -145,9 +142,14 @@ BUILTINS = {
     'eval': 'not translatable, and not safe to add',
     'exec': 'not translatable, and not safe to add',
     'type': 'not translatable: every value is text on the phone',
-    # print looks supported and is not: it compiles to a call to a method that
-    # was never written, so the build stops on cannot-find-symbol far away.
-    'print': 'toast(text), which you can see while the app runs',
+}
+
+# Builtins translated as the list of a for loop, and not yet as a value:
+# list(range(n)), dict(zip(keys, values)), x in range(a, b).
+BUILTINS_IN_A_FOR = {
+    'range': ('for i in range(n):', 'items.append(i)'),
+    'zip': ('for a, b in zip(xs, ys):', 'pairs.append([a, b])'),
+    'enumerate': ('for i, x in enumerate(items):', 'numbered.append([i, x])'),
 }
 
 # Statements ApkPy drops on purpose. Nothing is lost by ignoring them, so they
@@ -235,6 +237,14 @@ def advice(name):
             + root + ' is not part of it yet. ' + PLANNED[root]
         )
         return cause, (['Write it as ' + exact + '.'] if exact else [])
+
+    if '.' not in name and name in BUILTINS_IN_A_FOR:
+        loop, line = BUILTINS_IN_A_FOR[name]
+        return (
+            name + '() is translated as the list of a for loop, and not yet as '
+            'a value of its own.',
+            ['Build the list in the loop: ' + loop + ' ' + line],
+        )
 
     if '.' not in name and name in BUILTINS:
         return (
@@ -584,7 +594,7 @@ def raise_module_comprehension(node):
     )
 
 
-def raise_untranslated_arithmetic(node):
+def raise_untranslated_arithmetic(node, typed=None):
     """Arithmetic ApkPy could not write, which used to become empty text.
 
     "n=%s" % n, and price * 2 on text read from an input, both reached the end
@@ -618,6 +628,30 @@ def raise_untranslated_arithmetic(node):
                 'Write the repeated text out in full, or build it up in a for '
                 'loop over range().',
             ],
+            received=describe(node),
+        )
+    if typed == 'text':
+        # The rest is decided when the app runs (_apkpyArith); what stops
+        # here is what Python stops on too.
+        raise_unsupported(
+            node,
+            cause=('One side of this is text, and Python stops on text and a '
+                   'number with a TypeError: "5" - 1 is not 4. The Previewer '
+                   'stops here too.'),
+            suggestions=[
+                'Say which kind of number it is: int(value) - 1, or '
+                'float(price) * 2. Text from an input or from storage stays '
+                'text until you do.',
+            ],
+            received=describe(node),
+        )
+    if typed in ('list', 'dict'):
+        raise_unsupported(
+            node,
+            cause=('One side of this is a %s, and Python stops on it with a '
+                   'TypeError. The Previewer stops here too.' % typed),
+            suggestions=['Do the arithmetic on its items: for x in items: '
+                         'total += x * 2.'],
             received=describe(node),
         )
     raise_unsupported(

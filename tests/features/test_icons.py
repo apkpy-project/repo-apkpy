@@ -230,13 +230,64 @@ class UserSvgTests(unittest.TestCase):
             '<polygon points="12,2 22,22 2,22" fill="#000"/></svg>')
         self.assertGreater(_ink(icons.load_svg(path)), 0.2)
 
-    def test_stroke_only_svg_explains_how_to_fix_it(self):
+    def _painted(self, data, x, y):
+        coverage = icons.rasterize(icons.flatten(data), 24, supersample=4)
+        return coverage[int(y) * 24 + int(x)] > 128
+
+    def test_a_stroked_circle_is_drawn_as_its_ring(self):
         path = self._write('stroke.svg',
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
-            '<circle cx="12" cy="12" r="8" fill="none" stroke="#000"/></svg>')
-        with self.assertRaises(ValueError) as caught:
+            '<circle cx="12" cy="12" r="8" fill="none" stroke="#000" stroke-width="2"/></svg>')
+        data = icons.load_svg(path)
+        self.assertTrue(self._painted(data, 19.5, 12))
+        self.assertTrue(self._painted(data, 12, 4.5))
+        self.assertFalse(self._painted(data, 12, 12))
+        self.assertFalse(self._painted(data, 1, 1))
+
+    def test_lucide_attributes_on_the_root_reach_every_path(self):
+        # Lucide, Feather and Tabler write fill="none" stroke=... once, on <svg>.
+        path = self._write('plus.svg',
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" '
+            'stroke="currentColor" stroke-width="2" stroke-linecap="round">'
+            '<path d="M5 12h14"/><path d="M12 5v14"/></svg>')
+        data = icons.load_svg(path)
+        self.assertTrue(self._painted(data, 12, 12))
+        self.assertTrue(self._painted(data, 6, 12))
+        self.assertTrue(self._painted(data, 12, 18))
+        self.assertFalse(self._painted(data, 6, 6))
+
+    def test_line_and_polyline_are_drawn(self):
+        path = self._write('check.svg',
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+            'stroke="#000" stroke-width="2" fill="none">'
+            '<polyline points="4 12 9 17 20 6"/><line x1="4" y1="21" x2="20" y2="21"/></svg>')
+        data = icons.load_svg(path)
+        self.assertTrue(self._painted(data, 9, 16.5))
+        self.assertTrue(self._painted(data, 15, 10.5))
+        self.assertTrue(self._painted(data, 12, 21))
+        self.assertFalse(self._painted(data, 12, 15))
+
+    def test_a_filled_and_stroked_shape_keeps_both(self):
+        path = self._write('both.svg',
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+            '<rect x="6" y="6" width="12" height="12" fill="#000" stroke="#000" '
+            'stroke-width="4"/></svg>')
+        data = icons.load_svg(path)
+        self.assertTrue(self._painted(data, 12, 12))
+        self.assertTrue(self._painted(data, 4.5, 12))
+
+    def test_compact_arc_flags_are_read(self):
+        # Minified SVG (Lucide's npm build) glues the two flags to x: "013" is 0, 1, 3.
+        glued = icons.flatten('M3 5A2 2 0 015 3')
+        spaced = icons.flatten('M3 5A2 2 0 0 1 5 3')
+        self.assertEqual(glued, spaced)
+
+    def test_a_zero_stroke_draws_nothing(self):
+        path = self._write('zero.svg',
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+            '<circle cx="12" cy="12" r="8" fill="none" stroke="#000" stroke-width="0"/></svg>')
+        with self.assertRaises(ValueError):
             icons.load_svg(path)
-        self.assertIn('Outline stroke', str(caught.exception))
 
     def test_unconvertible_element_is_named(self):
         path = self._write('text.svg',

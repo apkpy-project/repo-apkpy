@@ -10,6 +10,7 @@ and ticketing apps are built around -- had no answer at all.
 
 import unittest
 
+from apkpy_lib.core import dead_methods
 from apkpy_lib.core import i18n
 from apkpy_lib.core.compiler import translate_python_to_android
 from apkpy_lib.core.features import scan as scan_feature
@@ -391,7 +392,9 @@ class TheForcedUpdateTests(unittest.TestCase):
 
     def test_the_version_comes_from_the_installed_package(self):
         # Not from the source: what matters is the build actually running.
-        java = self._java()
+        # (The helper is written only for an app that asks for the version.)
+        with dead_methods.everything_kept():
+            java = self._java()
         self.assertIn('getPackageInfo(getPackageName(), 0)', java)
         self.assertIn('getLongVersionCode()', java)
 

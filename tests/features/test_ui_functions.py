@@ -21,6 +21,7 @@ import tempfile
 import unittest
 
 import apkpy_lib as api
+from apkpy_lib.core import dead_methods
 from apkpy_lib.core.compiler import translate_python_to_android
 
 APP = '''from apkpy_lib import *
@@ -99,7 +100,9 @@ class TheCompilerExpandsTheCall(unittest.TestCase):
         self.assertEqual(_layout_texts(self.files, "uif_profile"), PROFILE_TEXTS)
 
     def test_a_returned_component_answers_to_its_name(self):
-        activity = self.files["java/Screen_uif_homeActivity.java"]
+        with dead_methods.everything_kept():
+            files = translate_python_to_android(APP)
+        activity = files["java/Screen_uif_homeActivity.java"]
         body = activity[activity.index("pythonCallback_bump()"):]
         body = body[:body.index("\n    }")]
         # Home, on uif_home, Visits, 12: the fourth label on the screen.
@@ -126,6 +129,44 @@ class TheLoopsTheShowcasesUsed(unittest.TestCase):
         self.assertNotIn("error.txt", files, files.get("error.txt", "")[:400])
         self.assertEqual(_layout_texts(files, "home"),
                          ["01", "Soft Static", "02", "Glass District"])
+
+    def test_an_id_chosen_or_lowered_inside_the_loop(self):
+        # The new Onda (14-11-2026): the week's dots and the three rings.
+        # Neither id reached the layout, so on the phone the letters were
+        # plain 16sp and every ring had the primary colour.
+        source = ('from apkpy_lib import *\nhome = Screen(id="home")\n'
+                  'for letter, done in [("M", True), ("T", False)]:\n'
+                  '    label(letter, id="day_done" if done else "day_open", screen=home)\n'
+                  'for name in ["Mindful", "Steps"]:\n'
+                  '    label(name, id="ring_" + name.lower(), screen=home)\n'
+                  'style = """\nday_done { font-size: 13px; }\nday_open { font-size: 14px; }\n'
+                  'ring_mindful { font-size: 15px; }\nring_steps { font-size: 17px; }\n"""\n'
+                  'run(start_screen=home)\n')
+        files = translate_python_to_android(source)
+        self.assertNotIn("error.txt", files, files.get("error.txt", "")[:400])
+        xml = files["res/layout/activity_screen_home.xml"]
+        sizes = re.findall(r'android:textSize="(\d+)sp"', xml)
+        self.assertEqual(sizes, ["13", "14", "15", "17"])
+
+    def test_tuples_indexed_inside_the_loop(self):
+        source = ('from apkpy_lib import *\nhome = Screen(id="home")\n'
+                  'for left, right in [(("a", "Kyoto"), ("b", "Banff"))]:\n'
+                  '    label(left[1], id="place_" + left[0], screen=home)\n'
+                  '    label(right[-1], id="place_" + right[0], screen=home)\n'
+                  'run(start_screen=home)\n')
+        files = translate_python_to_android(source)
+        self.assertNotIn("error.txt", files, files.get("error.txt", "")[:400])
+        self.assertEqual(_layout_texts(files, "home"), ["Kyoto", "Banff"])
+
+    def test_an_id_that_cannot_be_written_out_is_refused(self):
+        # It was dropped without a word: styled in the Previewer, plain on
+        # the phone.
+        error = _refusal('from apkpy_lib import *\nhome = Screen(id="home")\n'
+                         'def kind():\n    return "a"\n'
+                         'label("x", id=kind() + "_b", screen=home)\n'
+                         'run(start_screen=home)\n')
+        self.assertIn("U2033", error)
+        self.assertIn("An id names the component", error)
 
     def test_a_loop_that_builds_nothing_and_unpacks_is_refused(self):
         error = _refusal('from apkpy_lib import *\nhome = Screen(id="home")\n'

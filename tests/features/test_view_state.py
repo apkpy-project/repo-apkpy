@@ -1,6 +1,7 @@
 """Generated Activities preserve only runtime-mutated TextView contents."""
 import unittest
 
+from apkpy_lib.core import dead_methods
 from apkpy_lib.core.compiler import translate_python_to_android
 from apkpy_lib.core.features import view_state
 
@@ -85,8 +86,11 @@ class ViewStateTests(unittest.TestCase):
         self.assertIn("for (Integer id : ids) _apkpyRememberText(id)", java)
 
     def test_inline_and_named_callbacks_remember_changed_text(self):
+        # The named copy is written only when something calls it by name.
+        with dead_methods.everything_kept():
+            java = build(APP)["java/Screen_homeActivity.java"]
         for target in ("lbl2", "lbl3", "btn1", "lrow1_title", "lrow1_subtitle", "lrow1_trailing"):
-            self.assertGreaterEqual(self.java.count(f"_apkpyRememberText(R.id.{target});"), 2, target)
+            self.assertGreaterEqual(java.count(f"_apkpyRememberText(R.id.{target});"), 2, target)
 
     def test_native_inputs_keep_their_existing_state_handling(self):
         for number in range(1, 7):

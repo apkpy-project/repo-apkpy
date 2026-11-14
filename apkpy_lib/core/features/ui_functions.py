@@ -252,6 +252,27 @@ class _Fold(ast.NodeTransformer):
             for dict_key, dict_value in zip(node.value.keys, node.value.values):
                 if isinstance(dict_key, ast.Constant) and dict_key.value == key.value:
                     return ast.copy_location(copy.deepcopy(dict_value), node)
+        # for left, right in [(("a.jpg", "Kyoto"), ...)]: card(left[0], left[-1])
+        index = None
+        if isinstance(key, ast.Constant):
+            index = key.value
+        elif isinstance(key, ast.UnaryOp) and isinstance(key.op, ast.USub) \
+                and isinstance(key.operand, ast.Constant):
+            index = -key.operand.value if isinstance(key.operand.value, int) else None
+        if isinstance(node.value, (ast.Tuple, ast.List)) \
+                and isinstance(index, int) and not isinstance(index, bool) \
+                and isinstance(node.ctx, ast.Load) \
+                and not any(isinstance(e, ast.Starred) for e in node.value.elts) \
+                and -len(node.value.elts) <= index < len(node.value.elts):
+            return ast.copy_location(copy.deepcopy(node.value.elts[index]), node)
+        return node
+
+    def visit_IfExp(self, node):
+        # for letter, done in [("M", True), ...]:
+        #     label(letter, id="day_done" if done else "day_open")
+        self.generic_visit(node)
+        if isinstance(node.test, ast.Constant):
+            return node.body if node.test.value else node.orelse
         return node
 
     def visit_Call(self, node):
@@ -262,6 +283,13 @@ class _Fold(ast.NodeTransformer):
                 and isinstance(node.args[0].value, (str, int)) \
                 and not isinstance(node.args[0].value, bool):
             return ast.copy_location(ast.Constant(str(node.args[0].value)), node)
+        # id="ring_" + name.lower() inside an unrolled for
+        if isinstance(node.func, ast.Attribute) and not node.args and not node.keywords \
+                and node.func.attr in ("lower", "upper", "strip", "title", "capitalize") \
+                and isinstance(node.func.value, ast.Constant) \
+                and isinstance(node.func.value.value, str):
+            text = getattr(node.func.value.value, node.func.attr)()
+            return ast.copy_location(ast.Constant(text), node)
         return node
 
     def visit_JoinedStr(self, node):

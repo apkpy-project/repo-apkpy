@@ -48,8 +48,14 @@ from .layout_engine import (
 from .maps import ContinuousLocationMixin
 from .features import feeds as feeds_feature
 from .features import field as _field_feature
+from .features import keyboard as _keyboard_feature
+from .features import code_editor as _code_editor
+from .features import styled_dialog as _styled_dialog
+from . import dialog_rules as _dialog_rules
 from .features import sheet as _sheet_feature
 from .features import zoom as _zoom_feature
+from .features import alpha as _alpha
+from .features import gradient_under as _gradient_under
 from . import zoom_rules as _zoom_rules
 from . import sheet_rules as _sheet_rules
 from . import field_rules as _field_rules
@@ -3441,8 +3447,9 @@ def load_styles_now():
         global_keyframes = _parse_keyframes_internal(__main__.style)
         # Said once per name per run, so a Hot Previewer reload does not turn
         # one typo into a wall of repeats.
-        from .core.style_parser import report_unknown_properties
+        from .core.style_parser import report_hex_order, report_unknown_properties
         report_unknown_properties(user_styles, global_keyframes)
+        report_hex_order(__main__.style)
     else:
         global_keyframes = {}
     global_styles = apply_theme(user_styles, _active_theme)
@@ -3655,13 +3662,17 @@ def _shrinks_to_fit(style):
                 and str(style.get('right', '') or '').strip())
 
 
-def _natural_width(slot, fallback):
+def _natural_width(slot, fallback, ceiling=None):
     """The width an absolute container's content needs, instead of the full
     width its layout host is configured to -- which put a right-aligned
     column of buttons in the middle of the screen.
 
     A container records it on its layout host; the difference between the
-    slot and that host is the container's own padding and inset."""
+    slot and that host is the container's own padding and inset.
+
+    ``ceiling`` is the width the parent has. Capped by ``fallback`` -- the
+    slot's own last width -- a slot first placed narrow could never grow:
+    Onda's "Morning reset" over a picture stayed 25px wide and read "M"."""
     pending = [slot]
     while pending:
         widget = pending.pop(0)
@@ -3671,7 +3682,7 @@ def _natural_width(slot, fallback):
                 extra = max(0, slot.winfo_reqwidth() - widget.winfo_reqwidth())
             except Exception:
                 extra = 0
-            return max(1, min(fallback, natural + extra))
+            return max(1, min(ceiling or fallback, natural + extra))
         try:
             pending.extend(widget.winfo_children())
         except Exception:
@@ -3810,12 +3821,18 @@ def _parse_margin(style_dict):
         except (ValueError, TypeError):
             return 0
 
+    def _side(val):
+        # A negative margin counts as 0, as on the phone. Tk refuses a
+        # negative pad, so margin: -8px 0px 16px 0px closed the Previewer
+        # ("bad pad value"), and the phone's attribute lost the sign: 8dp.
+        return 0 if str(val).strip().startswith('-') else _px(val)
+
     sides = _box_shorthand(style_dict.get('margin')) or (0, 0, 0, 0)
-    top, right, bottom, left = (int(side) for side in sides)
-    if 'margin-top'    in style_dict: top    = _px(style_dict['margin-top'])
-    if 'margin-right'  in style_dict: right  = _px(style_dict['margin-right'])
-    if 'margin-bottom' in style_dict: bottom = _px(style_dict['margin-bottom'])
-    if 'margin-left'   in style_dict: left   = _px(style_dict['margin-left'])
+    top, right, bottom, left = (max(0, int(side)) for side in sides)
+    if 'margin-top'    in style_dict: top    = _side(style_dict['margin-top'])
+    if 'margin-right'  in style_dict: right  = _side(style_dict['margin-right'])
+    if 'margin-bottom' in style_dict: bottom = _side(style_dict['margin-bottom'])
+    if 'margin-left'   in style_dict: left   = _side(style_dict['margin-left'])
     return top, right, bottom, left
 
 
@@ -4566,12 +4583,16 @@ def _aa_rgba(canvas, color):
     elif raw.startswith('#') and len(raw) == 5:
         alpha, raw = int(raw[1] * 2, 16), '#' + raw[2:]
     r, g, b = canvas.winfo_rgb(raw)
-    return (r >> 8, g >> 8, b >> 8, alpha)
+    # Inside a component with `opacity`, mixed towards what is behind it, like
+    # every other colour there (features/alpha.py).
+    r, g, b = _alpha.layered(canvas, (r >> 8, g >> 8, b >> 8))
+    return (r, g, b, alpha)
 
 
-def _aa_shape_image(w, h, r, fill, outline, border):
+def _aa_shape_image(w, h, r, fill, outline, border, fill_image=None):
     """RGBA image of the shape; the border lies inside the box, as Android's
-    GradientDrawable strokes it."""
+    GradientDrawable strokes it. ``fill_image`` (a gradient, w x h RGBA)
+    fills it instead of the colour ``fill``."""
     from PIL import Image, ImageChops
     outer = _aa_mask(w, h, r)
     inner = outer
@@ -4586,6 +4607,11 @@ def _aa_shape_image(w, h, r, fill, outline, border):
         else:
             inner, ring = Image.new('L', (w, h), 0), outer
     result = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+    if fill_image is not None:
+        layer = fill_image.copy()
+        layer.putalpha(ImageChops.multiply(layer.getchannel('A'), inner))
+        result = Image.alpha_composite(result, layer)
+        fill = None
     for colour, coverage in ((fill, inner), (outline, ring)):
         if colour is None or coverage is None:
             continue
@@ -4600,20 +4626,30 @@ def _aa_photo(canvas, params):
     """A cached PhotoImage for these parameters, owned by the canvas's root
     (an image outlives neither the interpreter nor its window)."""
     from PIL import ImageTk
-    fill = _aa_rgba(canvas, params['fill'])
+    gradient = _gradient_fill(params['fill'])
+    fill = None if gradient is not None else _aa_rgba(canvas, params['fill'])
     outline = _aa_rgba(canvas, params['outline'])
     try:
         border = int(round(float(params['width'] or 0)))
     except (TypeError, ValueError):
         border = 1
+    layers = tuple(canvas.__dict__.get(_alpha.LAYERS_ATTR) or ())
     key = (params['w'], params['h'], tuple(round(c, 2) for c in _corner_tuple(params['r'])),
-           fill, outline, border)
+           fill, outline, border,
+           (str(params['fill']), layers) if gradient is not None else None)
     root = canvas._root()
     cache = root.__dict__.setdefault('_apkpy_aa_cache', {})
     photo = cache.pop(key, None)
     if photo is None:
+        picture = None
+        if gradient is not None:
+            from .features import gradient_image as _gradient_image
+            picture = _gradient_image.render(
+                gradient, params['w'], params['h'],
+                mix=(lambda rgb: _alpha.layered(canvas, rgb)) if layers else None,
+                key=layers)
         image = _aa_shape_image(params['w'], params['h'], params['r'],
-                                fill, outline, border)
+                                fill, outline, border, fill_image=picture)
         photo = ImageTk.PhotoImage(image, master=canvas)
     cache[key] = photo                      # most recent last
     while len(cache) > _AA_CACHE_LIMIT:
@@ -4885,7 +4921,7 @@ def _aa_install(canvas):
     return registry
 
 
-def _aa_shadow_photo(canvas, w, h, r, depth):
+def _aa_shadow_photo(canvas, w, h, r, depth, colour=None):
     """A soft shadow under a panel drawn at (1, 1, w - depth, h - depth).
 
     It replaces two near-black rounded layers offset down and to the right,
@@ -4898,7 +4934,15 @@ def _aa_shadow_photo(canvas, w, h, r, depth):
         from PIL import Image, ImageFilter, ImageTk
     except Exception:
         return None
-    key = ('shadow', w, h, tuple(round(c, 2) for c in _corner_tuple(r)), depth)
+    # A panel with `opacity` casts a lighter shadow, as on the phone.
+    strength = int(round(70 * _alpha.opacity_product(canvas)))
+    # box-shadow with a colour: the phone casts it in that colour (opaque,
+    # scaled by the theme's shadow alpha), a glow rather than a grey.
+    rgb = (0, 0, 0)
+    if colour and str(colour)[3:].upper() != '000000':
+        rgb = tuple(int(str(colour)[i:i + 2], 16) for i in (3, 5, 7))
+        strength = int(round(140 * _alpha.opacity_product(canvas)))
+    key = ('shadow', w, h, tuple(round(c, 2) for c in _corner_tuple(r)), depth, strength, rgb)
     root = canvas._root()
     cache = root.__dict__.setdefault('_apkpy_aa_cache', {})
     photo = cache.pop(key, None)
@@ -4906,16 +4950,21 @@ def _aa_shadow_photo(canvas, w, h, r, depth):
         body_w, body_h = max(2, w - depth - 1), max(2, h - depth - 1)
         alpha = Image.new('L', (w, h), 0)
         # Light from above, as Material: the shadow falls a little down.
-        alpha.paste(_aa_mask(body_w, body_h, r).point(lambda v: v * 70 // 255),
+        alpha.paste(_aa_mask(body_w, body_h, r).point(lambda v: v * strength // 255),
                     (1 + depth // 4, 1 + depth // 2))
         alpha = alpha.filter(ImageFilter.GaussianBlur(max(1.0, depth / 2.0)))
-        image = Image.new('RGBA', (w, h), (0, 0, 0, 0))
+        image = Image.new('RGBA', (w, h), rgb + (0,))
         image.putalpha(alpha)
         photo = ImageTk.PhotoImage(image, master=canvas)
     cache[key] = photo
     while len(cache) > _AA_CACHE_LIMIT:
         cache.pop(next(iter(cache)))
     return photo
+
+
+def _css_shadow_colour(value):
+    from .core.css_colors import shadow_colour
+    return shadow_colour(value)
 
 
 def _aa_create(canvas, x1, y1, x2, y2, r, kwargs):
@@ -4947,6 +4996,79 @@ def _aa_create(canvas, x1, y1, x2, y2, r, kwargs):
     return item
 
 
+def _gradient_fill(value):
+    """The gradient a shape's fill names (``linear-gradient(...)``), or None."""
+    if not isinstance(value, str) or 'gradient(' not in value:
+        return None
+    from .core.gradients import parse, layers
+    found = layers(value)
+    # background: a, b -- several layers, top first; gradient_image.render
+    # stacks a list.
+    if len(found) > 1:
+        return found
+    return parse(value)
+
+
+def _gradient_veil(value):
+    """The press over a gradient: light on a dark one, dark on a light one
+    (the phone's ripple, core/features/gradient_drawable.default_ripple)."""
+    from .core.features.gradient_drawable import default_ripple
+    gradient = _gradient_fill(value)
+    if isinstance(gradient, list):
+        gradient = gradient[0]
+    return default_ripple(gradient) if gradient is not None else '#1F000000'
+
+
+def _shape_label(label, own, gradient):
+    """Draw a label's own rounded background (or gradient) under its text,
+    as the phone's shape drawable does, over whatever is behind the label."""
+    radii = _parse_radii(own)
+    fill = _get_style_bg(own)
+    border_colour = _get_style_border_color(own)
+    border = _parse_border_width(own) if border_colour else 0
+
+    def picture_at():
+        from PIL import Image
+        w, h = label.winfo_width(), label.winfo_height()
+        if w < 2 or h < 2:
+            return None
+        picture = _gradient_under.backdrop(label, w, h)
+        if picture is None:
+            picture = Image.new('RGB', (w, h), tuple(
+                v >> 8 for v in label.winfo_rgb(tk.Misc.cget(label, 'bg'))))
+        picture = picture.convert('RGBA')
+        colour = None if (not fill or _is_transparent(fill)) else _aa_rgba(label, fill)
+        if colour is not None:
+            picture.alpha_composite(_aa_shape_image(w, h, radii, colour, None, 0))
+        if gradient is not None:
+            from .features import gradient_image as _gradient_image
+            layer = _gradient_image.render(gradient, w, h)
+            if layer is not None:
+                picture.alpha_composite(_aa_shape_image(w, h, radii, None, None, 0,
+                                                        fill_image=layer))
+        if border > 0:
+            picture.alpha_composite(_aa_shape_image(
+                w, h, radii, None, _aa_rgba(label, border_colour), border))
+        return picture.convert('RGB'), 0, 0
+
+    try:
+        _gradient_under.install(label, label, picture_at, tk.Misc.cget(label, 'bg'))
+        label.bind('<Configure>', lambda _e: _gradient_under.schedule(label), add='+')
+    except Exception:
+        pass
+
+
+def _aa_redraw(canvas, item):
+    """Draw a shape again from what was set on it; its colours are read
+    afresh (an `opacity` added since mixes them)."""
+    entry = (canvas.__dict__.get('_apkpy_aa') or {}).get(item)
+    if entry is None:
+        return
+    photo = _aa_photo(canvas, entry[0])
+    entry[1] = photo
+    tk.Canvas.itemconfigure(canvas, item, image=photo)
+
+
 def _create_circle(canvas, x1, y1, x2, y2, **kwargs):
     """A circle through the antialiased shape path: a rounded rectangle whose
     radius is half its side. Tk's create_oval has stepped edges on Windows --
@@ -4976,6 +5098,15 @@ def _create_rounded_rect(canvas, x1, y1, x2, y2, r, **kwargs):
     corners = tuple(max(0.0, min(c, (x2 - x1) / 2, (y2 - y1) / 2))
                     for c in _corner_tuple(r))
     radius = max(corners)
+    gradient = _gradient_fill(kwargs.get('fill'))
+    if gradient is not None:
+        item = _aa_create(canvas, x1, y1, x2, y2,
+                          corners if len(set(corners)) > 1 else radius, kwargs)
+        if item is not None:
+            return item
+        # No Pillow: the colour at its middle.
+        _flat = gradient[-1] if isinstance(gradient, list) else gradient
+        kwargs = dict(kwargs, fill=_tk_color(_flat.middle()) or '')
     if radius <= 0:
         fill = kwargs.get('fill')
         if _is_transparent(fill) or _partial_alpha(fill):
@@ -5562,6 +5693,33 @@ def _run_preview_lifecycle(screen, event):
 
 # ─── ComponentDef ─────────────────────────────────────────────────────────────
 
+def _widget_alive(widget):
+    try:
+        return bool(widget.winfo_exists())
+    except Exception:
+        return False
+
+
+def _bind_box_tap(widgets, callback):
+    """A container or card with on_click: a tap anywhere on it, as the phone's
+    setOnClickListener on the box. Tk events do not bubble, so every widget
+    inside answers -- except one with a tap of its own (a button)."""
+    def _tap(_event=None):
+        callback()
+
+    pending = list(widgets)
+    while pending:
+        widget = pending.pop()
+        try:
+            pending.extend(widget.winfo_children())
+            if widget.bind('<ButtonRelease-1>') or widget.bind('<Button-1>'):
+                continue
+            widget.bind('<ButtonRelease-1>', _tap, add='+')
+            widget.configure(cursor='hand2')
+        except Exception:
+            pass
+
+
 def _queue_preview_relayout(widget):
     """Refresh rounded parent containers after a visibility change.
 
@@ -5636,6 +5794,13 @@ class ComponentDef:
         _field_rules.check_type(self.kwargs.get('input_type', 'text')
                                 if self.comp_type == 'inputs' else self.comp_type)
         return _field_feature.validate(self)
+
+    def focus(self):
+        """Put the cursor in this field; on the phone the keyboard opens.
+        Called before the screen is drawn, it waits for the field."""
+        if self.comp_type not in ('inputs', 'input_field'):
+            _field_rules.check_focus(self.comp_type)
+        _keyboard_feature.focus(self)
 
     # ── Leitura e Escrita de Valor ────────────────────────────────────────────
 
@@ -5921,6 +6086,22 @@ class ComponentDef:
         _fade_component(self.widget, True, self._visibility_ms())
         _queue_preview_relayout(self.widget)
 
+    def set_state(self, state=None):
+        """Wear the stylesheet's ``id:state`` block over the component's own
+        (``answer:selected { border-color: #8B6CFF }``); ``None`` takes it off.
+        Background, gradient, border, corners, text colour and opacity change;
+        on the phone, the drawable and the colours compiled for that state."""
+        state = str(state) if state else None
+        if getattr(self, '_apkpy_state', None) == state:
+            return
+        self._apkpy_state = state
+        app = _app._get() if hasattr(_app, '_get') else None
+        if app is not None and getattr(self, '_apkpy_render_args', None):
+            try:
+                app.rerender_component(self)
+            except tk.TclError:
+                pass
+
     def hide(self):
         """Esconde o componente (ex: spinner) e pára a animação."""
         self._reactive_visible = False
@@ -5964,6 +6145,18 @@ class ComponentDef:
         # changed nothing: "Start" went on saying "Start" with the count
         # running. Kept in kwargs too, which is what the screen is drawn
         # from when it comes back.
+        if self.comp_type == 'web_page':
+            # Other HTML, or an address; ApkpyWeb.show() on the phone.
+            key = 'url' if re.match(r'\s*https?://', str(value), re.I) else 'html'
+            self.kwargs['url'], self.kwargs['html'] = '', ''
+            self.kwargs[key] = str(value)
+            show = getattr(self, '_web_show', None)
+            if show is not None:
+                try:
+                    show(str(value))
+                except Exception:
+                    pass
+            return
         if self.comp_type == 'markdown':
             # Kept for the next time the screen is drawn, and drawn now if it
             # is on screen. The phone's setMarkdown() does the same.
@@ -6652,6 +6845,9 @@ def _apply_preview_window_icon(root):
 class AppPreview:
     def __init__(self):
         _prepare_preview_process_identity()
+        # A colour with alpha (rgba(), #RRGGBBAA) is mixed over what is behind
+        # it instead of stopping the app with "invalid color name".
+        _alpha.install_alpha_net()
         self.root = tk.Tk()
         # After a save, the new window starts invisible where the old one is.
         from . import reload as _reload
@@ -6756,6 +6952,9 @@ class AppPreview:
         self.root.bind_all('<Alt-Left>', self._system_back)
         self.root.bind_all('<Control-Left>', self._turn_device)
         self.root.bind_all('<Control-Right>', self._turn_device)
+        # Ctrl+Shift+S: the person took a screenshot (display.on_screenshot).
+        self.root.bind_all('<Control-Shift-S>', self._screenshot_taken)
+        self.root.bind_all('<Control-Shift-s>', self._screenshot_taken)
         self.root.protocol("WM_DELETE_WINDOW", self._close_preview)
 
     # ── which way up, and the bars ───────────────────────────────────────────
@@ -6830,6 +7029,12 @@ class AppPreview:
         self._draw_again_after = self._status_later(0, again)
         if self._draw_again_after is None:
             again()
+
+    def _screenshot_taken(self, _event=None):
+        """Ctrl+Shift+S: a screenshot of the screen on show."""
+        from .features import kit as _kit
+        _kit.display._screenshot()
+        return 'break'
 
     def _turn_device(self, _event=None):
         """Ctrl+Left / Ctrl+Right: the phone turned on its side, and back."""
@@ -7225,11 +7430,38 @@ class AppPreview:
         screen_bg_tk  = screen_bg_css if screen_bg_css.startswith('#') else '#ffffff'
         self._screen_ink_bg = screen_bg_tk
         self.body.configure(bg=screen_bg_tk)
+        # background: linear-gradient(...) on the screen (or body): painted
+        # under its content once it is laid out (features/gradient_under.py).
+        # The strip under the clock takes the colour at the top, the scroll
+        # area past the content the colour at the bottom.
+        screen_gradient = _gradient_fill(screen_style.get('background-image'))
+        top_bg = bottom_bg = screen_bg_tk
+        if isinstance(screen_gradient, list):
+            # Several layers: what they show together at the top and bottom.
+            from .features import gradient_image as _gradient_image
+            _vw, _vh = (int(v) for v in _style_viewport)
+            _stack = _gradient_image.render(screen_gradient, max(1, _vw), max(1, _vh))
+            if _stack is not None:
+                _base = _hex_to_rgb(str(screen_bg_tk))
+
+                def _seen(x, y, picture=_stack, base=_base):
+                    r, g, b, a = picture.getpixel((x, y))
+                    return '#%02X%02X%02X' % tuple(
+                        int(round(c * a / 255.0 + d * (255 - a) / 255.0))
+                        for c, d in zip((r, g, b), base))
+                top_bg = _seen(_vw // 2, 0)
+                bottom_bg = _seen(_vw // 2, max(0, _vh - 1))
+        elif screen_gradient is not None:
+            _vw, _vh = _style_viewport
+            top_bg = _tk_color(screen_gradient.color_at_point(_vw / 2.0, 0, _vw, _vh),
+                               screen_bg_tk) or screen_bg_tk
+            bottom_bg = _tk_color(screen_gradient.color_at_point(_vw / 2.0, _vh, _vw, _vh),
+                                  screen_bg_tk) or screen_bg_tk
 
         # A real Android status bar occupies these pixels, but it is visually
         # part of the app bar. Keep the clock/icons and remove the detached
         # black strip by sharing the exact toolbar palette.
-        status_bg, status_fg = self._app_bar_palette(screen, screen_bg_tk)
+        status_bg, status_fg = self._app_bar_palette(screen, top_bg)
         self._status_frame.configure(bg=status_bg)
         self._status_clock.configure(bg=status_bg, fg=status_fg)
         self._status_icons.configure(bg=status_bg)
@@ -7248,7 +7480,7 @@ class AppPreview:
 
         if getattr(screen, 'scroll', False):
             # ── Layout com scroll vertical ───────────────────────────────────
-            sc = tk.Canvas(self.body, bg=screen_bg_tk, highlightthickness=0)
+            sc = tk.Canvas(self.body, bg=bottom_bg, highlightthickness=0)
             if self._content_width:
                 # coluna de telemóvel centrada (fullscreen): largura fixa, fill='y'
                 # + expand=True faz o Tk centrá-la horizontalmente no espaço livre.
@@ -7307,6 +7539,20 @@ class AppPreview:
                     self.layout.pack_propagate(False)
                 else:
                     self.layout.pack(fill='both', expand=True)
+
+        if screen_gradient is not None:
+            def _screen_picture(frame=self.layout, gradient=screen_gradient,
+                                base_colour=screen_bg_tk):
+                from .features import gradient_image as _gradient_image
+                w, h = frame.winfo_width(), frame.winfo_height()
+                picture = _gradient_image.render(gradient, w, h)
+                if picture is None:
+                    return None
+                base_rgb = tuple(v >> 8 for v in frame.winfo_rgb(base_colour))
+                return _gradient_under.flatten(picture, base_rgb), 0, 0
+            _gradient_under.install(self.layout, self.layout, _screen_picture, screen_bg_tk)
+            self.layout.bind('<Configure>',
+                             lambda _e, f=self.layout: _gradient_under.schedule(f), add='+')
 
         # Determinar orientação flex
         flex_dir = _get_flex_orientation(screen_style)  # 'row' | 'column'
@@ -7838,13 +8084,30 @@ class AppPreview:
 
         # One rule for the bar and everything on it, shared with the
         # compiler (theme.nav_colors).
-        bar_bg, active_color, inactive_color, pill_color = _nav_colors(
-            global_styles.get('__theme__', {}))
-        # The same height as the phone's bar (theme.NAV_BAR_DP).
-        bar = tk.Frame(self.root, bg=bar_bg, height=NAV_BAR_DP)
-        bar.pack(fill='x', side='bottom')
-        bar.pack_propagate(False)
-        self._bottom_nav_frame = bar
+        from .theme import nav_look as _nav_look
+        from .features import floating_nav as _floating_nav
+        _look = _nav_look(global_styles)
+        _tokens = global_styles.get('__theme__', {}) or {}
+        floating = _look['floating']
+        if floating:
+            # bottom_nav { margin; border-radius }: a card off the edges.
+            _screen_own = global_styles.get(getattr(active_screen, 'id', None) or '', {}) or {}
+            behind = _tk_color(_get_style_bg(_screen_own) or _tokens.get('background'),
+                               '#FFFFFF') or '#FFFFFF'
+            outer, bar, bar_bg = _floating_nav.build(
+                __import__('sys').modules[__name__], self.root, _look, behind)
+            self._bottom_nav_frame = outer
+        else:
+            bar_bg = _floating_nav.plain(_look['bar'], _tk_color(_tokens.get('background'),
+                                                                 '#FFFFFF') or '#FFFFFF')
+            # The same height as the phone's bar (theme.NAV_BAR_DP).
+            bar = tk.Frame(self.root, bg=bar_bg, height=NAV_BAR_DP)
+            bar.pack(fill='x', side='bottom')
+            bar.pack_propagate(False)
+            self._bottom_nav_frame = bar
+        active_color = _floating_nav.plain(_look['active'], bar_bg)
+        inactive_color = _floating_nav.plain(_look['inactive'], bar_bg)
+        pill_color = _floating_nav.plain(_look['pill'], bar_bg)
 
         n = len(bnav.screens)
         for i, (screen, label_text, icon_name) in enumerate(
@@ -7866,7 +8129,8 @@ class AppPreview:
                     col, bg=fg_active if is_active else bar_bg, height=2)
                 indicator.pack(fill='x', side='top')
             else:
-                indicator = tk.Frame(col, bg=bar_bg, height=4)
+                # The card's own inset takes the place of the 4px above.
+                indicator = tk.Frame(col, bg=bar_bg, height=0 if floating else 4)
                 indicator.pack(fill='x', side='top')
 
             icon_canvas = tk.Canvas(
@@ -7991,6 +8255,85 @@ class AppPreview:
 
 
     def _render_comp(self, comp, parent_widget, is_flex, pack_side, bg_color):
+        """Draw one component; with an `opacity` of its own, see-through.
+
+        The phone gives the whole View android:alpha. Tk has no alpha, so what
+        the component drew is mixed towards the colour behind it
+        (features/alpha.py). An image fades its own picture.
+        """
+        opacity = 1.0
+        if comp.comp_type != 'image':
+            opacity = _parse_opacity(component_style(
+                global_styles, comp.comp_type, comp.kwargs.get('comp_id'),
+                include_body=False, viewport=_style_viewport,
+                row_variant=getattr(comp, '_apkpy_state', None)))
+        try:
+            before = set(parent_widget.winfo_children())
+        except Exception:
+            before = set()
+        # set_state() draws the component again in the same place.
+        comp._apkpy_render_args = (parent_widget, is_flex, pack_side, bg_color)
+        self._render_comp_body(comp, parent_widget, is_flex, pack_side, bg_color)
+        try:
+            made = [w for w in parent_widget.winfo_children() if w not in before]
+        except Exception:
+            made = []
+        comp._apkpy_made = list(made)
+        if comp.comp_type in ('container', 'card') and callable(comp.kwargs.get('on_click')):
+            _bind_box_tap(made, comp.kwargs['on_click'])
+        if comp.comp_type == 'container':
+            _own = component_style(global_styles, 'container', comp.kwargs.get('comp_id'),
+                                   include_body=False, viewport=_style_viewport)
+            if _own.get('shimmer'):
+                from .features import shimmer as _shimmer
+                _surface = next((w for top in made for w in [top] + list(top.winfo_children())
+                                 if isinstance(w, tk.Canvas)), None)
+                _shimmer.attach(_surface, _own.get('shimmer'), _parse_radius(_own),
+                                empty=not comp.children)
+        if opacity >= 1.0:
+            return
+        if not made and getattr(comp, 'widget', None) is not None:
+            made = [comp.widget]
+        behind = _tk_color(bg_color, '#FFFFFF') or '#FFFFFF'
+        try:
+            backdrop = tuple(v >> 8 for v in parent_widget.winfo_rgb(behind))
+        except Exception:
+            backdrop = _hex_to_rgb(str(behind))
+        _alpha.apply_opacity(made, opacity, backdrop, _aa_redraw)
+
+    def rerender_component(self, comp):
+        """Draw ``comp`` again where it is (set_state)."""
+        args = getattr(comp, '_apkpy_render_args', None)
+        made = [w for w in getattr(comp, '_apkpy_made', None) or []
+                if _widget_alive(w)]
+        if args is None or not made:
+            return
+        parent = args[0]
+        after = None
+        try:
+            if made[-1].winfo_manager() == 'pack':
+                slaves = parent.pack_slaves()
+                index = slaves.index(made[-1])
+                after = slaves[index + 1] if index + 1 < len(slaves) else None
+        except Exception:
+            after = None
+        for widget in made:
+            try:
+                widget.destroy()
+            except Exception:
+                pass
+        self._render_comp(comp, *args)
+        if after is not None and _widget_alive(after):
+            for widget in comp._apkpy_made:
+                try:
+                    if widget.winfo_manager() == 'pack':
+                        widget.pack_configure(before=after)
+                except Exception:
+                    pass
+        if comp._apkpy_made:
+            _queue_preview_relayout(comp._apkpy_made[0])
+
+    def _render_comp_body(self, comp, parent_widget, is_flex, pack_side, bg_color):
         if comp.comp_type == 'button':
             self._render_button(comp, parent_widget, is_flex, pack_side, bg_color)
         elif comp.comp_type == 'inputs':
@@ -8022,6 +8365,14 @@ class AppPreview:
             render_map_preview(
                 self, comp, parent_widget, is_flex, pack_side, bg_color
             )
+        elif comp.comp_type == 'web_page':
+            from .features.web_page import render_web_page_preview
+            render_web_page_preview(
+                self, comp, parent_widget, is_flex, pack_side, bg_color
+            )
+        elif comp.comp_type == 'draw_pad':
+            from .features.draw_pad import render_draw_pad
+            render_draw_pad(self, comp, parent_widget, is_flex, pack_side, bg_color)
         elif comp.comp_type in ('markdown', 'rich_text'):
             from .features.rich_content import render_rich_content_preview
             render_rich_content_preview(
@@ -8127,9 +8478,11 @@ class AppPreview:
     def _render_container(self, comp, parent_widget, parent_is_flex, parent_pack_side, parent_bg):
         comp_id = comp.kwargs.get('comp_id')
         semantic_type = 'card' if comp.comp_type == 'card' else 'container'
+        state = getattr(comp, '_apkpy_state', None)
         style = _merge_with_body(
             comp_id, semantic_type,
             comp.kwargs.get('variant') if semantic_type == 'card' else None,
+            row_variant=state,
         )
         if comp.kwargs.get('card_actions'):
             style = {
@@ -8150,13 +8503,21 @@ class AppPreview:
         # on top of whatever surface it sat on -- a flat dark band across a
         # composer. A container with nothing of its own is transparent, which
         # visually is its parent.
-        own_fill = _get_style_bg(component_style(
+        own_style = component_style(
             global_styles, semantic_type, comp_id, include_body=False,
             variant=(comp.kwargs.get('variant')
                      if semantic_type == 'card' else None),
-            viewport=_style_viewport,
-        ))
-        bg = _tk_color(own_fill, parent_bg)
+            viewport=_style_viewport, row_variant=state,
+        )
+        own_fill = _get_style_bg(own_style)
+        # background: linear-gradient(...): drawn on the panel canvas, and
+        # painted under the widgets inside (features/gradient_under.py).
+        own_gradient = _gradient_fill(own_style.get('background-image'))
+        gradient_value = own_style.get('background-image') if own_gradient else None
+        # A glass panel (rgba(), #RRGGBBAA) is its colour over the parent's,
+        # not the colour at full strength: a black box where the phone shows
+        # the screen through it.
+        bg = _tk_color(_alpha.over(own_fill, parent_bg), parent_bg)
         flex_dir = _get_flex_orientation(style)
         responsive_config = comp.kwargs.get('responsive') or {}
         if responsive_config:
@@ -8213,6 +8574,7 @@ class AppPreview:
         min_height = _resolve_css_size_tk(
             style.get('min-height'), 'height', _style_viewport, _percent_height_base()
         )
+        empty_fixed_height = 0
         if not min_height and not comp.children:
             # An empty box of a fixed height -- a spacer, a colour bar, a tile
             # in a grid -- has nothing inside to measure, and was 1px here
@@ -8223,6 +8585,7 @@ class AppPreview:
             )
             if fixed_height:
                 min_height = max(1, fixed_height - pad_t - pad_b)
+                empty_fixed_height = fixed_height
         if target_width and target_width < viewport_width:
             outer.configure(width=target_width)
         if grows:
@@ -8253,7 +8616,10 @@ class AppPreview:
             # align-self in a plain column: the phone gives it layout_gravity.
             outer.pack(padx=(ml, mr), pady=(mt, mb),
                        anchor=_ALIGN_SELF_ANCHOR.get(
-                           str(style.get('align-self', '')).strip().lower(), 'center'))
+                           str(style.get('align-self', '')).strip().lower(),
+                           _ALIGN_SELF_ANCHOR.get(
+                               getattr(parent_widget, '_apkpy_align_items', ''),
+                               'center')))
         else:
             outer.pack(fill='x', padx=(ml, mr), pady=(mt, mb))
 
@@ -8264,7 +8630,7 @@ class AppPreview:
         # the content has to leave that room too, or its corner leaves the curve.
         panel_shadow_depth = 5 if has_shadow else 0
         panel_radii = _parse_radii(style)
-        if radius > 0:
+        if radius > 0 or gradient_value:
             # Frames Tk não suportam cantos arredondados. Um Canvas desenha o
             # painel e aloja o frame de conteúdo, mantendo o layout declarativo.
             # The content is a rectangular Tk frame laid over the rounded
@@ -8275,6 +8641,14 @@ class AppPreview:
             # an antialiased one. padding already subtracts the inset, so this
             # moves content only where the padding is smaller than it.
             inset = max(2, min(16, int(1.999 + radius * 0.2929)), bw)
+            if radius <= 0:
+                inset = bw          # a square gradient has no curve to clear
+            if empty_fixed_height:
+                # The content sits inside the curve, so the canvas is the
+                # content plus the inset each side. An empty 32x32 circle came
+                # out 32x44 -- a capsule -- when the padding was under it.
+                min_height = max(1, empty_fixed_height - max(pad_t, inset)
+                                 - max(pad_b, inset))
             panel = tk.Canvas(outer, bg=parent_bg, highlightthickness=0, bd=0)
             if grows or grows_in_row:
                 panel.pack(fill='both', expand=True)
@@ -8304,7 +8678,8 @@ class AppPreview:
                     c.delete('panel_shape')
                     c.delete('panel_shadow')
                     shadow_depth = panel_shadow_depth
-                    shadow = (_aa_shadow_photo(c, w, h, panel_radii, shadow_depth)
+                    shadow = (_aa_shadow_photo(c, w, h, panel_radii, shadow_depth,
+                                               _css_shadow_colour(shadow_raw))
                               if has_shadow else None)
                     if shadow is not None:
                         c._apkpy_shadow = shadow
@@ -8324,12 +8699,28 @@ class AppPreview:
                             fill='#07070A', outline='#07070A', width=1,
                             tags='panel_shadow',
                         )
-                    _create_rounded_rect(
-                        c, 1, 1, w - max(1, shadow_depth),
-                        h - max(1, shadow_depth), panel_radii,
-                        fill=bg, outline=(bc if bw > 0 and bc else bg),
-                        width=max(1, bw), tags='panel_shape',
-                    )
+                    edge = 0 if (gradient_value and radius <= 0 and not shadow_depth) else 1
+                    shape_box = (edge, edge, w - max(edge, shadow_depth),
+                                 h - max(edge, shadow_depth))
+                    if gradient_value:
+                        # The colour under the gradient (CSS draws the image
+                        # over background-color), then the gradient.
+                        if own_fill and not _is_transparent(own_fill):
+                            _create_rounded_rect(c, *shape_box, panel_radii, fill=bg,
+                                                 outline='', width=0, tags='panel_shape')
+                        _create_rounded_rect(
+                            c, *shape_box, panel_radii, fill=gradient_value,
+                            outline=(bc if bw > 0 and bc else ''),
+                            width=max(0, bw), tags='panel_shape')
+                        c._apkpy_gradient_box = shape_box
+                        _gradient_under.schedule(c)
+                    else:
+                        _create_rounded_rect(
+                            c, 1, 1, w - max(1, shadow_depth),
+                            h - max(1, shadow_depth), panel_radii,
+                            fill=bg, outline=(bc if bw > 0 and bc else bg),
+                            width=max(1, bw), tags='panel_shape',
+                        )
                     c.tag_lower('panel_shape')
                     c.tag_lower('panel_shadow')
                     # In a flex *row* the panel hugs its content; in a
@@ -8388,6 +8779,25 @@ class AppPreview:
 
             panel.bind('<Configure>', _draw_panel)
             panel.bind('<Map>', _show_content, add='+')
+            if gradient_value:
+                def _gradient_picture(c=panel, content=inner_frame):
+                    from .features import gradient_image as _gradient_image
+                    box = c.__dict__.get('_apkpy_gradient_box')
+                    if box is None:
+                        return None
+                    x1, y1, x2, y2 = (int(round(v)) for v in box)
+                    layers = c.__dict__.get(_alpha.LAYERS_ATTR)
+                    picture = _gradient_image.render(
+                        own_gradient, x2 - x1, y2 - y1,
+                        mix=(lambda rgb: _alpha.layered(c, rgb)) if layers else None,
+                        key=tuple(layers or ()))
+                    if picture is None:
+                        return None
+                    under = tk.Misc.cget(content, 'bg') if (
+                        own_fill and not _is_transparent(own_fill)) else tk.Misc.cget(c, 'bg')
+                    base_rgb = tuple(v >> 8 for v in c.winfo_rgb(under))
+                    return _gradient_under.flatten(picture, base_rgb), x1, y1
+                _gradient_under.install(panel, inner_frame, _gradient_picture, bg)
             inner_frame.bind('<Configure>', _fit_panel, add='+')
             # ComponentDef.show()/hide() finds this callback while walking up
             # the Tk widget tree, including changes that emit no Configure.
@@ -8535,7 +8945,8 @@ class AppPreview:
                         child_style = styles_for_children[index]
                         req_w = max(1, widgets[index].winfo_reqwidth())
                         if _shrinks_to_fit(child_style):
-                            req_w = _natural_width(widgets[index], req_w)
+                            req_w = _natural_width(widgets[index], req_w,
+                                                   ceiling=available)
                         items.append({
                             'style': child_style,
                             'width': req_w,
@@ -8552,7 +8963,12 @@ class AppPreview:
                             natural = sum(flowing) + _number(layout_style.get('gap')) * max(0, len(flowing) - 1)
                         else:
                             natural = max(flowing) if flowing else 1
-                        available = max(1, min(available, int(round(natural))))
+                        # Capped by the screen, not by this host's own width:
+                        # that is the last pass's answer, and a chip measured
+                        # before its text arrived (25px) stayed 25px and cut
+                        # "185 XP" for good.
+                        ceiling = max(1, _style_viewport[0] - pad_l - pad_r)
+                        available = max(1, min(ceiling, int(round(natural))))
                     live_boxes, needed_height = compute_layout_boxes(
                         layout_style, items, available,
                         height=explicit_height or min_height,
@@ -8632,6 +9048,10 @@ class AppPreview:
                     expand=(justify == 'center'), fill='x',
                     side=(tk.BOTTOM if justify != 'center' else tk.TOP),
                 )
+            # align-items is the column's android:gravity on the phone; a
+            # narrower child reads it below (a progress fill at the start).
+            content_parent._apkpy_align_items = str(
+                style.get('align-items', '')).strip().lower()
             for index, child in enumerate(comp.children):
                 if index and gap:
                     spacer = tk.Frame(content_parent, bg=bg)
@@ -8902,7 +9322,8 @@ class AppPreview:
         comp_id = comp.kwargs.get('comp_id')
         variant = comp.kwargs.get('variant')
         # Fundir body + estilos específicos do componente
-        style   = _merge_with_body(comp_id, 'label', variant)
+        state   = getattr(comp, '_apkpy_state', None)
+        style   = _merge_with_body(comp_id, 'label', variant, row_variant=state)
         # No colour of its own: the screen's (body's included), the Theme's,
         # or the one that reads on the background -- theme.content_ink, as on
         # the phone. It was #212121 always, black on a screen its author made
@@ -8910,7 +9331,8 @@ class AppPreview:
         # dark text into a dark card.
         screen_style = getattr(self, '_screen_ink_style', None) or {}
         own     = component_style(global_styles, 'label', comp_id, include_body=False,
-                                  variant=variant, viewport=_style_viewport)
+                                  variant=variant, viewport=_style_viewport,
+                                  row_variant=state)
         fg      = _get_style_fg(own) or _content_ink(
             global_styles.get('__theme__', {}),
             own_bg=_get_style_bg(own) or None,
@@ -8923,6 +9345,35 @@ class AppPreview:
         font    = _build_tk_font(style, default_size=_body)
         parent  = parent_widget
         bg      = bg_color
+        # A background of its own, as the phone's TextView wears it (the
+        # label's shape drawable, padding included). The Previewer always
+        # drew the parent's: a navy tag was plain text on the page.
+        own_fill = _get_style_bg(own)
+        paints   = bool(own_fill) and not _is_transparent(own_fill)
+        own_gradient = _gradient_fill(own.get('background-image'))
+        # A border with no fill: the phone's shape drawable strokes it; here
+        # a badge outlined in grey was plain text.
+        outlined = bool(_get_style_border_color(own)) and _parse_border_width(own) > 0
+        pad_t = pad_r = pad_b = pad_l = 0
+        # The padding the stylesheet wrote for this label: with no background
+        # to show it, it is room around the text (the TextView's own padding
+        # on the phone), and in a column it replaces the 16px indent.
+        declared = any(str(own.get(name) or '').strip() for name in (
+            'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left'))
+        room_t = room_r = room_b = room_l = 0
+        if paints or own_gradient is not None or outlined:
+            pad_t, pad_r, pad_b, pad_l = _parse_padding_tk(own)
+        elif declared:
+            room_t, room_r, room_b, room_l = _parse_padding_tk(own)
+        if paints:
+            bg = _tk_color(_alpha.over(own_fill, bg_color), bg_color)
+        pad_x, pad_y = (pad_l + pad_r) // 2, (pad_t + pad_b) // 2
+        # Rounded (a pill, a badge) or a gradient: the label wears a picture
+        # of its shape, and what is behind shows at the corners.
+        shaped = (paints or own_gradient is not None or outlined) and (
+            _parse_radius(own) > 0 or own_gradient is not None or outlined)
+        if shaped:
+            bg = bg_color
         align   = normalize_text_align(style.get('text-align'))
         leading = _tk_leading(
             self.root, font, style, _parse_font_size(style, default=_body),
@@ -8945,13 +9396,21 @@ class AppPreview:
                 fg=fg, bg=bg,
                 anchor=_TK_ANCHOR.get(align, 'w' if in_slot else 'center'),
                 justify=_TK_JUSTIFY.get(align, 'left' if in_slot else 'center'),
-                padx=0, pady=leading,
+                padx=pad_x, pady=leading + pad_y,
             )
             if in_slot:
-                lbl.pack(side=pack_side, padx=(ml, mr), pady=(mt, mb), fill='x')
+                # The slot is the box ApkpyLayout gives the TextView, whose
+                # width: 48px it is: packed at the left of a row's slot, a
+                # tile with that width stayed as narrow as its text.
+                lbl.pack(side=pack_side, padx=(ml + room_l, mr + room_r),
+                         pady=(mt + room_t, mb + room_b), fill='x',
+                         expand=pack_side in (tk.LEFT, tk.RIGHT))
             else:
-                lbl.pack(side=pack_side, padx=(ml, mr), pady=(mt, mb))
+                lbl.pack(side=pack_side, padx=(ml + room_l, mr + room_r),
+                         pady=(mt + room_t, mb + room_b))
             comp.widget = lbl
+            if shaped:
+                _shape_label(lbl, own, own_gradient)
             if getattr(comp, '_initial_value', None) is not None:
                 comp.set_value(comp._initial_value)
             _animate_widget(_app.root, lbl, style, text_color=fg)
@@ -8971,29 +9430,37 @@ class AppPreview:
             # "1284 likes" with margin-left: 14px sat at 30px on the desktop
             # and at 14 on the phone.
             indent = 0 if ml > 0 else 16
+            indent = indent or pad_x
+            if declared:
+                # Its own padding instead: "$486.20" with padding: 0px sat
+                # 16px right of "Spending" in the same card.
+                indent = pad_x
             lbl = tk.Label(
                 parent, text=text, font=font,
                 fg=fg, bg=bg, anchor=_TK_ANCHOR.get(align, 'w'),
                 justify=_TK_JUSTIFY.get(align, 'left'),
-                padx=indent, pady=leading,
+                padx=indent, pady=leading + pad_y,
                 wraplength=max(80, (self._content_width or 411) - 44
-                               - 2 * indent - ml - mr),
+                               - 2 * indent - ml - mr - room_l - room_r),
             )
             breathing = 0 if getattr(parent, '_apkpy_stack_gap', 0) else 2
-            lbl.pack(pady=(breathing + (0 if frames else spacer_h), breathing + mb),
-                     fill='x', padx=(ml, mr))
+            lbl.pack(pady=(breathing + (0 if frames else spacer_h) + room_t,
+                           breathing + mb + room_b),
+                     fill='x', padx=(ml + room_l, mr + room_r))
 
             # TextView no Android quebra linhas automaticamente. Atualiza o
             # wraplength quando o pai recebe a largura real do layout/scroll.
             def _sync_label_wrap(event, widget=lbl):
                 try:
                     widget.configure(wraplength=max(
-                        80, event.width - 2 * indent - ml - mr))
+                        80, event.width - 2 * indent - ml - mr - room_l - room_r))
                 except Exception:
                     pass
             parent.bind('<Configure>', _sync_label_wrap, add='+')
 
             comp.widget = lbl
+            if shaped:
+                _shape_label(lbl, own, own_gradient)
             if getattr(comp, '_initial_value', None) is not None:
                 comp.set_value(comp._initial_value)
 
@@ -9007,11 +9474,12 @@ class AppPreview:
                                border_color=None, border_width=0, pressed_color=None,
                                margin=(0, 0, 0, 0), font=None, parent=None, pack_side=None, bg_color=None,
                                nav_data=None, compact=False, icon=None, padding=None,
+                               side_padding_set=None,
                                min_height=0, press=None, text_transform=None,
                                text_align=None, letter_spacing=None,
                                line_height=None, icon_color=None,
                                css_width=None, css_height=None, grow=False,
-                               material_inset=False):
+                               material_inset=False, icon_size=20):
         """Botão Material Design: cinza claro, texto uppercase, flat.
 
         ``css_width``/``css_height`` are the stylesheet's size in Preview
@@ -9039,6 +9507,11 @@ class AppPreview:
         is_flex    = pack_side is not None
 
         pad_t, pad_r, pad_b, pad_l = padding or (0, 0, 0, 0)
+        # padding: 8px 0px says 0 at the sides; only a button that says
+        # nothing gets Material's room. 0 was read as unset, so seven keys in
+        # a row with no side padding broke "Tab" into T / a / b.
+        if side_padding_set is None:
+            side_padding_set = bool(pad_l or pad_r)
         try:
             import tkinter.font as _tkfont
             _font_measure = _tkfont.Font(root=self.root, font=btn_font)
@@ -9087,8 +9560,8 @@ class AppPreview:
             text_w = _material_button_text_width(
                 caption, _measure_text, _tracking,
             )
-            icon_w = 28 if icon and caption else (20 if icon else 0)
-            horizontal_padding = pad_l + pad_r if (pad_l or pad_r) else 36
+            icon_w = icon_size + 8 if icon and caption else (icon_size if icon else 0)
+            horizontal_padding = pad_l + pad_r if side_padding_set else 36
             # Rounded up, with a pixel to spare: _content_layout wraps at
             # the canvas width minus the same padding, and a label 0.4px
             # over it broke "Music" into "Musi" / "c".
@@ -9148,8 +9621,8 @@ class AppPreview:
 
         def _content_layout(w):
             label = "" if compact and icon else _disp()
-            icon_w = 26 if icon and label else 0
-            horizontal_padding = pad_l + pad_r if (pad_l or pad_r) else 36
+            icon_w = icon_size + 6 if icon and label else 0
+            horizontal_padding = pad_l + pad_r if side_padding_set else 36
             text_limit = max(1, w - horizontal_padding - icon_w)
             lines = (
                 _wrap_material_button_text(
@@ -9176,8 +9649,8 @@ class AppPreview:
         def _shown_colour():
             lit = getattr(comp, '_dynamic_icon_color', None) if comp is not None else None
             return lit or icon_color or text_color
-        _edge_l = pad_l or 16
-        _edge_r = pad_r or 16
+        _edge_l = pad_l if side_padding_set else 16
+        _edge_r = pad_r if side_padding_set else 16
 
         def _draw_content(w, h, lines=None):
             label = "" if compact and icon else _disp()
@@ -9213,7 +9686,7 @@ class AppPreview:
                     icon_x = w / 2
                 _draw_material_icon(
                     canvas, _shown_icon(), icon_x, h / 2, _shown_colour(),
-                    size=20, tags='icon',
+                    size=icon_size, tags='icon',
                 )
                 return
             text_w = max(
@@ -9225,12 +9698,12 @@ class AppPreview:
                 # the shape app:iconGravity="start" gives on Android, and the
                 # reason an aligned row reads as a list instead of a pill.
                 _draw_material_icon(
-                    canvas, _shown_icon(), _edge_l + 9, h / 2, _shown_colour(),
-                    size=20, tags='icon',
+                    canvas, _shown_icon(), _edge_l + icon_size / 2 - 1, h / 2, _shown_colour(),
+                    size=icon_size, tags='icon',
                 )
                 if _align == 'left':
                     canvas.create_text(
-                        _edge_l + 26, h // 2, text=wrapped_label, anchor='w',
+                        _edge_l + icon_size + 6, h // 2, text=wrapped_label, anchor='w',
                         fill=text_color, font=btn_font, justify=_justify,
                         tags='label',
                     )
@@ -9241,12 +9714,12 @@ class AppPreview:
                         tags='label',
                     )
                 return
-            total_w = 18 + 8 + text_w
+            total_w = icon_size - 2 + 8 + text_w
             left = (w - total_w) / 2
             # icon-color counts here too, as Android bakes it into the icon.
             _draw_material_icon(
-                canvas, _shown_icon(), left + 9, h / 2, _shown_colour(),
-                size=20, tags='icon',
+                canvas, _shown_icon(), left + icon_size / 2 - 1, h / 2, _shown_colour(),
+                size=icon_size, tags='icon',
             )
             canvas.create_text(
                 left + 26 + text_w / 2, h // 2, text=wrapped_label,
@@ -9277,7 +9750,7 @@ class AppPreview:
             # square: Tk's rectangle has no alpha, and "#00000000" is not a
             # colour Tcl accepts -- a square transparent icon button took the
             # Previewer down.
-            if radius > 0 or (_aa_enabled() and (
+            if radius > 0 or _gradient_fill(cur_fill) is not None or (_aa_enabled() and (
                     _is_transparent(cur_fill) or _partial_alpha(cur_fill))):
                 _create_rounded_rect(canvas, 1, 1, w-1, h-1, radius, fill=cur_fill,
                                      outline=outline_c, width=outline_w, tags='body')
@@ -9302,6 +9775,23 @@ class AppPreview:
             start = getattr(canvas, '_current_fill', None) or fill_color
             _press_token[0] += 1
             token = _press_token[0]
+            if _gradient_fill(fill_color) is not None:
+                # A gradient cannot ease to a colour: a veil over it while
+                # pressed, as Android's ripple lies over the background.
+                canvas.delete('press_veil')
+                if target != fill_color:
+                    try:
+                        w, h = canvas.winfo_width(), canvas.winfo_height()
+                        _create_rounded_rect(canvas, 1, 1, w - 1, h - 1, radius,
+                                             fill=_gradient_veil(fill_color),
+                                             tags='press_veil')
+                        canvas.tag_raise('press_veil', 'body')
+                    except Exception:
+                        pass
+                canvas._current_fill = fill_color
+                if then:
+                    then()
+                return
 
             def settle():
                 try:
@@ -9421,6 +9911,13 @@ class AppPreview:
             material_inset = not any(
                 key.startswith('padding') or key in ('height', 'min-height')
                 for key in style)
+        # A gradient of its own (never body's, which is the screen's) is the
+        # body's fill; the antialiased shape draws it.
+        _own_image = component_style(global_styles, 'button', comp_id, include_body=False,
+                                     variant=variant, viewport=_style_viewport
+                                     ).get('background-image')
+        if _gradient_fill(_own_image):
+            bg = _own_image
         pressed_bg = _get_style_pressed_color(style)
         radius     = _parse_radius(style)
         if material_inset and 'border-radius' not in style:
@@ -9429,14 +9926,20 @@ class AppPreview:
         bw         = _parse_border_width(style)
         margins    = _parse_margin(style)
         padding    = _parse_padding_tk(style)
+        side_padding_set = any(key in style for key in
+                               ('padding', 'padding-left', 'padding-right'))
         raw_min_height = str(style.get('min-height', '')).strip()
         min_height_match = re.search(r'\d+(?:\.\d+)?', raw_min_height)
         min_height = int(float(min_height_match.group(0))) if min_height_match else 0
         # 14: a button that names no size is Material's 14sp on the phone;
         # it was 11px here, the label three-quarters of the phone's.
+        # Every button is a MaterialButton there, medium (500) unless the
+        # stylesheet says otherwise -- not only one without a colour of its
+        # own: a styled "Top up" was regular here and medium on the phone.
+        # Tk has normal and bold; bold is the nearer.
         font       = _build_tk_font(
-            dict(style, **{'font-weight': style.get('font-weight') or 'bold'})
-            if material_inset else style, default_size=14)
+            dict(style, **{'font-weight': style.get('font-weight') or 'bold'}),
+            default_size=14)
         css_width, css_height = _button_css_size(style)
         user_cmd   = comp.kwargs.get('command')
         nav_target = comp.nav_target
@@ -9457,10 +9960,12 @@ class AppPreview:
                 text_align=style.get('text-align'),
                 letter_spacing=style.get('letter-spacing'),
                 line_height=style.get('line-height'),
-                padding=padding, min_height=min_height,
+                padding=padding, side_padding_set=side_padding_set,
+                min_height=min_height,
                 css_width=css_width, css_height=css_height,
                 grow=_number(style.get('flex-grow')) > 0,
                 material_inset=material_inset,
+                icon_size=int(_length_px(style.get('icon-size'), 20)),
             )
             fill_color = bg if bg else '#e0e0e0'
             _animate_widget(_app.root, None, style, canvas=canvas,
@@ -9488,9 +9993,11 @@ class AppPreview:
                 text_align=style.get('text-align'),
                 letter_spacing=style.get('letter-spacing'),
                 line_height=style.get('line-height'),
-                padding=padding, min_height=min_height,
+                padding=padding, side_padding_set=side_padding_set,
+                min_height=min_height,
                 css_width=css_width, css_height=css_height,
                 material_inset=material_inset,
+                icon_size=int(_length_px(style.get('icon-size'), 20)),
             )
 
             fill_color = bg if bg else '#e0e0e0'
@@ -9538,7 +10045,10 @@ class AppPreview:
                 margin[1], margin[2], margin[3],
             ),
             padding=_parse_padding_tk(style),
-            font=_build_tk_font(style, default_size=13),
+            # A field you type in is an EditText on the phone, 18sp unless the CSS says.
+            font=_build_tk_font(style, default_size=(
+                _field_rules.EDIT_TEXT_SIZE
+                if comp.kwargs.get('input_type', 'text') in _field_rules.TYPES else 13)),
             accent_color=input_accent_color(global_styles, comp_id),
             parent=parent_widget,
             bg_color=bg_color,
@@ -9546,6 +10056,7 @@ class AppPreview:
         )
         if getattr(comp, '_initial_value', None) is not None:
             comp.set_value(comp._initial_value)
+        _keyboard_feature.drawn(comp)
         _watch_choice_change(comp)
 
         # Animação de margem (o widget de input em si não tem fg, usa‑se um label “fantasma”)
@@ -11620,14 +12131,21 @@ class AppPreview:
         label_font = (family, -label_size)
         bg = _tk_color(bg_color, '#FFFFFF')
 
+        width_match = re.match(r'^\s*([0-9.]+)\s*(px|dp)?\s*$', str(own.get('width', '')))
+        fixed_w = int(float(width_match.group(1))) if width_match else 0
         outer = tk.Frame(parent_widget, bg=bg)
-        if is_flex and pack_side in (tk.LEFT, tk.RIGHT):
+        if fixed_w:
+            # width: 92px is the chart's own width on the phone too.
+            outer.pack(padx=(ml, mr), pady=(mt, mb),
+                       **({'side': pack_side} if is_flex else {'anchor': 'w'}))
+        elif is_flex and pack_side in (tk.LEFT, tk.RIGHT):
             outer.pack(side=pack_side, fill='both', expand=True, padx=(ml, mr), pady=(mt, mb))
         else:
             outer.pack(fill='x', padx=(ml, mr), pady=(mt, mb),
                        **({'side': pack_side} if is_flex else {}))
-        canvas = tk.Canvas(outer, height=draw_h, bg=bg, highlightthickness=0, bd=0)
-        canvas.pack(fill='x')
+        canvas = tk.Canvas(outer, height=draw_h, bg=bg, highlightthickness=0, bd=0,
+                           **({'width': fixed_w} if fixed_w else {}))
+        canvas.pack(fill='none' if fixed_w else 'x')
         comp.widget = canvas
         hits = []          # (kind, geometry, item) for on_click
 
@@ -13765,6 +14283,8 @@ class AppPreview:
 
             if field is not None:
                 field.finish(entry, _field_pads, _field_repaint)
+            # Enter is the keyboard's corner key; a phone field takes the dial pad's keys.
+            _keyboard_feature.wire(self, comp, entry, placeholder)
 
         # ── DATE / TIME picker ───────────────────────────────────────────────
         elif input_type in ("date", "time"):
@@ -13996,6 +14516,8 @@ class AppPreview:
                     comp.widget = txt
 
                 _watch_textarea(txt, _redraw_ta)
+                if comp is not None:
+                    _code_editor.watch(txt, _ta_style, text_color, placeholder)
 
                 def _field_repaint():
                     focused = _widget_has_focus(txt)
@@ -14050,6 +14572,8 @@ class AppPreview:
                 txt.bind("<FocusOut>", on_focus_out_ta)
 
                 _watch_textarea(txt)
+                if comp is not None:
+                    _code_editor.watch(txt, _ta_style, text_color, placeholder)
 
                 def _field_repaint():
                     _paint_ta(_widget_has_focus(txt))
@@ -14425,6 +14949,17 @@ class ClipboardAPI:
         except Exception as e:
             print(f"[ApkPy clipboard.copy] {text}  ({e})")
 
+    def paste(self):
+        """The text on the clipboard, or "". Android shows the person a short
+        notice that the app read it."""
+        from .features import kit as _kit
+        return _kit.clipboard_paste()
+
+    def has_text(self):
+        """Whether there is text to paste, without reading it."""
+        from .features import kit as _kit
+        return _kit.clipboard_has_text()
+
 clipboard = ClipboardAPI()
 
 from .features.camera import CameraAPI, camera
@@ -14454,6 +14989,12 @@ class GalleryAPI:
             print(f"[ApkPy gallery.pick] ({e})")
             if on_result:
                 on_result(False, "")
+
+    def save(self, path, album="", on_result=None):
+        """Put a picture or a video of the app in the gallery, in an album
+        named after the app or ``album=``. ``on_result(ok, name)``."""
+        from .features import kit as _kit
+        return _kit.gallery_save(path, album, on_result)
 
 gallery = GalleryAPI()
 
@@ -15092,7 +15633,7 @@ def _card_action_component(action):
 
 
 def card(title=None, subtitle=None, image=None, content=None, actions=None,
-         id=None, variant="elevated", screen=None, parent=None):
+         id=None, variant="elevated", screen=None, parent=None, on_click=None):
     """Create a semantic Material card or an empty composable card surface.
 
     ``title``/``subtitle``/``image``/``actions`` provide the ready-made form.
@@ -15101,7 +15642,8 @@ def card(title=None, subtitle=None, image=None, content=None, actions=None,
     complete card is attached to a screen.
     """
     normalized = normalize_card_variant(variant)
-    comp = ComponentDef('card', comp_id=id, variant=normalized)
+    comp = ComponentDef('card', comp_id=id, variant=normalized,
+                        **({'on_click': on_click} if on_click is not None else {}))
     prefix = str(id or 'card')
     if image:
         comp.children.append(ComponentDef(
@@ -15139,12 +15681,14 @@ def card(title=None, subtitle=None, image=None, content=None, actions=None,
     return comp
 
 
-def container(id=None, screen=None, parent=None):
+def container(id=None, screen=None, parent=None, on_click=None):
     """
     Cria um contentor (caixa) para agrupar outros componentes (ex: Note Card, Header).
     Pode ser adicionado à raiz do ecrã (screen) ou a outro contentor (parent).
+    ``on_click=fn`` chama fn() quando se toca em qualquer ponto da caixa.
     """
-    comp = ComponentDef('container', comp_id=id)
+    comp = ComponentDef('container', comp_id=id,
+                        **({'on_click': on_click} if on_click is not None else {}))
     if parent is not None:
         parent.children.append(comp)
     elif screen is not None:
@@ -15831,6 +16375,7 @@ def validate(*fields):
 
     Each field with ``required=`` that is empty shows its error -- all of
     them at once, not one a tap -- and the first one takes the cursor."""
+    _job_rules.guard("component", "validate()")
     for field in fields:
         if not isinstance(field, ComponentDef):
             _field_rules.refuse('validate() takes the fields to check.',
@@ -15840,8 +16385,16 @@ def validate(*fields):
     return _field_feature.validate_all(fields)
 
 
+def hide_keyboard():
+    """Close the phone's keyboard and take the cursor out of the field --
+    after a search, say, so the results are not under it. In the Previewer
+    the cursor leaves the field."""
+    _job_rules.guard("screen_api", "hide_keyboard()")
+    _keyboard_feature.hide(_app._instance)
+
+
 def inputs(placeholder="", id=None, type="text", screen=None, parent=None, on_change=None,
-           help=None, error=None, required=False):
+           help=None, error=None, required=False, on_submit=None, action=None, autofill=None):
     """
     Adiciona um campo de input à interface.
 
@@ -15875,14 +16428,31 @@ def inputs(placeholder="", id=None, type="text", screen=None, parent=None, on_ch
         required:  True, or the words to show when the field is empty
                    (``required="Enter your name"``). ``validate(a, b)`` and
                    ``field.validate()`` check it.
+        on_submit: What the keyboard's corner key (Enter, on a desktop) does
+                   in a one-line field: a function given the field's text, or
+                   nothing. ``inputs("Message", action="send", on_submit=send)``.
+        action:    The corner key: "send", "next", "done", "search" or "go".
+                   "done", "search" and "go" close the keyboard, "send" keeps
+                   it open, "next" moves to the next field. A search field
+                   has "search"; with ``on_submit`` and no action, "done".
+        autofill:  What the field is to password managers and the keyboard:
+                   "email", "username", "password", "new_password", "otp",
+                   "name", "phone", "address" or "postal_code".
+
+    type="email", "phone" and "url" are text fields with the keyboard for
+    them. ``hide_keyboard()`` closes the keyboard and ``field.focus()`` puts
+    the cursor in a field and opens it.
     """
     _field = {}
+    _field_rules.check_known(type)
     _help = _field_rules.words(help, 'help')
     _error = _field_rules.words(error, 'error')
     _required = _field_rules.required_message(required)
     if _field_rules.wanted(_help, _error, _required):
         _field_rules.check_type(type)
         _field = {'help': _help, 'error': _error, 'required_message': _required}
+    _field.update(_keyboard_feature.options(type, action, on_submit, autofill))
+    type = _field_rules.base_type(type)
     if parent is not None:
         comp = ComponentDef('inputs', placeholder=placeholder, input_type=type, comp_id=id, on_change=on_change, **_field)
         parent.children.append(comp)
@@ -15901,7 +16471,8 @@ def inputs(placeholder="", id=None, type="text", screen=None, parent=None, on_ch
         bc     = _get_style_border_color(style)
         bw     = _parse_border_width(style)
         fc     = _get_style_focus_border_color(style)
-        font   = _build_tk_font(style, default_size=13)
+        font   = _build_tk_font(style, default_size=(
+            _field_rules.EDIT_TEXT_SIZE if type in _field_rules.TYPES else 13))
         _app.add_input(placeholder=placeholder, input_type=type, bg=bg, fg=fg, radius=radius, border_color=bc, border_width=bw, focus_border_color=fc, font=font, accent_color=input_accent_color(global_styles, id))
         return None
 
@@ -17288,6 +17859,10 @@ def _make_dialog(title, message, buttons):
         print('[ApkPy dialog] %s: %s  (sem Previewer aberto -- Cancel)'
               % (title, message))
         return None
+    if _dialog_rules.wanted(global_styles):
+        # dialog { ... } in the stylesheet: the app's own card, as on the phone.
+        import sys as _sys
+        return _styled_dialog.ask(_sys.modules[__name__], title, message, buttons)
 
     win = tk.Toplevel(root)
     win.title(str(title))
@@ -17317,25 +17892,30 @@ def _make_dialog(title, message, buttons):
     return result[0]
 
 
-def alert(title, message):
+def alert(title, message, ok=None):
     """
     Mostra um diálogo com título, mensagem e botão OK.
-    - No Android: abre um AlertDialog nativo.
-    - No Preview: diálogo Tkinter com botão OK em inglês.
+    - No Android: abre um AlertDialog nativo; sem ``ok=`` o botão é o OK do
+      sistema, na língua do telemóvel.
+    - No Preview: diálogo Tkinter; sem ``ok=`` o botão diz OK.
     """
     _job_rules.guard("dialog", "alert()")
-    _make_dialog(str(title), str(message), [("OK", True)])
+    _make_dialog(str(title), str(message), [(str(ok) if ok else "OK", True)])
 
 
-def confirm(title, message, on_result=None):
+def confirm(title, message, on_result=None, ok=None, cancel=None):
     """
-    Mostra um diálogo de confirmação com botões OK/Cancel.
+    Mostra um diálogo de confirmação com dois botões.
     Chama on_result(True) se confirmar, on_result(False) se cancelar.
-    - No Android: AlertDialog com botões positivo/negativo.
-    - No Preview: diálogo Tkinter com botões OK/Cancel em inglês.
+    ``ok=`` e ``cancel=`` dão o texto dos botões (``ok="Sair"``,
+    ``cancel="Ficar"``).
+    - No Android: AlertDialog; sem eles, os botões do sistema, na língua do
+      telemóvel ("OK" / "Cancelar" num telemóvel em português).
+    - No Preview: diálogo Tkinter; sem eles, OK / Cancel.
     """
     _job_rules.guard("dialog", "confirm()")
-    result = _make_dialog(str(title), str(message), [("OK", True), ("Cancel", False)])
+    result = _make_dialog(str(title), str(message), [
+        (str(ok) if ok else "OK", True), (str(cancel) if cancel else "Cancel", False)])
     if on_result:
         on_result(bool(result))
 

@@ -140,22 +140,22 @@ class Labels(unittest.TestCase):
     def test_the_audit_reads_the_colour_that_is_drawn(self):
         import contextlib
         import io
-        from apkpy_lib.core import compiler
+        from apkpy_lib.core.compiler import translate as build     # the module that asks for the audit
 
         def findings(style, run):
             found = []
-            original = compiler._audit_accessibility
+            original = build._audit_accessibility
 
             def keep(screens, styles):
                 found.extend(original(screens, styles))
                 return found
-            compiler._audit_accessibility = keep
+            build._audit_accessibility = keep
             try:
                 with contextlib.redirect_stdout(io.StringIO()):
                     translate_python_to_android(
                         LABELS % ('style = """\n%s\n"""' % style, run))
             finally:
-                compiler._audit_accessibility = original
+                build._audit_accessibility = original
             return found
 
         themed = ', theme=Theme(primary="#0F766E")'
@@ -284,6 +284,54 @@ class ThePreviewersPlainButton(unittest.TestCase):
             ui.global_styles.clear()
             ui.global_styles.update(saved)
             root.destroy()
+
+    def _drawn(self, styles):
+        import tkinter as tk
+        from apkpy_lib import ui
+        try:
+            app = ui.AppPreview.__new__(ui.AppPreview)
+            root = tk.Tk()
+        except tk.TclError:
+            self.skipTest("no display")
+        root.withdraw()
+        drawn = {}
+
+        def keep(self_, text, bg, fg, radius, *a, **kw):
+            drawn.update(bg=bg, font=kw.get('font'))
+            return tk.Canvas(root)
+
+        saved = dict(ui.global_styles)
+        original = ui.AppPreview._draw_material_button
+        animate, proxy = ui._animate_widget, ui._app
+        try:
+            ui.global_styles.clear()
+            ui.global_styles.update(styles)
+            ui.AppPreview._draw_material_button = keep
+            ui._animate_widget = lambda *a, **kw: None
+            ui._app = type('App', (), {'root': root})()
+            app.root = root
+            comp = ui.ComponentDef('button', text='Top up', comp_id='go')
+            ui.AppPreview._render_button(app, comp, root, False, None, '#FFFFFF')
+            return drawn
+        finally:
+            ui.AppPreview._draw_material_button = original
+            ui._animate_widget, ui._app = animate, proxy
+            ui.global_styles.clear()
+            ui.global_styles.update(saved)
+            root.destroy()
+
+    def test_a_styled_button_is_medium_too(self):
+        # Every button is a MaterialButton on the phone, medium unless told
+        # otherwise; a styled one was regular here (seen 31-10-2026).
+        drawn = self._drawn({'go': {'background-color': '#F97316'}})
+        self.assertIn('bold', drawn['font'])
+        drawn = self._drawn({'go': {'background-color': '#F97316', 'font-weight': 'normal'}})
+        self.assertNotIn('bold', drawn['font'])
+
+    def test_a_gradient_is_the_body(self):
+        drawn = self._drawn({'go': {'background-image': 'linear-gradient(90deg, #F97316, #EC4899)',
+                                    'background-color': '#F35E58'}})
+        self.assertEqual(drawn['bg'], 'linear-gradient(90deg, #F97316, #EC4899)')
 
 
 class TheSameCssOnBothSides(unittest.TestCase):

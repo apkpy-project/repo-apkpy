@@ -164,7 +164,9 @@ def encoded_payload(comp, *, text_color, secondary_color, accent_color,
 
 
 def generate_rich_content_view_java(package):
-    return _RICH_CONTENT_VIEW_JAVA.replace("__PACKAGE__", package)
+    from ..code_highlight import java_tables
+    return (_RICH_CONTENT_VIEW_JAVA.replace("__PACKAGE__", package)
+            .replace("    // __CODE_TABLES__", java_tables()))
 
 
 def generate_tree_view_java(package):
@@ -212,6 +214,7 @@ public final class ApkpyRichContentView extends LinearLayout {
         "\\[([^\\]]+)\\]\\(([^)]+)\\)|\\*\\*([^*]+)\\*\\*|~~([^~]+)~~|`([^`]+)`|\\*([^*]+)\\*"
     );
     private static final Pattern HEADING = Pattern.compile("^(#{1,6})\\s+(.*)$");
+    // __CODE_TABLES__
     private static final Pattern QUOTE = Pattern.compile("^\\s*>\\s?(.*)$");
     private static final Pattern CHECK = Pattern.compile(
         "^\\s*[-*]\\s+\\[([ xX])\\]\\s+(.*)$"
@@ -394,6 +397,11 @@ public final class ApkpyRichContentView extends LinearLayout {
                                 float density, boolean copyCode) {
         boolean codeBlock = false;
         int blockStart = -1;
+        // ```cpp numbers: the language colours the words, numbers counts lines
+        // (core/code_highlight.py writes the tables).
+        int codeLang = -1;
+        boolean codeNumbers = false;
+        int codeLine = 0;
         String[] lines = source.replace("\r\n", "\n").replace('\r', '\n').split("\n", -1);
         for (String raw : lines) {
             String trimmed = raw.trim();
@@ -403,11 +411,47 @@ public final class ApkpyRichContentView extends LinearLayout {
                 }
                 codeBlock = !codeBlock;
                 blockStart = codeBlock ? out.length() : -1;
+                if (codeBlock) {
+                    String info = trimmed.substring(3).trim().toLowerCase();
+                    String[] words = info.isEmpty() ? new String[0] : info.split("\\s+");
+                    codeLang = -1;
+                    codeNumbers = false;
+                    codeLine = 0;
+                    if (words.length > 0) {
+                        String name = CODE_ALIASES.containsKey(words[0]) ? CODE_ALIASES.get(words[0]) : words[0];
+                        for (int i = 0; i < CODE_LANGS.length; i++) if (CODE_LANGS[i].equals(name)) codeLang = i;
+                    }
+                    for (int i = 1; i < words.length; i++) if (words[i].equals("numbers")) codeNumbers = true;
+                }
                 continue;
             }
             int lineStart = out.length();
             if (codeBlock) {
+                codeLine++;
+                int brightness = (299 * ((textColor >> 16) & 0xFF) + 587 * ((textColor >> 8) & 0xFF)
+                        + 114 * (textColor & 0xFF)) / 1000;
+                int[] palette = brightness > 140 ? CODE_DARK : CODE_LIGHT;
+                if (codeNumbers) {
+                    int numberStart = out.length();
+                    out.append(codeLine < 10 ? " " : "").append(String.valueOf(codeLine)).append("  ");
+                    out.setSpan(new ForegroundColorSpan(palette[9]), numberStart, out.length(),
+                            Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+                }
+                int textStart = out.length();
                 out.append(raw).append('\n');
+                if (codeLang >= 0) {
+                    Matcher words = CODE_PATTERNS[codeLang].matcher(raw);
+                    while (words.find()) {
+                        if (words.end() == words.start()) continue;
+                        for (int g = 1; g <= words.groupCount(); g++) {
+                            if (words.group(g) == null) continue;
+                            out.setSpan(new ForegroundColorSpan(palette[CODE_KINDS[codeLang][g - 1]]),
+                                    textStart + words.start(), textStart + words.end(),
+                                    Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
+                            break;
+                        }
+                    }
+                }
                 int lineEnd = out.length();
                 out.setSpan(new TypefaceSpan("monospace"), lineStart, lineEnd, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);
                 out.setSpan(new BackgroundColorSpan(0x33222222), lineStart, lineEnd, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE);

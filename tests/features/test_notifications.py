@@ -133,7 +133,10 @@ worker = background_job("notice", run=task)
         self.assertIn('ApkpyNotifications.post(getApplicationContext()', worker_java)
         self.assertIn('ApkpyNotifications.allowed(getApplicationContext())', worker_java)
         self.assertNotIn('_apkpyNotify(', worker_java)
-        self.assertIn('getApplicationContext().getPackageManager()', worker_java)
+        # A Worker is no Context: whatever asks for the package manager asks
+        # the application's.
+        self.assertEqual(worker_java.count('getPackageManager()'),
+                         worker_java.count('getApplicationContext().getPackageManager()'))
         self.assertNotIn('private void _apkpyOpenStore(', worker_java)
 
     def test_push_uses_same_publisher(self):

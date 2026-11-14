@@ -179,7 +179,9 @@ def ring_fraction(value, maximum):
 def ring_center_text(value, maximum, center=None):
     if center is not None:
         return str(center)
-    return '%d%%' % int(round(ring_fraction(value, maximum) * 100))
+    # Halves up, as the phone's Math.round: 5 of 8 cups is 63% there, and
+    # round() -- to even -- said 62% in the Previewer.
+    return '%d%%' % int(math.floor(ring_fraction(value, maximum) * 100 + 0.5))
 
 
 def bar_rects(values, left, top, width, height, scale_top):

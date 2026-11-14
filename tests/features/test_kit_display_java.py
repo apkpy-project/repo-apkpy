@@ -119,6 +119,21 @@ public class Activity {
     public boolean isChangingConfigurations() { return changing; }
     public void setRequestedOrientation(int wanted) { requested = wanted; }
     public void runOnUiThread(Runnable work) { handedToMain++; work.run(); }
+    // Android 14: told of a screenshot of this screen.
+    public interface ScreenCaptureCallback { void onScreenCaptured(); }
+    public java.util.List<ScreenCaptureCallback> capturing = new java.util.ArrayList<>();
+    public java.util.concurrent.Executor getMainExecutor() {
+        return new java.util.concurrent.Executor() {
+            public void execute(Runnable work) { work.run(); }
+        };
+    }
+    public void registerScreenCaptureCallback(java.util.concurrent.Executor on, ScreenCaptureCallback told) {
+        capturing.add(told);
+    }
+    public void unregisterScreenCaptureCallback(ScreenCaptureCallback told) { capturing.remove(told); }
+    public void screenshot() {
+        for (ScreenCaptureCallback each : new java.util.ArrayList<>(capturing)) each.onScreenCaptured();
+    }
     // What Android does to a screen, as far as its window can tell.
     public void create() {
         for (Application.ActivityLifecycleCallbacks each : application.watchers) each.onActivityCreated(this, null);
@@ -316,6 +331,49 @@ public class Harness {
         say(has(busy) + " handed to main " + busy.handedToMain);
         busy.destroy(false);
 
+        // Told of a screenshot: the functions by their names, once each.
+        begin("shots");
+        final StringBuilder told = new StringBuilder();
+        ApkpyDisplay.Calls calls = new ApkpyDisplay.Calls() {
+            public void call(String name) { told.append(name).append(';'); }
+        };
+        Recipe snap = new Recipe();
+        ApkpyDisplay.host(snap, calls);         // a field of the screen: before onCreate
+        open(snap);
+        snap.screenshot();
+        say("before asking: " + snap.capturing.size() + " [" + told + "]");
+        say(ApkpyDisplay.onScreenshot(snap, "saved") + " " + ApkpyDisplay.onScreenshot(snap, "saved")
+                + " " + ApkpyDisplay.onScreenshot(snap, "count") + " listening " + snap.capturing.size());
+        snap.screenshot();
+        say("told [" + told + "]");
+        // Turned: the new copy listens before any of the app's code for it.
+        snap.stop();
+        snap.destroy(true);
+        say("the old copy listens " + snap.capturing.size());
+        SystemClock.now += 400;
+        told.setLength(0);
+        Recipe turnedOver = new Recipe();
+        ApkpyDisplay.host(turnedOver, calls);
+        open(turnedOver);
+        turnedOver.screenshot();
+        say("turned: listening " + turnedOver.capturing.size() + " told [" + told + "]");
+        turnedOver.destroy(false);
+        say("closed: listening " + turnedOver.capturing.size());
+        // A screen with no way to call its functions is told nothing.
+        Pass bare = open(new Pass());
+        say(ApkpyDisplay.onScreenshot(bare, "saved"));
+        told.setLength(0);
+        bare.screenshot();
+        say("no host [" + told + "]");
+        bare.destroy(false);
+        // Before Android 14 there is nothing to listen to.
+        Build.VERSION.SDK_INT = 33;
+        Old older = open(new Old());
+        ApkpyDisplay.host(older, calls);
+        say(ApkpyDisplay.onScreenshot(older, "saved") + " listening " + older.capturing.size());
+        older.destroy(false);
+        Build.VERSION.SDK_INT = 36;
+
         begin("end");
         say("watching " + APP.watchers.size());
     }
@@ -365,6 +423,17 @@ WANTED = {
     "older": ["ok sleeps -1.0 no-bars way -99 flags 4358",
               "ok sleeps -1.0 bars way -99 flags 256"],
     "thread": ["ok ok ok ok", "awake 0.3 no-bars way 1 handed to main 4"],
+    "shots": [
+        "before asking: 0 []",
+        "ok ok ok listening 1",                 # one listener, however many functions
+        "told [saved;count;]",
+        "the old copy listens 0",
+        "turned: listening 1 told [saved;count;]",
+        "closed: listening 0",
+        "ok",
+        "no host []",
+        "unsupported listening 0",
+    ],
     "end": ["watching 1"],
 }
 
@@ -433,6 +502,9 @@ class ThePhonesWindow(unittest.TestCase):
 
     def test_asked_from_another_thread(self):
         self._same("thread")
+
+    def test_a_screenshot_calls_the_screens_functions(self):
+        self._same("shots")
 
     def test_one_watcher_for_the_app(self):
         self._same("end")

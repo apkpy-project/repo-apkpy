@@ -18,10 +18,18 @@ REASONS = {"ok": "Posted", "not_allowed": "Notifications are disabled",
            "invalid_progress": "Use 0 to 100, None, or indeterminate"}
 VERBS = ("channel", "cancel", "cancel_all", "allowed", "ask")
 PARAMS = ("title", "message", "id", "channel", "icon", "style", "picture", "lines",
-          "actions", "on_tap", "on_dismiss", "ongoing", "progress", "group", "when")
+          "actions", "on_tap", "on_dismiss", "ongoing", "progress", "group", "when",
+          "at", "repeat", "exact")
 DEFAULTS = dict(id="apkpy_notification", channel=DEFAULT_CHANNEL, icon="notifications",
                 style="none", picture=None, lines=None, actions=None, on_tap=None,
-                on_dismiss=None, ongoing=False, progress=None, group=None, when=None)
+                on_dismiss=None, ongoing=False, progress=None, group=None, when=None,
+                at=None, repeat=None, exact=False)
+
+# notify(at=): what the build says of a time it cannot read, and of a repeat.
+AT_HELP = ('notify(at=) is a time: "09:00" for the next 09:00, or a day and an '
+           'hour, "2026-11-07 09:00"')
+REPEAT_HELP = 'notify(repeat=) is written out: None, "daily" or "weekly"'
+EXACT_HELP = 'notify(exact=) is True or False, written out'
 
 
 def validate(style="none", picture=None, lines=None, actions=None, progress=None):
@@ -154,9 +162,95 @@ def parse_call(t, call):
                  constant(args["progress"], "progress") if isinstance(args["progress"], ast.Constant) else None)
     except ValueError as e:
         fail(str(e), call)
+    _check_reminder(args, call)
     args["style"] = ast.Constant(value=style)
     args["icon"] = ast.Constant(value=icon)
     return {"type": "notify", "args": args, "actions": parsed_actions, "line": call.lineno}
+
+
+def _given(node):
+    return not (isinstance(node, ast.Constant) and node.value is None)
+
+
+def _check_reminder(args, call):
+    """A time written out has to be one the phone reads; repeat= is one of
+    three words, and means nothing without a time."""
+    import datetime
+    from ... import kit_rules
+    at, repeat = args["at"], args["repeat"]
+    if isinstance(at, ast.Constant) and at.value is not None:
+        if not isinstance(at.value, str) \
+                or kit_rules.reminder_at(at.value, datetime.datetime.now()) is None:
+            fail(AT_HELP + "; got %r." % (at.value,), call)
+    if not isinstance(repeat, ast.Constant):
+        fail(REPEAT_HELP + ".", call)
+    if repeat.value is not None:
+        if not isinstance(repeat.value, str) or kit_rules.reminder_repeat(repeat.value) in (None, ""):
+            fail(REPEAT_HELP + "; got %r." % (repeat.value,), call)
+        if not _given(at):
+            fail("notify(repeat=) repeats a reminder, and needs the time of the "
+                 "first: at=\"09:00\".", call)
+    # Whether the app asks for alarms to the minute is in its manifest: it is
+    # known when the app is built, so it is written out.
+    exact = args["exact"]
+    if not (isinstance(exact, ast.Constant) and isinstance(exact.value, bool)):
+        fail(EXACT_HELP + ".", call)
+    if exact.value and not _given(at):
+        fail("notify(exact=True) is for a reminder, and needs its time: "
+             "at=\"09:00\".", call)
+
+
+def uses_reminders(tree):
+    """Whether any notify() is given a time to wait for."""
+    for node in ast.walk(tree):
+        if is_call(node) and isinstance(node.func, ast.Name):
+            for keyword in node.keywords:
+                if keyword.arg == "at" and _given(keyword.value):
+                    return True
+    return False
+
+
+def uses_exact(tree):
+    """Whether any notify() asks for its time to the minute: exact=True."""
+    for node in ast.walk(tree):
+        if is_call(node) and isinstance(node.func, ast.Name):
+            for keyword in node.keywords:
+                if (keyword.arg == "exact" and isinstance(keyword.value, ast.Constant)
+                        and keyword.value.value is True):
+                    return True
+    return False
+
+
+# The receivers a reminder needs: the alarm going off, and the phone starting
+# again (every alarm is gone after a restart, and after the app is updated).
+REMINDER_XML = (
+    '<receiver android:name=".ApkpyNotifications$ReminderReceiver" android:exported="false" />\n'
+    '    <receiver android:name=".ApkpyNotifications$RestartReceiver" android:exported="true">\n'
+    '        <intent-filter>\n'
+    '            <action android:name="android.intent.action.BOOT_COMPLETED" />\n'
+    '            <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />\n'
+    '__EXACT_ACTION__'
+    '        </intent-filter>\n'
+    '    </receiver>\n')
+BOOT_PERMISSION = '<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />'
+# notify(exact=True): alarms to the minute, which from Android 12 the person
+# allows in Settings; Android says so to the app when they do, and the
+# reminders already set are set again to the minute.
+EXACT_PERMISSION = '<uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />'
+EXACT_ACTION = ('            <action android:name='
+                '"android.app.action.SCHEDULE_EXACT_ALARM_PERMISSION_STATE_CHANGED" />\n')
+
+
+def integrate_manifest(manifest, reminders=False, exact=False):
+    """The receivers notifications need inside <application>."""
+    receivers = '<receiver android:name=".ApkpyNotifications$DismissReceiver" android:exported="false" />\n    '
+    if reminders:
+        receivers += REMINDER_XML.replace("__EXACT_ACTION__", EXACT_ACTION if exact else "") + "    "
+        wanted = [BOOT_PERMISSION] + ([EXACT_PERMISSION] if exact else [])
+        for permission in wanted:
+            if permission not in manifest:
+                manifest = manifest.replace("<application", permission + "\n    <application", 1)
+    return manifest.replace("</application>", receivers + "</application>")
 
 
 def value_java(node):
@@ -190,6 +284,13 @@ def emit_command(lines, c, val, indent, scope="activity"):
         pairs = []
         for key in ("title", "message", "id", "channel", "icon", "style", "picture", "lines", "ongoing", "progress", "group", "when"):
             pairs.extend((json.dumps(key), text(key)))
+        for key in ("at", "repeat"):
+            # Only a reminder carries them: what every other notify() writes
+            # stays as it was.
+            if _given(args[key]):
+                pairs.extend((json.dumps(key), text(key)))
+        if isinstance(args["exact"], ast.Constant) and args["exact"].value is True:
+            pairs.extend((json.dumps("exact"), json.dumps("true")))
         for key in ("on_tap", "on_dismiss"):
             pairs.extend((json.dumps(key), json.dumps(args[key] or "")))
         for i, (label, callback) in enumerate(c["actions"]):
@@ -251,11 +352,38 @@ def files(tree, t, package, asset_root, icon_vector):
     source = source.replace("__PICTURES__", "\n".join('case %s: return %s;' % (json.dumps(k), json.dumps(v[0])) for k,v in pictures.items()))
     source = source.replace("__ICONS__", "\n".join('case %s: return R.drawable.apkpy_notification_%s;' % (json.dumps(k), re.sub('[^a-z0-9_]','_',k.lower())) for k in sorted(icons)))
     result = {"java/ApkpyNotifications.java": source}
+    if uses_reminders(tree):
+        # When a reminder is due is read by the rules the kit's calls share.
+        from .kit import java_source as kit_java_source
+        result["java/ApkpyKitRules.java"] = kit_java_source("ApkpyKitRules", package)
+    else:
+        source = _without_reminders(source)
+        result["java/ApkpyNotifications.java"] = source
     for icon in icons:
         result["res/drawable/apkpy_notification_%s.xml" % re.sub('[^a-z0-9_]','_',icon.lower())] = icon_vector(icon, "#FFFFFF")
     for target, original in pictures.values():
         result["app/src/main/assets/" + target] = ("COPY_FILE", original)
     return result
+
+
+def _without_reminders(source):
+    """ApkpyNotifications for an app with no reminder: the part that waits
+    names ApkpyKitRules, which such an app does not have."""
+    start = source.index("    // --- reminders: notify(at=)")
+    end = source.index("    public static final class DismissReceiver")
+    source = source[:start] + source[end:]
+    for line in ("        // notify(at=): kept for later, and Android's alarm set for when it is due.\n"
+                 "        if (!original.optString(\"at\").isEmpty()) {\n"
+                 "            schedule(c, original, owner);\n"
+                 "            return;\n"
+                 "        }\n", "        disarm(c, id);\n",
+                 "        for (String id : new ArrayList<>(reminders(c).getAll().keySet())) disarm(c, id);\n",
+                 "        // Opened again after Android forgot its alarms -- the app stopped from\n"
+                 "        // Settings, or by a phone that cleans up: what is waiting is set again.\n"
+                 "        rearm(a.getApplicationContext());\n"):
+        assert line in source, line
+        source = source.replace(line, "", 1)
+    return source
 
 
 def integrate_activity(source):

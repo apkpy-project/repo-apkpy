@@ -143,7 +143,9 @@ class TheLibrarysOwnWordsAreEnglish(unittest.TestCase):
                             'def ask():\n'
                             '    confirm("Delete?", "Sure?", on_result=done)\n'
                             'button("Go", screen=home, command=ask)\n'))
-        self.assertIn('setNegativeButton("Cancel"', java)
+        # No word of the library's own in any language: the system's Cancel,
+        # in the phone's language (ok=/cancel= give other texts).
+        self.assertIn('getString(android.R.string.cancel)', java)
         self.assertNotIn('Cancelar', java)
 
     def test_default_radio_options(self):

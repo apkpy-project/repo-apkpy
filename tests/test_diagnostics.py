@@ -227,6 +227,18 @@ class ExpandedDiagnosticsTests(unittest.TestCase):
 class CompilerLocationTests(unittest.TestCase):
     """A compiler diagnostic must point at the application, never at ApkPy."""
 
+    def assert_names_no_file_of_the_compiler(self, report):
+        """The compiler is a folder of modules, some of them folders too: a report
+        that named one of their files (translate.py, statements.py, ...) would be
+        pointing at ApkPy all the same."""
+        from apkpy_lib.core import compiler
+        names = set()
+        for _, _, files in os.walk(os.path.dirname(compiler.__file__)):
+            names |= {name for name in files if name.endswith(".py")}
+        self.assertGreater(len(names), 30)
+        for name in sorted(names) + ["compiler.py"]:
+            self.assertNotIn(name, report)
+
     def test_missing_job_function_points_at_writehere(self):
         source = (
             "from apkpy_lib import Screen, background_job, run\n"
@@ -240,7 +252,7 @@ class CompilerLocationTests(unittest.TestCase):
         self.assertIn("APKPY J7002", report)
         self.assertIn("writehere.py:3", report)
         self.assertIn("background_job", report)
-        self.assertNotIn("compiler.py", report)
+        self.assert_names_no_file_of_the_compiler(report)
 
     def test_models_without_schema_point_at_the_model(self):
         source = (
@@ -255,7 +267,7 @@ class CompilerLocationTests(unittest.TestCase):
         report = files["error.txt"]
         self.assertIn("APKPY C4003", report)
         self.assertIn("writehere.py:4", report)
-        self.assertNotIn("compiler.py", report)
+        self.assert_names_no_file_of_the_compiler(report)
 
     def test_library_only_traceback_reports_no_misleading_location(self):
         error = ValueError("blur must be a non-negative number")

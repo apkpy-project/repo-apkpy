@@ -43,7 +43,7 @@ def generate_gradle_files(base_path, package_name, project_name, needs_workmanag
                           google_services=False,
                           application_id=None,
                           version_code=1, version_name="1.0", signing=None,
-                          extra_dependencies="", extra_keep=""):
+                          extra_dependencies="", extra_keep="", debug_key=False):
     """
     Generates fundamental Gradle configuration files for an Android project.
 
@@ -52,6 +52,8 @@ def generate_gradle_files(base_path, package_name, project_name, needs_workmanag
     is what `apkpy.toml` lets the user customise. `version_code` / `version_name`
     also come from the config. `signing` (a dict from native_build.ensure_keystore)
     turns the release build into a SIGNED one — required for the Play Store.
+    `debug_key` (apkpy run --release) signs the release build with the debug
+    key instead, so it installs on a phone.
     """
     application_id = application_id or package_name
 
@@ -98,6 +100,20 @@ def generate_gradle_files(base_path, package_name, project_name, needs_workmanag
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'),
                     'proguard-rules.pro'
+        }
+    }
+"""
+    elif debug_key:
+        # apkpy run --release made an unsigned APK, and no phone installs one:
+        # --usb and --qr failed on it. Gradle's own debug key signs it (Gradle
+        # makes the key the first time). The Play refuses an app signed with
+        # that key, so this never passes for a published build: that is
+        # apkpy release. No R8 here, to keep the build quick: it shrinks the
+        # libraries, and the app opened no faster with it (10-09-2026).
+        buildtypes_block = """
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
         }
     }
 """
@@ -1085,7 +1101,8 @@ def _keep_line_map(text, config):
         pass        # only apkpy logs reads it, and it does without
 
 
-def _generate_android_project(python_code, build_dir, app_name, config=None, signing=None):
+def _generate_android_project(python_code, build_dir, app_name, config=None, signing=None,
+                              debug_key=False):
     """Transpile writehere.py and assemble a full, buildable Gradle project in build_dir.
 
     Shared by `apkpy build` (which then zips it) and `apkpy run` (which then
@@ -1279,6 +1296,7 @@ def _generate_android_project(python_code, build_dir, app_name, config=None, sig
         version_code=config.get("version_code", 1),
         version_name=config.get("version_name", "1.0"),
         signing=signing,
+        debug_key=debug_key,
     )
     return multi_files
 
@@ -1459,7 +1477,8 @@ def _write_agent_files(directory, force=False, explain=False):
 @click.option('--name', default=None, help="App name (default: this folder's name).")
 @click.option('--qr', is_flag=True, help="Also serve the APK over Wi-Fi with a QR code to install.")
 @click.option('--usb', is_flag=True, help="Also install on a USB-connected device via adb.")
-@click.option('--release', is_flag=True, help="Build an (unsigned) release APK instead of debug.")
+@click.option('--release', is_flag=True,
+              help="Build a release APK instead of debug, signed with the debug key so it installs.")
 def run(name, qr, usb, release):
     """Compile writehere.py straight into an installable .apk — no Android Studio."""
     python_code = _read_writehere()
@@ -1481,7 +1500,8 @@ def run(name, qr, usb, release):
     # 2) Generate the native project under ~/.apkpy/build so the user's folder stays clean.
     build_dir = os.path.join(nb.apkpy_home(), "build", app_name)
     os.makedirs(os.path.dirname(build_dir), exist_ok=True)
-    _generate_android_project(python_code, build_dir, app_name, config=config)
+    _generate_android_project(python_code, build_dir, app_name, config=config,
+                              debug_key=release)
     nb.write_local_properties(build_dir, tc['sdk'])
 
     # 3) Compile.

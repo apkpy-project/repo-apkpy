@@ -272,7 +272,8 @@ class WhatStopsTheBuild(unittest.TestCase):
 
     def test_a_call_that_does_not_exist(self):
         self._stops('display.rotate("landscape")', "display has no rotate()",
-                    "display has: keep_on(), brightness(), immersive(), orientation().")
+                    "display has: keep_on(), brightness(), immersive(), orientation(), "
+                    "on_screenshot().")
         self._stops('display.keep_awake()', "display has no keep_awake()", "display.keep_on(on=True)")
         self._stops('display.fullscreen()', "display has no fullscreen()")
 

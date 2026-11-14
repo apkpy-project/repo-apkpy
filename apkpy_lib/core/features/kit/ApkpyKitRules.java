@@ -355,4 +355,128 @@ public final class ApkpyKitRules {
         }
         return digit ? kept.toString() : "";
     }
+    // --- the clock ---------------------------------------------------------
+
+    /** {hour, minute}, or null when either is not one a clock has. */
+    public static int[] clockAlarm(String hour, String minute) {
+        long readHour = whole(hour, -1L);
+        long readMinute = whole(minute, -1L);
+        if (readHour < 0 || readHour > 23 || readMinute < 0 || readMinute > 59) return null;
+        return new int[] { (int) readHour, (int) readMinute };
+    }
+
+    /** The length of a countdown, or -1 outside what a clock app takes. */
+    public static long clockSeconds(String seconds) {
+        long read = whole(seconds, -1L);
+        return read >= __CLOCK_SHORTEST__L && read <= __CLOCK_LONGEST__L ? read : -1L;
+    }
+
+    // --- the calendar ------------------------------------------------------
+
+    /**
+     * What calendar.events makes of its two times: {begin, finish}, or null.
+     *
+     * Nothing given is the week from the start of today. A start with no hour
+     * is that day's midnight; an end with no hour is the whole of that day.
+     * No end is a week after the start.
+     */
+    public static long[] calendarWindow(String start, String end, long now, TimeZone zone) {
+        String givenStart = trim(start);
+        String givenEnd = trim(end);
+        long begin;
+        if (!givenStart.isEmpty()) {
+            int[] first = when(givenStart);
+            if (first == null) return null;
+            begin = millis(first, false, 0, zone);
+        } else {
+            GregorianCalendar today = new GregorianCalendar(zone);
+            today.setTimeInMillis(now);
+            today.set(Calendar.HOUR_OF_DAY, 0);
+            today.set(Calendar.MINUTE, 0);
+            today.set(Calendar.SECOND, 0);
+            today.set(Calendar.MILLISECOND, 0);
+            begin = today.getTimeInMillis();
+        }
+        long finish;
+        if (!givenEnd.isEmpty()) {
+            int[] last = when(givenEnd);
+            if (last == null) return null;
+            finish = millis(last, false, last[6] == 1 ? 0 : 1, zone);
+        } else {
+            GregorianCalendar week = new GregorianCalendar(zone);
+            week.setTimeInMillis(begin);
+            week.add(Calendar.DAY_OF_MONTH, __CALENDAR_DAYS__);
+            finish = week.getTimeInMillis();
+        }
+        if (finish <= begin) return null;
+        return new long[] { begin, finish };
+    }
+
+    // --- the gallery -------------------------------------------------------
+
+    /** The type a file is saved to the gallery as, or "" when it shows none. */
+    public static String galleryType(String name) {
+        String text = trim(name);
+        int dot = text.lastIndexOf('.');
+        if (dot < 0) return "";
+        switch (lower(text.substring(dot + 1))) {
+__GALLERY_TYPES__
+            default: return "";
+        }
+    }
+
+    // --- reminders: notify(at=) ----------------------------------------------
+
+    /** A reminder's time when none can be read. */
+    public static final long NO_TIME = Long.MIN_VALUE;
+    private static final Pattern CLOCK_TIME = Pattern.compile("([0-9]{1,2}):([0-9]{2})");
+
+    /** "", "daily" or "weekly"; null for anything else. */
+    public static String reminderRepeat(String text) {
+        String kind = lower(text == null ? "" : text);
+        return kind.isEmpty() || "daily".equals(kind) || "weekly".equals(kind) ? kind : null;
+    }
+
+    /**
+     * When notify(at=) posts, or NO_TIME. "2026-11-07 09:00" is that moment,
+     * even one already gone; "09:00" is the next 09:00, today or tomorrow. A
+     * day with no hour is not a time to post at.
+     */
+    public static long reminderAt(String text, long now, TimeZone zone) {
+        String given = trim(text);
+        java.util.regex.Matcher clock = CLOCK_TIME.matcher(given);
+        if (clock.matches()) {
+            int hour = Integer.parseInt(clock.group(1));
+            int minute = Integer.parseInt(clock.group(2));
+            if (hour > 23 || minute > 59) return NO_TIME;
+            GregorianCalendar due = new GregorianCalendar(zone);
+            due.setTimeInMillis(now);
+            due.set(Calendar.HOUR_OF_DAY, hour);
+            due.set(Calendar.MINUTE, minute);
+            due.set(Calendar.SECOND, 0);
+            due.set(Calendar.MILLISECOND, 0);
+            if (due.getTimeInMillis() <= now) due.add(Calendar.DAY_OF_MONTH, 1);
+            return due.getTimeInMillis();
+        }
+        int[] found = when(given);
+        if (found == null || found[6] == 0) return NO_TIME;
+        return millis(found, false, 0, zone);
+    }
+
+    /**
+     * The next time a repeated reminder posts after now, or NO_TIME for one
+     * that does not repeat. Counted on the clock: a daily one at 09:00 stays
+     * at 09:00 when the clocks change.
+     */
+    public static long reminderNext(long due, String repeat, long now, TimeZone zone) {
+        String kind = reminderRepeat(repeat);
+        int step = "daily".equals(kind) ? 1 : "weekly".equals(kind) ? 7 : 0;
+        if (step == 0) return NO_TIME;
+        GregorianCalendar following = new GregorianCalendar(zone);
+        following.setTimeInMillis(due);
+        do {
+            following.add(Calendar.DAY_OF_MONTH, step);
+        } while (following.getTimeInMillis() <= now);
+        return following.getTimeInMillis();
+    }
 }

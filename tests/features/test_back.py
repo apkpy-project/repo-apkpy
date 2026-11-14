@@ -10,6 +10,7 @@ pops the history Alt+Left already used.
 """
 
 import unittest
+from apkpy_lib.core import dead_methods
 
 from test_real_screens import Previewed, _build
 
@@ -32,9 +33,12 @@ class ThePhone(unittest.TestCase):
         self.assertIn('Screen_detailActivity.this.finish();', java)
 
     def test_back_in_a_function_and_in_a_lambda(self):
-        java = _detail(_build(TWO + 'def done():\n    toast("Saved")\n    back()\n'
-                                    'button("Done", id="done", screen=detail, command=done)\n'
-                                    'list_row("Close", id="row", screen=detail, command=lambda: back())\n'))
+        # done() as a method of its own is written only when kept on purpose:
+        # the button runs it in its click handler.
+        with dead_methods.everything_kept():
+            java = _detail(_build(TWO + 'def done():\n    toast("Saved")\n    back()\n'
+                                        'button("Done", id="done", screen=detail, command=done)\n'
+                                        'list_row("Close", id="row", screen=detail, command=lambda: back())\n'))
         self.assertGreaterEqual(java.count('Screen_detailActivity.this.finish();'), 2)
         done = java[java.index('void pythonCallback_done()'):]
         self.assertLess(done.index('Toast.makeText'), done.index('finish();'))

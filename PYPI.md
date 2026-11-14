@@ -1,8 +1,31 @@
-# ApkPy — a Python to Android transpiler
+<p align="center">
+  <a href="https://repo-apkpy.pages.dev/"><img src="https://raw.githubusercontent.com/apkpy-project/repo-apkpy/main/assets/apkpy-logo.png" alt="ApkPy, a Python to Android transpiler" width="247" height="64"></a>
+</p>
+
+<p align="center"><em>Write the app in Python. Install a native Android app.</em></p>
+
+<p align="center">
+  <a href="https://github.com/apkpy-project/repo-apkpy/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/apkpy-project/repo-apkpy/tests.yml?branch=main&label=tests&logo=github" alt="Tests"></a>
+  <a href="https://pypi.org/project/apkpy/"><img src="https://img.shields.io/pypi/v/apkpy?label=pypi&logo=pypi&logoColor=white" alt="PyPI version"></a>
+  <a href="https://repo-apkpy.pages.dev/getting-started/"><img src="https://img.shields.io/badge/python-3.8%20%E2%80%93%203.13-3776AB?logo=python&logoColor=white" alt="Python 3.8 to 3.13"></a>
+  <a href="https://repo-apkpy.pages.dev/build-release/"><img src="https://img.shields.io/badge/android-7.0%2B-3DDC84?logo=android&logoColor=white" alt="Android 7.0 and later"></a>
+  <a href="https://repo-apkpy.pages.dev/project-continuity/"><img src="https://img.shields.io/badge/license-Apache%202.0-1F6B45" alt="Apache License 2.0"></a>
+  <a href="https://repo-apkpy.pages.dev/"><img src="https://img.shields.io/website?url=https%3A%2F%2Frepo-apkpy.pages.dev&label=docs&up_message=online&up_color=1F6B45" alt="Documentation"></a>
+</p>
+
+<p align="center">
+  <a href="https://repo-apkpy.pages.dev/">Documentation</a> ·
+  <a href="https://repo-apkpy.pages.dev/getting-started/">Getting started</a> ·
+  <a href="https://github.com/apkpy-project/repo-apkpy/tree/main/examples">Examples</a> ·
+  <a href="https://repo-apkpy.pages.dev/showcase/">Showcase</a> ·
+  <a href="https://github.com/apkpy-project/repo-apkpy/blob/main/CONTRIBUTING.md">Contributing</a>
+</p>
 
 **ApkPy is a Python package (`pip install apkpy`) that transpiles Python UI code into native Android Java and XML. The generated APK does not bundle a Python interpreter and does not use a WebView.**
 
 Documentation, guides and showcase: **[repo-apkpy.pages.dev](https://repo-apkpy.pages.dev/)**
+
+Source, examples and issues: **[github.com/apkpy-project/repo-apkpy](https://github.com/apkpy-project/repo-apkpy)** — a ⭐ there helps other Python developers find ApkPy.
 
 Your Python is read at build time and turned into ordinary Android source — `Activity` classes, layout XML, `res/` resources — so what installs on the phone is a normal Android app. A small app ships at about 1.5 MB, signed and shrunk with R8 (its debug build is about 5 MB) and starts with no interpreter to boot.
 
@@ -10,7 +33,84 @@ You write the whole app in Python with a CSS-style design system, see it on your
 
 **Compiled, not embedded.** ApkPy compiles your Python to Java when you build, and no interpreter ships in the APK. That is why a small app is about 1.5 MB and starts with nothing to boot. It translates the Python you write apps with ([the list](https://repo-apkpy.pages.dev/compatibility/)), and in place of `pip` packages it brings its own APIs for the same jobs (`https`, `db`, `files`, `background_job`); anything outside the list stops the build at its line, with a form that compiles. ApkPy is open source under the Apache License 2.0.
 
+**How big an app can be.** A first example is short so it is easy to read; that is not the limit. [`examples/replicas`](https://github.com/apkpy-project/repo-apkpy/blob/main/examples/replicas/writehere.py) is one app of 17 screens and about 1,150 lines of Python: a chat you type into, a music app that plays, a photo feed with stories, a profile whose tabs swipe over a photo grid, settings that remember, a ride sheet over a map, a mail inbox you swipe to archive (with Undo) and a task list you reorder by holding a row. Its release APK is about 8 MB, pictures and music included. A bigger app splits into its own Python files ([`import money`](https://github.com/apkpy-project/repo-apkpy/tree/main/examples/modules)), long lists scroll through recycled rows, data lives in SQLite or the reactive data core, and work carries on in background jobs with an offline queue. [What ApkPy reaches](https://repo-apkpy.pages.dev/coverage/) lists the 60 capabilities real applications use.
+
 ---
+
+## ApkPy 1.15.0 — games, gradients and the keyboard
+
+An app can have a game: `apkpy start Hopper --game platformer` makes one, 2D
+or 2.5D, written in Python in `game/` and run by a Java engine that is the same
+on the phone and on the PC, and `apkpy game studio` opens a Studio to change
+its objects, scenes, levels, sounds and pictures without code. The engine was
+written by Rúben Rego as ApkPyGame and is part of ApkPy from this version.
+
+Boxes take gradients, see-through colours and shadows with a colour, and a tap
+puts on a state the stylesheet names:
+
+```python
+from apkpy_lib import *
+
+quiz = Screen(id="quiz")
+label("Tea or coffee?", id="question", screen=quiz)
+
+
+def pick_tea():
+    tea.set_state("selected")
+    coffee.set_state(None)
+
+
+def pick_coffee():
+    coffee.set_state("selected")
+    tea.set_state(None)
+
+
+tea = container(id="answer", on_click=pick_tea, screen=quiz)
+label("Tea", id="answer_text", parent=tea)
+coffee = container(id="answer", on_click=pick_coffee, screen=quiz)
+label("Coffee", id="answer_text", parent=coffee)
+
+style = """
+quiz {
+    background: linear-gradient(160deg, #1E1B4B, #0F172A);
+    padding: 24px;
+}
+question {
+    color: #FFFFFF;
+    font-size: 22px;
+}
+answer {
+    margin-top: 12px;
+    padding: 16px;
+    border-radius: 16px;
+    border-width: 1px;
+    border-color: #FFFFFF33;
+    background-color: rgba(255, 255, 255, 0.08);
+}
+answer:selected {
+    background: linear-gradient(90deg, #7C5CFF, #B06CFF);
+    box-shadow: 0 8px 24px rgba(124, 92, 255, 0.55);
+}
+answer_text {
+    color: #FFFFFF;
+}
+"""
+
+run(start_screen=quiz)
+```
+
+A field says which keyboard it wants (`type="email"`, `action="send"`,
+`autofill="password"`), `draw_pad()` takes a signature, and `web_page()` shows
+HTML inside a screen. The app reaches more of the phone -- reminders at a
+time, alarms, calls, the calendar, the gallery, the clipboard -- and the phone
+runs more of Python: sets, `Counter`, `defaultdict` and functions as values.
+
+A hex colour with alpha now puts it last, as CSS does: `#00000080` is black at
+half strength. A stylesheet written in Android's order (`#80000000`) is
+reported with the colour to write instead.
+
+Upgrade with `python -m pip install --upgrade apkpy==1.15.0`. See the
+[1.15.0 notes](https://repo-apkpy.pages.dev/version-1.15.0/).
 
 ## ApkPy 1.14.2 — sorting, json, and a Previewer that reloads
 
@@ -1296,7 +1396,7 @@ The exact benchmark application code contains no ApkPy library source:
 - [Flet application](https://github.com/apkpy-project/repo-apkpy/blob/main/benchmarks/benchmark-notes/flet/main.py)
 - [Kivy application](https://github.com/apkpy-project/repo-apkpy/blob/main/benchmarks/benchmark-notes/kivy/main.py)
 - [BeeWare/Toga application](https://github.com/apkpy-project/repo-apkpy/blob/main/benchmarks/benchmark-notes/beeware/src/benchmark_notes/app.py)
-- [Method, raw samples, hashes and configurations](https://github.com/apkpy-project/repo-apkpy/blob/main/BENCHMARKS.md)
+- [Method, raw samples, hashes and configurations](https://github.com/apkpy-project/repo-apkpy/blob/main/benchmarks/README.md)
 
 “App source” is the physical count of the primary Python entry files, including
 blank lines and excluding package configuration and generated Java/XML/Gradle.
@@ -1360,7 +1460,7 @@ Documentation:
 
 - [Build a production feed](https://repo-apkpy.pages.dev/production-feeds/)
 - [Compatibility, limits and release checklist](https://repo-apkpy.pages.dev/compatibility/)
-- [Complete 1.2.2 release notes](https://github.com/apkpy-project/repo-apkpy/blob/main/RELEASE_1.2.2.md)
+- [Complete 1.2.2 release notes](https://github.com/apkpy-project/repo-apkpy/blob/main/releases/1.2.2.md)
 
 ---
 

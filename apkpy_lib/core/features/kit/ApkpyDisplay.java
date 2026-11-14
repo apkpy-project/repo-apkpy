@@ -13,6 +13,8 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
 
+import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -30,17 +32,27 @@ import java.util.WeakHashMap;
  * and the window that replaces the old one starts with none of it. What the
  * screen had asked for is handed on to the copy that replaces it; closing the
  * screen ends it. Which way up a screen is, Android carries over by itself.
+ *
+ * on_screenshot() is told by Android 14 and later, which says so to the
+ * screen on show when the person takes a screenshot of it. The screenshot is
+ * taken all the same: secure_screen() is what stops it.
  */
 public final class ApkpyDisplay {
+
+    /** How a screen's functions are reached by name; see ApkpyNetwork. */
+    public interface Calls {
+        void call(String name);
+    }
 
     /** What one screen has asked for. */
     private static final class Asked {
         boolean keepOn;
         float brightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
         boolean immersive;
+        final ArrayList<String> shots = new ArrayList<>();
 
         boolean nothing() {
-            return !keepOn && !immersive && brightness < 0f;
+            return !keepOn && !immersive && brightness < 0f && shots.isEmpty();
         }
     }
 
@@ -61,9 +73,86 @@ public final class ApkpyDisplay {
 
     private static final Map<Activity, Asked> ASKED = new WeakHashMap<>();
     private static final Map<String, Left> HANDED_ON = new HashMap<>();
+    private static final Map<Activity, WeakReference<Calls>> CALLS = new WeakHashMap<>();
     private static boolean watching;
 
     private ApkpyDisplay() { }
+
+    /**
+     * A screen says how its functions are called. Written into every screen
+     * of an app that asks to be told of screenshots, and run as it is made.
+     */
+    public static Calls host(Activity activity, Calls calls) {
+        synchronized (ASKED) {
+            CALLS.put(activity, new WeakReference<>(calls));
+        }
+        return calls;
+    }
+
+    public static String onScreenshot(final Activity activity, String name) {
+        if (Build.VERSION.SDK_INT < 34) return "unsupported";
+        Asked mine = asked(activity);
+        boolean first;
+        synchronized (ASKED) {
+            first = mine.shots.isEmpty();
+            if (!mine.shots.contains(name)) mine.shots.add(name);
+        }
+        if (first) {
+            onMain(activity, new Runnable() {
+                @Override public void run() {
+                    Shots.listen(activity);
+                }
+            });
+        }
+        return "ok";
+    }
+
+    /** A screenshot was taken of this screen: its functions are called. */
+    private static void shot(Activity activity) {
+        ArrayList<String> names;
+        Calls calls;
+        synchronized (ASKED) {
+            Asked mine = ASKED.get(activity);
+            if (mine == null || mine.shots.isEmpty()) return;
+            names = new ArrayList<>(mine.shots);
+            WeakReference<Calls> held = CALLS.get(activity);
+            calls = held == null ? null : held.get();
+        }
+        if (calls == null || activity.isDestroyed()) return;
+        for (String name : names) calls.call(name);
+    }
+
+    /** Android 14's own, kept apart so that an older phone never loads it. */
+    private static final class Shots {
+        private static final Map<Activity, Activity.ScreenCaptureCallback> LISTENING =
+                new WeakHashMap<>();
+
+        static void listen(Activity activity) {
+            if (activity.isDestroyed() || LISTENING.containsKey(activity)) return;
+            // Held weakly: the map's value must not keep its own key alive.
+            final WeakReference<Activity> held = new WeakReference<>(activity);
+            Activity.ScreenCaptureCallback told = new Activity.ScreenCaptureCallback() {
+                @Override public void onScreenCaptured() {
+                    Activity screen = held.get();
+                    if (screen != null) shot(screen);
+                }
+            };
+            try {
+                activity.registerScreenCaptureCallback(activity.getMainExecutor(), told);
+                LISTENING.put(activity, told);
+            } catch (RuntimeException refused) {
+                // DETECT_SCREEN_CAPTURE missing from the manifest.
+            }
+        }
+
+        static void stop(Activity activity) {
+            Activity.ScreenCaptureCallback told = LISTENING.remove(activity);
+            if (told == null) return;
+            try {
+                activity.unregisterScreenCaptureCallback(told);
+            } catch (RuntimeException ignored) { }
+        }
+    }
 
     public static String keepOn(final Activity activity, String on) {
         final boolean wanted = ApkpyKitRules.truth(on);
@@ -216,6 +305,7 @@ public final class ApkpyDisplay {
             }
             awake(activity, left.asked.keepOn);
             bright(activity, left.asked.brightness);
+            if (Build.VERSION.SDK_INT >= 34 && !left.asked.shots.isEmpty()) Shots.listen(activity);
         }
 
         @Override public void onActivityStarted(Activity activity) { }
@@ -232,7 +322,9 @@ public final class ApkpyDisplay {
         @Override public void onActivitySaveInstanceState(Activity activity, Bundle out) { }
 
         @Override public void onActivityDestroyed(Activity activity) {
+            if (Build.VERSION.SDK_INT >= 34) Shots.stop(activity);
             synchronized (ASKED) {
+                CALLS.remove(activity);
                 Asked mine = ASKED.remove(activity);
                 if (mine == null || mine.nothing()) return;
                 if (activity.isChangingConfigurations()) {

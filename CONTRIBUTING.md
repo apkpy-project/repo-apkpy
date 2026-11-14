@@ -49,7 +49,7 @@ python -m pip install -e .
 
 | Folder | What is in it |
 | --- | --- |
-| `apkpy_lib/core/` | The build: your Python read, and written out as an Android project. `compiler.py` is the translator; `core/features/` holds the features one by one, with the Java classes that go into the apps. |
+| `apkpy_lib/core/` | The build: your Python read, and written out as an Android project. `compiler/` is the translator (its `__init__.py` lists its modules in the order they depend on each other); `core/features/` holds the features one by one, with the Java classes that go into the apps. |
 | `apkpy_lib/ui.py`, `apkpy_lib/features/` | The Previewer: the same app drawn on the desktop. |
 | `apkpy_lib/*_rules.py` | What both sides read, so the phone and the Previewer cannot disagree. |
 | `tests/` | The tests. |

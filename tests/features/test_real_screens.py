@@ -237,6 +237,51 @@ class LabelsInAColumn(unittest.TestCase):
         self.assertIn('layout_marginLeft="14dp"', likes_xml)
         self.assertNotIn('paddingLeft', likes_xml)
 
+    BOX = ('home = Screen(id="home")\n'
+           'box = container(id="box", screen=home)\n'
+           'a = label("Spending", id="title", parent=box)\n'
+           'b = label("$486.20", id="value", parent=box)\n'
+           'c = label("Wide", id="wide", parent=box)\n')
+    BOX_CSS = ('home { padding: 0px; }\n'
+               'box { padding: 0px; background-color: #FFFFFF; }\n'
+               'value { padding: 0px; }\n'
+               'wide { padding: 4px 24px 2px 8px; }')
+
+    def test_its_own_padding_replaces_the_indent(self):
+        # "$486.20" with padding: 0px sat 16 right of "Spending" in the
+        # same card, on both runtimes (Lumen, 14-11-2026).
+        with Previewed(self.BOX, self.BOX_CSS) as p:
+            left = p.app.root.winfo_rootx()
+            title, value, wide = p.widget('a'), p.widget('b'), p.widget('c')
+            self.assertEqual(int(title.cget('padx')), 16)
+            self.assertEqual(int(value.cget('padx')), 0)
+            self.assertEqual(value.winfo_rootx() - left, 0)
+            self.assertEqual(int(wide.cget('padx')), 0)
+            self.assertEqual(wide.winfo_rootx() - left, 8)
+        xml = ''.join(_layouts(_build(self.BOX, self.BOX_CSS)).values())
+
+        def view(text):
+            return xml[xml.rfind('<TextView', 0, xml.find(text)):xml.find(text)]
+        self.assertIn('paddingLeft="16dp"', view('Spending'))
+        self.assertIn('paddingLeft="0dp" android:paddingRight="0dp"', view('$486.20'))
+        self.assertIn('paddingLeft="8dp" android:paddingRight="24dp"', view('Wide'))
+        self.assertIn('paddingTop="4dp" android:paddingBottom="2dp"', view('Wide'))
+
+    def test_a_pill_in_a_column_keeps_its_padding(self):
+        body = ('home = Screen(id="home")\n'
+                'label("NEW", id="tag", screen=home)\n')
+        css = ('home { padding: 0px; }\n'
+               'tag { background-color: #EEEBFF; border-radius: 12px; padding: 5px 12px; }')
+        xml = ''.join(_layouts(_build(body, css)).values())
+        tag = xml[xml.rfind('<TextView', 0, xml.find('NEW')):xml.find('NEW')]
+        # Left and right are the stylesheet's; top and bottom stay with the
+        # shape drawable, which carries the same numbers.
+        self.assertIn('paddingLeft="12dp" android:paddingRight="12dp"', tag)
+        self.assertNotIn('paddingTop', tag)
+        for tag_match in re.finditer(r'<([\w.]+)\b([^>]*)>', xml, re.S):
+            attrs = re.findall(r'([\w:]+)="', tag_match.group(2))
+            self.assertEqual(len(attrs), len(set(attrs)), tag_match.group(1))
+
 
 class TheMarginShorthand(unittest.TestCase):
 
@@ -258,6 +303,28 @@ class TheMarginShorthand(unittest.TestCase):
         self.assertIn('layout_marginTop="10dp"', more)
         self.assertIn('layout_marginLeft="14dp"', more)
         self.assertNotIn('paddingLeft', more)
+
+    def test_a_negative_margin_counts_as_zero_on_both_sides(self):
+        # Northline's "8 places in 7 countries" with margin: -8px 0px 16px
+        # 0px closed the Previewer ("bad pad value") and was +8dp on the
+        # phone: the sign was dropped.
+        body = ('home = Screen(id="home")\n'
+                'label("Saved", id="title", screen=home)\n'
+                'note = label("8 places", id="note", screen=home)\n'
+                'tip = label("Tap a place", id="tip", screen=home)\n')
+        css = ('note { margin: -8px 0px 16px 0px; }\n'
+               'tip { margin-top: -4px; margin-left: -10px; }')
+        with Previewed(body, css) as p:
+            self.assertTrue(p.widget('note').winfo_exists())
+            self.assertEqual(ui._parse_margin({'margin': '-8px 0px 16px 0px'}), (0, 0, 16, 0))
+            self.assertEqual(ui._parse_margin({'margin-left': '-10px'}), (0, 0, 0, 0))
+        xml = ''.join(_layouts(_build(body, css)).values())
+        note = xml[xml.rfind('<TextView', 0, xml.find('8 places')):xml.find('8 places')]
+        tip = xml[xml.rfind('<TextView', 0, xml.find('Tap a place')):xml.find('Tap a place')]
+        self.assertNotIn('layout_marginTop="8dp"', note)
+        self.assertNotIn('layout_marginTop="2dp"', note)
+        self.assertIn('layout_marginBottom="16dp"', note)
+        self.assertNotIn('layout_marginLeft="10dp"', tip)
 
 
 class TheStatusBarReadsAgainstTheScreen(unittest.TestCase):
@@ -382,6 +449,44 @@ hint { position: absolute; left: 0px; right: 0px; bottom: 20px; color: #FFFFFF; 
             hint = p.widget('hint')
             self.assertTrue(str(hint.cget('image')), 'the caption kept its black strip')
 
+    def test_words_placed_over_it_are_as_wide_as_their_text(self):
+        # Onda's hero (14-11-2026): a column at left/top only over a picture,
+        # in an app with a Theme, was 25px wide for good -- "DAILY CALM" read
+        # "DAIL" and "Morning reset" read "M". The slot's stale width capped
+        # what its content asked for, so it could never grow.
+        body = ('from apkpy_lib import ui as _ui\n'
+                '_theme = Theme(mode="light")\n'
+                '_ui._active_theme = _theme\n'
+                '_ui._declared_theme[0] = _theme\n'
+                'home = Screen(id="home")\n'
+                'hero = container(id="hero", screen=home)\n'
+                'image(PICTURE, id="art", parent=hero, describe="")\n'
+                'words = container(id="words", parent=hero)\n'
+                'kicker = label("DAILY CALM", id="kicker", parent=words)\n'
+                'title = label("Morning reset", id="title", parent=words)\n')
+        css = '''
+home { padding: 20px; }
+hero { position: relative; height: 230px; padding: 0px; }
+art { width: 100%; height: 100%; object-fit: cover; }
+words { position: absolute; left: 22px; top: 22px; display: flex;
+        flex-direction: column; align-items: flex-start; background-color: #00000000; }
+title { font-size: 26px; font-weight: bold; }
+'''
+        source = self.body[:self.body.index('\n') + 1] + body
+        # The Theme stays declared after the window closes; its body's 12px
+        # gap then moved every Previewer test that came after this one.
+        saved = (ui._active_theme, ui._declared_theme[0])
+
+        def _restore():
+            ui._active_theme, ui._declared_theme[0] = saved
+        self.addCleanup(_restore)
+        with Previewed(source, css) as p:
+            p.settle(1.0)
+            for name in ('kicker', 'title'):
+                text = p.widget(name)
+                slot = text.master.master
+                self.assertGreaterEqual(slot.winfo_width(), text.winfo_reqwidth(), name)
+
     def test_a_transparent_button_draws_no_body(self):
         with Previewed(self.body, self.CSS) as p:
             close = p.widget('close')
@@ -390,6 +495,53 @@ hint { position: absolute; left: 0px; right: 0px; bottom: 20px; color: #FFFFFF; 
             registry = canvas.__dict__.get('_apkpy_aa') or {}
             fills = [entry[0].get('fill') for entry in registry.values()]
             self.assertNotIn('#000000', [str(f).lower() for f in fills])
+
+
+class TheAuditOverAPicture(unittest.TestCase):
+    """White words over a photo were reported at 1.07:1 against the page
+    (Northline's hero, 14-11-2026): what is behind them is the picture, and
+    no colour stands for it."""
+
+    STYLES = """
+        home { background-color: #F6F7F9; }
+        hero { position: relative; height: 300px; }
+        words { position: absolute; left: 20px; bottom: 20px; background-color: #00000000; }
+        title { color: #FFFFFF; font-size: 30px; }
+        pill { position: absolute; top: 16px; left: 16px; color: #FFFFFF; background-color: #FFFFFF; }
+        loose { color: #FFFFFF; }
+    """
+
+    def _found(self, children):
+        from apkpy_lib.core.compiler import _audit_accessibility
+        from apkpy_lib.core.style_parser import _parse_style_blocks
+        styles = dict(_parse_style_blocks(self.STYLES))
+        screens = {"home": [{"comp_type": "container", "id": "hero", "children": children},
+                            {"comp_type": "label", "id": "loose", "text": "Below"}]}
+        return {where: text for _, where, text in _audit_accessibility(screens, styles)}
+
+    def test_words_over_the_picture_are_not_measured_against_the_page(self):
+        found = self._found([
+            {"comp_type": "image", "id": "art", "src": "a.jpg", "describe": ""},
+            {"comp_type": "container", "id": "words",
+             "children": [{"comp_type": "label", "id": "title", "text": "Porto"}]},
+        ])
+        self.assertNotIn("home.title", found)
+        # The same white anywhere else on the page is still reported.
+        self.assertIn("home.loose", found)
+
+    def test_a_pill_over_the_picture_is_measured_on_its_own_fill(self):
+        found = self._found([
+            {"comp_type": "image", "id": "art", "src": "a.jpg", "describe": ""},
+            {"comp_type": "label", "id": "pill", "text": "In 21 days"},
+        ])
+        self.assertIn("home.pill", found)
+
+    def test_without_a_picture_the_words_are_measured(self):
+        found = self._found([
+            {"comp_type": "container", "id": "words",
+             "children": [{"comp_type": "label", "id": "title", "text": "Porto"}]},
+        ])
+        self.assertIn("home.title", found)
 
 
 if __name__ == '__main__':

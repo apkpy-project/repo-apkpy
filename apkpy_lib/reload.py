@@ -80,7 +80,8 @@ def _take_child_env():
     spare = os.environ.pop(_SPARE, None)
     os.environ.pop(_HOME, None)
     argv = os.environ.pop(_ARGV, None)
-    if folder and generation and parent == str(os.getppid()):
+    watcher = _started_by(parent)
+    if folder and generation and watcher is not None:
         try:
             _child = (folder, int(generation))
             if spare:
@@ -88,7 +89,7 @@ def _take_child_env():
         except ValueError:
             _child = None
             return
-        _watcher[0] = os.getppid()
+        _watcher[0] = watcher
         if sys.platform == "win32":
             try:
                 import ctypes
@@ -97,6 +98,68 @@ def _take_child_env():
                                                                  False, _watcher[0])
             except Exception:
                 pass
+
+
+def _started_by(parent):
+    """The watcher's pid when the watcher started this Python, else None.
+
+    A virtual environment's python.exe on Windows is a launcher that starts
+    the real python.exe as one more process, so there the watcher is the
+    parent of our parent. Without this the app took itself for a fresh
+    ``python writehere.py``, became a watcher too, and started copies of
+    itself without end."""
+    try:
+        pid = int(parent)
+    except (TypeError, ValueError):
+        return None
+    ours = os.getppid()
+    if pid == ours:
+        return pid
+    if sys.platform == "win32" and pid > 0 and _parent_of(ours) == pid:
+        return pid
+    return None
+
+
+def _parent_of(pid):
+    """Windows: the pid of the process that started *pid*, or None."""
+    try:
+        import ctypes
+        from ctypes import wintypes
+    except Exception:
+        return None
+
+    class Entry(ctypes.Structure):          # PROCESSENTRY32W
+        _fields_ = [("dwSize", wintypes.DWORD), ("cntUsage", wintypes.DWORD),
+                    ("th32ProcessID", wintypes.DWORD),
+                    ("th32DefaultHeapID", ctypes.c_size_t),
+                    ("th32ModuleID", wintypes.DWORD), ("cntThreads", wintypes.DWORD),
+                    ("th32ParentProcessID", wintypes.DWORD),
+                    ("pcPriClassBase", ctypes.c_long), ("dwFlags", wintypes.DWORD),
+                    ("szExeFile", ctypes.c_wchar * 260)]
+
+    try:
+        kernel32 = ctypes.WinDLL("kernel32")    # its own, so the types set here stay here
+        kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+        kernel32.CreateToolhelp32Snapshot.argtypes = [wintypes.DWORD, wintypes.DWORD]
+        kernel32.Process32FirstW.argtypes = [wintypes.HANDLE, ctypes.POINTER(Entry)]
+        kernel32.Process32NextW.argtypes = [wintypes.HANDLE, ctypes.POINTER(Entry)]
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        snapshot = kernel32.CreateToolhelp32Snapshot(0x2, 0)    # TH32CS_SNAPPROCESS
+        if not snapshot or snapshot == ctypes.c_void_p(-1).value:
+            return None
+        try:
+            entry = Entry()
+            entry.dwSize = ctypes.sizeof(Entry)
+            found = kernel32.Process32FirstW(snapshot, ctypes.byref(entry))
+            while found:
+                if entry.th32ProcessID == pid:
+                    return int(entry.th32ParentProcessID)
+                found = kernel32.Process32NextW(snapshot, ctypes.byref(entry))
+        finally:
+            kernel32.CloseHandle(snapshot)
+    except Exception:
+        return None
+    return None
 
 
 def _watcher_gone():
@@ -477,7 +540,9 @@ def _error_line(text):
         if stripped.startswith('File "') and ", line " in stripped:
             name = stripped[6:stripped.index('"', 6)]
             if "apkpy_lib" not in name and "<frozen" not in name:
-                where = "%s, line %s" % (os.path.basename(name),
+                # The file's own name whichever separator the path uses: on
+                # Linux os.path.basename kept all of C:\apps\shop\writehere.py.
+                where = "%s, line %s" % (name.replace("\\", "/").rsplit("/", 1)[-1],
                                          stripped.split(", line ")[1].split(",")[0])
     return lines[-1].strip() + ("\n" + where if where else "")
 

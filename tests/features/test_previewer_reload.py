@@ -520,6 +520,9 @@ class TheWatcherTests(unittest.TestCase):
         # the watcher. An IDE's Stop button kills it without a word; the app
         # it started must notice and end, not stay behind on its own.
         os.environ.pop("APKPY_HEADLESS_CORE", None)
+        # Whoever runs the suite with the reload off (APKPY_RELOAD=0) must still
+        # get a watcher here: without one the app runs in this very Python.
+        os.environ.pop("APKPY_RELOAD", None)
         with open(self.app, "w", encoding="utf-8") as handle:
             handle.write(textwrap.dedent('''\
                 import os, sys, time
@@ -561,6 +564,38 @@ class TheWatcherTests(unittest.TestCase):
         done = subprocess.run([sys.executable, "-c", code], env=env,
                               capture_output=True, text=True, timeout=60)
         self.assertEqual(done.stdout.strip(), "False", done.stderr)
+
+    @unittest.skipUnless(sys.platform == "win32", "the venv launcher is a Windows thing")
+    def test_a_python_started_through_a_launcher_is_the_watcher_s(self):
+        # A venv's python.exe on Windows starts the real python.exe as one more
+        # process. The app's parent is then that launcher, not the watcher; it
+        # used to take itself for a fresh run, watch too, and start copies of
+        # itself without end. Here a plain Python in the middle plays the launcher.
+        code = ("import sys; sys.path.insert(0, %r); from apkpy_lib import reload; "
+                "print(reload.child(), reload._watcher[0])" % ROOT)
+        launcher = "import subprocess, sys; sys.exit(subprocess.call([sys.executable, '-c', %r]))" % code
+        env = dict(os.environ, APKPY_RELOAD_DIR=self.folder, APKPY_RELOAD_GEN="2",
+                   APKPY_RELOAD_PARENT=str(os.getpid()))
+        done = subprocess.run([sys.executable, "-c", launcher], env=env,
+                              capture_output=True, text=True, timeout=60)
+        self.assertEqual(done.stdout.split(), ["True", str(os.getpid())], done.stderr)
+        # One more step up is not ours.
+        env["APKPY_RELOAD_PARENT"] = str(os.getppid())
+        done = subprocess.run([sys.executable, "-c", launcher], env=env,
+                              capture_output=True, text=True, timeout=60)
+        self.assertEqual(done.stdout.split()[0], "False", done.stderr)
+
+    def test_the_parent_s_parent(self):
+        if sys.platform == "win32":
+            self.assertEqual(reload._parent_of(os.getpid()), os.getppid())
+        with mock.patch.object(reload, "_parent_of", return_value=4242):
+            self.assertEqual(reload._started_by(str(os.getppid())), os.getppid())
+            self.assertIsNone(reload._started_by("4243"))
+            self.assertIsNone(reload._started_by(None))
+            self.assertIsNone(reload._started_by("x"))
+            # The parent's parent counts only where a launcher sits between.
+            self.assertEqual(reload._started_by("4242"),
+                             4242 if sys.platform == "win32" else None)
 
 
 if __name__ == "__main__":

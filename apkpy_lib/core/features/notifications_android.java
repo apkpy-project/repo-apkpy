@@ -81,6 +81,11 @@ public final class ApkpyNotifications {
     public static void post(Context c, JSONObject spec, Class<?> owner) { post(c, spec, owner, null); }
     public static synchronized void post(Context context, JSONObject original, Class<?> owner, Intent custom) {
         Context c = context.getApplicationContext();
+        // notify(at=): kept for later, and Android's alarm set for when it is due.
+        if (!original.optString("at").isEmpty()) {
+            schedule(c, original, owner);
+            return;
+        }
         JSONObject s;
         try { s = new JSONObject(original.toString()); }
         catch (JSONException e) { throw new IllegalArgumentException(e); }
@@ -214,9 +219,11 @@ public final class ApkpyNotifications {
     }
     public static synchronized void cancel(Context c,String id) {
         String tag=PREFIX+id; REVISIONS.remove(tag); manager(c).cancel(tag,0); removeEvents(c,tag); summaries(c);
+        disarm(c, id);
     }
     public static synchronized void cancelAll(Context c) {
         REVISIONS.clear();
+        for (String id : new ArrayList<>(reminders(c).getAll().keySet())) disarm(c, id);
         for (android.service.notification.StatusBarNotification n : manager(c).getActiveNotifications())
             if (n.getTag()!=null && (n.getTag().startsWith(PREFIX)||n.getTag().startsWith(SUMMARY))) { manager(c).cancel(n.getTag(),n.getId()); removeEvents(c,n.getTag()); }
     }
@@ -246,6 +253,9 @@ public final class ApkpyNotifications {
         DISPATCH.put(a,callback);
         if (attached) return;
         attached=true;
+        // Opened again after Android forgot its alarms -- the app stopped from
+        // Settings, or by a phone that cleans up: what is waiting is set again.
+        rearm(a.getApplicationContext());
         a.getApplication().registerActivityLifecycleCallbacks(new Application.ActivityLifecycleCallbacks() {
             public void onActivityCreated(Activity a,Bundle b) { }
             public void onActivityStarted(Activity a) { }
@@ -283,6 +293,166 @@ public final class ApkpyNotifications {
             } catch (JSONException ignored) { }
         }
     }
+    // --- reminders: notify(at=) ---------------------------------------------
+
+    private static SharedPreferences reminders(Context c) {
+        return c.getApplicationContext().getSharedPreferences("apkpy_reminders", Context.MODE_PRIVATE);
+    }
+
+    /** The notification, kept under its id with the moment it is due. */
+    private static void schedule(Context c, JSONObject spec, Class<?> owner) {
+        long due = ApkpyKitRules.reminderAt(spec.optString("at"), System.currentTimeMillis(),
+                TimeZone.getDefault());
+        // A time worked out while the app runs that is not one: nothing to wait
+        // for. One written out in the source was checked by the build.
+        if (due == ApkpyKitRules.NO_TIME) return;
+        String id = spec.optString("id");
+        try {
+            JSONObject kept = new JSONObject(spec.toString());
+            kept.remove("at");
+            kept.remove("exact");
+            kept.put("due", due);
+            kept.put("owner", owner == null ? "" : owner.getName());
+            reminders(c).edit().putString(id, kept.toString()).apply();
+        } catch (JSONException broken) {
+            return;
+        }
+        arm(c, id, due);
+        if (flag(spec, "exact")) askExact(c);
+    }
+
+    /**
+     * notify(exact=True): the first time a reminder would be one Android may
+     * move, the page in Settings where the person lets the app set alarms to
+     * the minute. Once: a person who said no is not asked at every reminder.
+     * When they allow it Android says so (RestartReceiver), and what is
+     * waiting is set again to the minute.
+     */
+    private static void askExact(Context c) {
+        if (Build.VERSION.SDK_INT < 31) return;
+        AlarmManager alarms = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
+        if (alarms == null || alarms.canScheduleExactAlarms()) return;
+        SharedPreferences asked = c.getSharedPreferences("apkpy_exact_alarms", Context.MODE_PRIVATE);
+        if (asked.getBoolean("asked", false)) return;
+        asked.edit().putBoolean("asked", true).apply();
+        try {
+            Intent page = new Intent(android.provider.Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                    android.net.Uri.fromParts("package", c.getPackageName(), null));
+            page.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            c.startActivity(page);
+        } catch (RuntimeException none) {
+            // A phone with no such page: the reminder stays as Android sets it.
+        }
+    }
+
+    private static PendingIntent alarm(Context c, String id, int flags) {
+        Intent intent = new Intent(c, ReminderReceiver.class);
+        // One alarm per reminder: the data tells two of them apart.
+        intent.setData(android.net.Uri.fromParts("apkpy-reminder", id, null));
+        intent.putExtra("id", id);
+        return PendingIntent.getBroadcast(c, 0, intent,
+                flags | (Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0));
+    }
+
+    /**
+     * Android's alarm for it. To the minute up to Android 11, where it costs
+     * nothing. From Android 12 an alarm to the minute needs a permission the
+     * person grants in the settings, and the Play asks every app that declares
+     * it why: without it the alarm is one the phone may move to suit itself,
+     * by up to three quarters of the time it waits and never by more than an
+     * hour, and it still goes off while the phone is asleep in a drawer. A
+     * Xiaomi on Android 16 posts it at the end of that window: set at 12:27
+     * for 12:30, it came at 12:31:50; one for 09:00 the next day may come at
+     * 10:00 (07-11-2026).
+     */
+    private static void arm(Context c, String id, long due) {
+        AlarmManager alarms = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
+        if (alarms == null) return;
+        PendingIntent fire = alarm(c, id, PendingIntent.FLAG_UPDATE_CURRENT);
+        try {
+            if (Build.VERSION.SDK_INT < 23) {
+                alarms.setExact(AlarmManager.RTC_WAKEUP, due, fire);
+            } else if (Build.VERSION.SDK_INT < 31 || alarms.canScheduleExactAlarms()) {
+                alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, due, fire);
+            } else {
+                alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, due, fire);
+            }
+        } catch (SecurityException refused) {
+            alarms.set(AlarmManager.RTC_WAKEUP, due, fire);
+        }
+    }
+
+    private static void disarm(Context c, String id) {
+        if (!reminders(c).contains(id)) return;
+        reminders(c).edit().remove(id).apply();
+        Context app = c.getApplicationContext();
+        PendingIntent fire = alarm(app, id, PendingIntent.FLAG_NO_CREATE);
+        if (fire == null) return;
+        AlarmManager alarms = (AlarmManager) app.getSystemService(Context.ALARM_SERVICE);
+        if (alarms != null) alarms.cancel(fire);
+        fire.cancel();
+    }
+
+    /** The alarm went off: post it, and set the next one of a repeated reminder. */
+    static synchronized void due(Context c, String id) {
+        if (id == null) return;
+        String raw = reminders(c).getString(id, null);
+        if (raw == null) return;
+        JSONObject spec;
+        try {
+            spec = new JSONObject(raw);
+        } catch (JSONException broken) {
+            reminders(c).edit().remove(id).apply();
+            return;
+        }
+        long now = System.currentTimeMillis();
+        long next = ApkpyKitRules.reminderNext(spec.optLong("due"), spec.optString("repeat"),
+                now, TimeZone.getDefault());
+        Class<?> owner = null;
+        try {
+            String name = spec.optString("owner");
+            if (!name.isEmpty()) owner = Class.forName(name);
+        } catch (ClassNotFoundException gone) { }
+        if (next == ApkpyKitRules.NO_TIME) {
+            reminders(c).edit().remove(id).apply();
+        } else {
+            try { spec.put("due", next); } catch (JSONException ignored) { }
+            reminders(c).edit().putString(id, spec.toString()).apply();
+            arm(c, id, next);
+        }
+        spec.remove("due");
+        spec.remove("owner");
+        spec.remove("repeat");
+        try {
+            post(c, spec, owner);
+        } catch (IllegalArgumentException dropped) {
+            // Its channel was taken away since it was set: nothing to post in.
+        }
+    }
+
+    /** The phone restarted, and took every alarm with it: set them again. One
+     *  whose time came while the phone was off goes off at once. */
+    static synchronized void rearm(Context c) {
+        for (Map.Entry<String, ?> entry : reminders(c).getAll().entrySet()) {
+            try {
+                arm(c.getApplicationContext(), entry.getKey(),
+                        new JSONObject(String.valueOf(entry.getValue())).optLong("due"));
+            } catch (JSONException ignored) { }
+        }
+    }
+
+    public static final class ReminderReceiver extends BroadcastReceiver {
+        @Override public void onReceive(Context c, Intent intent) {
+            due(c.getApplicationContext(), intent.getStringExtra("id"));
+        }
+    }
+
+    public static final class RestartReceiver extends BroadcastReceiver {
+        @Override public void onReceive(Context c, Intent intent) {
+            rearm(c.getApplicationContext());
+        }
+    }
+
     public static final class DismissReceiver extends BroadcastReceiver {
         @Override public void onReceive(Context c,Intent intent) {
             JSONObject event=consume(c,intent);

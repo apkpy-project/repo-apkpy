@@ -15,6 +15,7 @@ import shutil
 import tempfile
 import unittest
 
+from apkpy_lib.core import dead_methods
 from apkpy_lib.core.compiler import translate_python_to_android
 from apkpy_lib.core.features import modules as modules_feature
 
@@ -116,7 +117,7 @@ class TheMergeTests(_OnDisk):
     def test_an_import_with_no_file_beside_it_is_left_alone(self):
         java = self.java("import json\n" + APP +
                          "def go():\n    out.set_value('hi')\n" + TAIL)
-        self.assertIn("pythonCallback_go", java)
+        self.assertIn('String.valueOf("hi")', java)
 
 
 class TheClassesInAHelperTests(_OnDisk):
@@ -208,7 +209,7 @@ class TheRefusalTests(_OnDisk):
     def test_untranslatable_python_names_the_helper_file(self):
         self.write("helpers.py",
                    "def shout(text):\n"
-                   "    return {c for c in text if c}\n")
+                   "    return text @ text\n")
         error = self.error("import helpers\n" + APP +
                            "def go():\n    out.set_value(helpers.shout('hi'))\n" + TAIL)
         self.assertIn("helpers.py", error)
@@ -276,10 +277,14 @@ class TheNumbersStayNumbersTests(_OnDisk):
         self.assertNotIn("Long.parseLong(String.valueOf(cents))", java)
 
     def test_a_function_nobody_calls_keeps_text_parameters(self):
-        java = self.java_for(
-            "def unused(value):\n    return str(value)\n",
-            "'hi'")
+        with dead_methods.everything_kept():
+            java = self.java_for(
+                "def unused(value):\n    return str(value)\n",
+                "'hi'")
         self.assertIn("private String pythonCallback_unused(String value)", java)
+        # And left out of the app, which never calls it (06-11-2026).
+        self.assertNotIn("pythonCallback_unused", self.java_for(
+            "def unused(value):\n    return str(value)\n", "'hi'"))
 
     def test_one_helper_feeding_another(self):
         self.write("helpers.py",

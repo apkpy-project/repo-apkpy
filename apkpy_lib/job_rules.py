@@ -148,6 +148,12 @@ _COMMANDS = {
     "overlay_open": ("dialog", "opening a modal, sheet or menu"),
     "data_observer": ("data_observe", "observe()"),
     "camera_view_control": ("screen_api", "camera_view"),
+    # These read "not translated yet" (J7005) and named the internal command
+    # ("keyboard.call()"): none of them can ever run without a screen.
+    "field_error": ("component", "{py_var}.set_error()"),
+    "field_check": ("component", "validate()"),
+    "draw_pad_call": ("component", "{py_var}.{method}()"),
+    "keyboard_call": ("screen_api", "hide_keyboard()"),
 }
 
 # Families of commands, by prefix, for everything not named above.
@@ -204,6 +210,8 @@ def describe_command(command):
         template = kind.replace("_", ".", 1) + "()" if kind else "this call"
     if kind == "comp_visibility":
         suffix = "show" if command.get("visible") else "hide"
+    if kind == "keyboard_call" and command.get("method") == "focus":
+        family, template = "component", "{py_var}.focus()"
     fields = _Blank(command)
     fields["suffix"] = suffix or kind
     return family, template.format_map(fields)
@@ -311,12 +319,14 @@ _COMPONENT_VERBS = (
     "hide", "set_src", "play", "pause", "stop", "seek", "set_source",
     "set_speed", "set_muted", "set_center", "set_follow_user", "set_location",
     "set_markers", "set_route", "get_route", "set_zoom", "clear_map_cache",
+    "set_error", "validate", "focus",
 )
 PREVIEW_GUARDS = (
     ("ComponentDef", "component", _COMPONENT_VERBS),
     ("ReactiveState", "component", ("set", "increment", "decrement", "toggle")),
     ("OverlayDef", "dialog", ("open", "close")),
     ("DrawerDef", "dialog", ("open", "close")),
+    ("DrawPadDef", "component", ("clear", "save", "is_empty")),
     ("ModelDef", "data_observe", ("observe",)),
     ("permissions", "permission_request", ("request",)),
     ("files", "screen_api", ("pick",)),

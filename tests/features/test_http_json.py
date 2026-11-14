@@ -115,10 +115,11 @@ class BodyReachesTheWireTests(unittest.TestCase):
         self.assertIn('!= null', named)
 
     def test_the_helpers_the_body_needs_are_in_the_class(self):
+        # _apkpyJsonVal and _apkpyTimeoutMs are for values only known when
+        # the app runs; this body and its timeout are written out, so neither
+        # is in the class.
         for helper in ('private org.json.JSONObject _apkpyJsonObj(',
-                       'private org.json.JSONArray _apkpyJsonArr(',
-                       'private Object _apkpyJsonVal(',
-                       'private int _apkpyTimeoutMs('):
+                       'private org.json.JSONArray _apkpyJsonArr('):
             self.assertIn(helper, self.java, helper)
 
     def test_the_generated_java_is_balanced(self):

@@ -52,6 +52,10 @@ jobs:
           - {os: windows-latest, python: "3.9", seen: true}
           - {os: windows-latest, python: "3.10", seen: true}
           - {os: windows-latest, python: "3.12", seen: true}
+          # 3.14 removed ast.Str and ast.Num, which still matched every
+          # string and number until 3.13: ApkPy 1.14.2 could not translate
+          # an app there, and no run had looked. Added on 2026-11-09.
+          - {os: windows-latest, python: "3.14", seen: false}
     runs-on: ${{ matrix.os }}
     continue-on-error: ${{ !matrix.seen }}
     steps:

@@ -133,6 +133,11 @@ def _call(func, args, like, keywords=None):
 # number: the compiler reads the text back with Long.parseLong/Double.parseDouble.
 READ_BACK = '_apkpy_read_back'
 
+# Set on the list() this module writes around a field it knows holds a list:
+# it says what the value is, and is not a copy to make (the compiler gives the
+# value itself, as the JSON text of a list cannot change in place).
+LIST_READ = '_apkpy_list_read'
+
 
 def _read_back(call):
     setattr(call, READ_BACK, True)
@@ -273,11 +278,17 @@ def _check_method(cls_name, stmt):
                     '@staticmethod and @property.' % what,
                     ['Write it as a plain method, or as a function of the module.'],
                     received='@%s' % what)
+    if not (stmt.args.vararg or stmt.args.kwarg) and (
+            stmt.args.kwonlyargs or getattr(stmt.args, 'posonlyargs', None)):
+        # def add(self, name, *, qty=1): one plain list of parameters, as a
+        # function of the module gets (signatures.py).
+        from . import signatures
+        signatures.flatten(stmt)
     params = _args_of(stmt)
-    if stmt.args.vararg or stmt.args.kwarg or stmt.args.kwonlyargs:
-        _refuse(stmt, '*args, **kwargs and keyword-only parameters on a method are not '
-                'translated yet.', ['Give the method plain parameters, with defaults '
-                                    'where they are optional.'],
+    if stmt.args.vararg or stmt.args.kwarg:
+        _refuse(stmt, '*args and **kwargs on a method are not translated yet.',
+                ['Give the method plain parameters, with defaults where they are optional, '
+                 'or take a list: def %s(self, items).' % stmt.name],
                 received='def %s(...)' % stmt.name)
     if kind != 'static' and not params:
         _refuse(stmt, 'A method needs self as its first parameter.',
@@ -1637,7 +1648,9 @@ class _Writer(object):
         if kind == 'str':
             return _call('str', [node], like)
         if _is_list(kind):
-            return _call('list', [node], like)
+            call = _call('list', [node], like)
+            setattr(call, LIST_READ, True)
+            return call
         if kind == 'tuple':
             from . import tuples
             setattr(node, tuples.TUPLE, True)

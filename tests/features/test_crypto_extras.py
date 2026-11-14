@@ -85,7 +85,7 @@ class TheSecureRandomTests(unittest.TestCase):
                                    'storage.set("k", crypto.token(16))')
                      .replace("import Screen,", "import Screen, crypto,"))
         token = java[java.index("private String _apkpyToken(int count)"):]
-        token = token[:token.index("private String _apkpySha256(")]
+        token = token[:token.index("\n    }")]
         self.assertIn("java.security.SecureRandom", token)
         # random.choice() and randint() keep java.util.Random on purpose --
         # shuffling a list is not a secret. Only the token must be strong.

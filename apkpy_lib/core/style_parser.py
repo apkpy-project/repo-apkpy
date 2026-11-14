@@ -2,6 +2,18 @@
 
 import re
 
+from . import gradients as _gradients
+from .css_colors import NAMED, named, normalize_value
+
+
+def _value(key, value):
+    """A declaration's value, its colours in the engine's form: rgba(), hsl()
+    and CSS's #RRGGBBAA anywhere in it, and a colour's name (orange) where the
+    property is a colour (core/css_colors.py). Done here, once, for both
+    renderers."""
+    value = normalize_value(value.strip())
+    return named(value) if key in COLOR_PROPERTIES else value
+
 
 MEDIA_RULE_PREFIX = "__media__|"
 
@@ -39,12 +51,61 @@ def _extract_balanced_at_rules(css_text, rule_name):
     return ''.join(output), blocks
 
 
+def _background_shorthand(props, raw):
+    """``background:`` as CSS reads it: a gradient is the image, a colour the
+    colour. Like CSS, the shorthand resets the colour an earlier line set."""
+    value = normalize_value(raw.strip())
+    found = _gradients.find(value)
+    props.pop('background-color', None)
+    if found is not None:
+        # Every gradient is a layer, the first on top, as CSS stacks them;
+        # what is left is the colour under them all.
+        images, outside, rest = [], [], value
+        while found is not None:
+            outside.append(rest[:found[0]])
+            images.append(rest[found[0]:found[1]])
+            rest = rest[found[1]:]
+            found = _gradients.find(rest)
+        outside.append(rest)
+        props['background-image'] = ', '.join(images)
+        words = ' '.join(outside).replace(',', ' ').split()
+        if len(words) == 1:
+            props['background-color'] = named(words[0])
+        return
+    words = value.split()
+    if len(words) == 1 and (words[0].startswith(('#', 'var(')) or words[0].lower() in NAMED
+                            or words[0].lower() == 'none'):
+        props['background-color'] = named(words[0])
+
+
+def _gradient_stand_in(props):
+    """An opaque gradient's colour at its middle, as the block's
+    background-color when it names none: what text contrast is measured on,
+    and what a component that draws no gradient paints. Never for a gradient
+    with alpha -- a scrim over a photo would be painted twice."""
+    if 'background-image' not in props or 'background-color' in props:
+        return
+    gradient = _gradients.parse(props['background-image'])
+    if gradient is None:
+        return
+    colours = [_gradients.argb(c) for c, _ in gradient.stops]
+    if colours and all(c is not None and c[0] == 255 for c in colours):
+        props['background-color'] = gradient.middle()
+
+
 def _parse_style_blocks(css_text):
     parsed = []
     for selector_group, content in re.findall(r'([^{}]+)\{([^{}]*)\}', css_text):
         props = {}
-        for key, value in re.findall(r'([\w-]+)\s*:\s*(.*?);', content):
-            props[key.strip()] = value.strip()
+        # [^;] and not `.`: a value written over several lines (a background
+        # of three gradients, one per line) was dropped without a word.
+        for key, value in re.findall(r'([\w-]+)\s*:\s*([^;]*?);', content):
+            value = ' '.join(value.split())
+            if key.strip() == 'background':
+                _background_shorthand(props, value)
+                continue
+            props[key.strip()] = _value(key.strip(), value)
+        _gradient_stand_in(props)
         for selector in selector_group.split(','):
             # ``.name`` was already accepted; ``#name`` was not, so a
             # stylesheet written out of browser habit parsed cleanly, matched
@@ -72,8 +133,8 @@ def parse_css(css_text):
         kf_dict = {}
         for stage, props_str in re.findall(r'([a-zA-Z0-9%]+)\s*\{([^{}]*)\}', content):
             props = {}
-            for key, value in re.findall(r'([\w-]+)\s*:\s*(.*?);', props_str):
-                props[key.strip()] = value.strip()
+            for key, value in re.findall(r'([\w-]+)\s*:\s*([^;]*?);', props_str):
+                props[key.strip()] = _value(key.strip(), ' '.join(value.split()))
             kf_dict[stage.strip()] = props
         keyframes[name.strip()] = kf_dict
 
@@ -137,6 +198,7 @@ KNOWN_PROPERTIES = frozenset(COLOR_PROPERTIES | frozenset((
     'font-size', 'font-weight', 'font-family', 'font-style', 'text-align',
     'text-transform', 'letter-spacing', 'line-height', 'title-lines',
     'subtitle-lines', 'subtitle-size', 'trailing-size', 'rows', 'max-rows',
+    'syntax', 'shimmer',
     # Shape
     'border-width', 'border-radius', 'box-shadow', 'stroke-width',
     # Space
@@ -152,7 +214,7 @@ KNOWN_PROPERTIES = frozenset(COLOR_PROPERTIES | frozenset((
     'grid-template-columns', 'grid-column', 'grid-row',
     'position', 'top', 'right', 'bottom', 'left', 'z-index',
     # Media and effects
-    'opacity', 'object-fit', 'filter', 'scale',
+    'opacity', 'object-fit', 'filter', 'scale', 'background-image',
     # Behaviour
     'transition', 'press', 'code-copy', 'animation-name',
     'animation-duration',
@@ -166,7 +228,6 @@ KNOWN_PROPERTIES = frozenset(COLOR_PROPERTIES | frozenset((
 _PROPERTY_HINTS = {
     'elevation': 'box-shadow',
     'shadow': 'box-shadow',
-    'background': 'background-color',
     'border': 'border-width',
     'font': 'font-size',
     'text-color': 'color',
@@ -226,6 +287,70 @@ def unknown_properties(styles, keyframes=None):
     return found
 
 
+def hex_order_suspects(css_text):
+    """``[(selector, property, written, instead)]`` for a hex colour written
+    alpha first, in Android's order.
+
+    A stylesheet reads ``#RRGGBBAA`` with the alpha last, as CSS does. Before
+    1.15 it read ``#AARRGGBB``, so ``#80000000`` was black at half strength;
+    now it is a dark red nobody can see, and ``#66FFFFFF`` (white at 40%) is
+    an opaque cyan. Two signs, both rare in CSS written alpha last: a colour
+    that is fully transparent but has a colour in it, and an opaque one
+    written with eight digits. Neither counts when the colour means the same
+    both ways. Pure: the caller decides whether to report.
+    """
+    found = []
+    css_text = re.sub(r'/\*.*?\*/', '', css_text or '', flags=re.S)
+    for selector_group, content in re.findall(r'([^{}]+)\{([^{}]*)\}', css_text):
+        selector = selector_group.strip().lstrip('.#').strip()
+        for key, value in re.findall(r'([\w-]+)\s*:\s*([^;]*);', content):
+            if key.strip() not in COLOR_PROPERTIES:
+                continue
+            for digits in re.findall(r'#([0-9a-fA-F]{8}|[0-9a-fA-F]{4})\b', value):
+                d = digits.upper()
+                if len(d) == 4:
+                    d = ''.join(c * 2 for c in d)
+                invisible = d[6:] == '00' and d[:6] != '000000' and d[:2] != '00'
+                opaque = d[6:] == 'FF' and d[:2] != 'FF'
+                if not (invisible or opaque):
+                    continue
+                instead = '#' + d[2:] if d[:2] == 'FF' else '#' + d[2:] + d[:2]
+                found.append((selector, key.strip(), '#' + digits, instead))
+    return found
+
+
+_HEX_ORDER_REPORTED = set()
+
+
+def report_hex_order(css_text):
+    """Say so, once per colour per process, and carry on building."""
+    fresh = [s for s in hex_order_suspects(css_text) if s[2].upper() not in _HEX_ORDER_REPORTED]
+    if not fresh:
+        return
+    _HEX_ORDER_REPORTED.update(s[2].upper() for s in fresh)
+    from ..diagnostics import Diagnostic, report_diagnostic
+    report_diagnostic(Diagnostic(
+        code='U2049',
+        title='This colour looks written alpha first',
+        message="%d colour%s look%s written in Android's order, alpha first." % (
+            len(fresh), '' if len(fresh) == 1 else 's', 's' if len(fresh) == 1 else ''),
+        cause=(
+            'A stylesheet reads an eight-digit hex the way CSS does, with the '
+            'alpha last: #00000080 is black at half strength. Read that way, '
+            '#80000000 is not drawn at all and #66FFFFFF is an opaque cyan, '
+            'where alpha first they were black at half strength and white at '
+            '40%. The colour is drawn as CSS reads it.'
+        ),
+        expected='the alpha last (#RRGGBBAA), rgba(), or transparent',
+        received='\n'.join('%s { %s: %s }  ->  write %s'
+                           % (sel, prop, written, instead)
+                           for sel, prop, written, instead in fresh),
+        suggestions=['Write the colour after the arrow: the same colour, alpha last.',
+                     'For something see-through on purpose, write transparent.'],
+        docs='https://repo-apkpy.pages.dev/themes-styling/',
+    ))
+
+
 def report_unknown_properties(styles, keyframes=None):
     """Say so, once per name per process, and carry on building."""
     import difflib
@@ -282,7 +407,7 @@ COMPONENT_ARGUMENTS = {
         'screens')),
     'button': frozenset(('active', 'active_icon', 'command', 'describe', 'icon',
         'id', 'parent', 'screen', 'text', 'variant', 'visible')),
-    'card': frozenset(('actions', 'content', 'id', 'image', 'parent',
+    'card': frozenset(('actions', 'content', 'id', 'image', 'on_click', 'parent',
         'screen', 'subtitle', 'title', 'variant')),
     'card_action': frozenset(('command', 'icon', 'id', 'text', 'variant')),
     'carousel': frozenset(('id', 'items', 'on_click', 'parent', 'screen')),
@@ -290,7 +415,7 @@ COMPONENT_ARGUMENTS = {
         'parent', 'screen', 'value', 'x', 'y')),
     'chips': frozenset(('check', 'icons', 'id', 'multiple', 'on_change', 'options',
         'parent', 'required', 'screen', 'selected')),
-    'container': frozenset(('id', 'parent', 'screen', 'visible')),
+    'container': frozenset(('id', 'on_click', 'parent', 'screen', 'visible')),
     'drawer': frozenset(('header', 'icons', 'id', 'labels', 'screens',
         'subtitle')),
     'empty_state': frozenset(('action', 'icon', 'id', 'message', 'on_action',
@@ -300,16 +425,17 @@ COMPONENT_ARGUMENTS = {
     'grid': frozenset(('cols', 'id', 'items', 'on_click', 'parent',
         'screen')),
     'pager': frozenset(('id', 'parent', 'screen')),
+    'web_page': frozenset(('html', 'id', 'parent', 'screen', 'url')),
     'segmented': frozenset(('check', 'icons', 'id', 'multiple', 'on_change', 'options',
         'parent', 'required', 'screen', 'selected')),
     'tab': frozenset(('describe', 'icon', 'id', 'parent', 'text')),
     'image': frozenset(('aspect_ratio', 'blur', 'cache', 'command',
         'describe', 'fade_in', 'fallback', 'id', 'parent', 'placeholder',
         'screen', 'src', 'tint', 'visible', 'zoom')),
-    'input_field': frozenset(('error', 'help', 'id', 'on_change', 'parent',
-        'placeholder', 'required', 'screen', 'type')),
-    'inputs': frozenset(('error', 'help', 'id', 'on_change', 'parent',
-        'placeholder', 'required', 'screen', 'type')),
+    'input_field': frozenset(('action', 'autofill', 'error', 'help', 'id', 'on_change',
+        'on_submit', 'parent', 'placeholder', 'required', 'screen', 'type')),
+    'inputs': frozenset(('action', 'autofill', 'error', 'help', 'id', 'on_change',
+        'on_submit', 'parent', 'placeholder', 'required', 'screen', 'type')),
     'label': frozenset(('id', 'parent', 'screen', 'text', 'variant', 'visible')),
     'list_row': frozenset(('command', 'icon', 'id', 'parent', 'screen',
         'subtitle', 'text', 'trailing', 'trailing_icon')),

@@ -239,5 +239,69 @@ class TheTreeHasOneShape(unittest.TestCase):
         self.assertIn("_apkpyListGet(String.valueOf(parts), String.valueOf(1))", java)
 
 
+# Python 3.14 removed these: ast.Str, ast.Num... and Constant.s / Constant.n. Until 3.13 they still matched
+# a Constant (isinstance(Constant("a"), ast.Str) was True), so code naming them worked everywhere the suites ran,
+# and on 3.14 every app that assigned a name failed with C4001 "module 'ast' has no attribute 'Str'".
+REMOVED_IN_3_14 = ("Str", "Num", "Bytes", "NameConstant", "Ellipsis")
+
+WITHOUT_THEM = """
+import ast, sys
+for name in %r:
+    vars(ast).pop(name, None)
+def _gone(name):
+    raise AttributeError("module 'ast' has no attribute %%r" %% name)
+ast.__getattr__ = _gone
+for name in ("n", "s"):
+    if name in vars(ast.Constant):
+        delattr(ast.Constant, name)
+sys.path.insert(0, %r)
+from apkpy_lib.core.compiler import translate_python_to_android
+out = translate_python_to_android(sys.stdin.read())
+sys.stdout.write(out.get("error.txt") or out["java/Screen_homeActivity.java"])
+""" % (REMOVED_IN_3_14, str(ROOT))
+
+
+class NothingThatPython314Removed(unittest.TestCase):
+
+    def test_no_file_names_them(self):
+        import ast
+        found = []
+        for path in _sources():
+            if path.name == Path(__file__).name:
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Attribute) and node.attr in REMOVED_IN_3_14
+                        and isinstance(node.value, ast.Name) and node.value.id == "ast"):
+                    found.append("%s:%d  ast.%s" % (path.relative_to(ROOT), node.lineno, node.attr))
+        self.assertEqual(found, [], "\n" + "\n".join(found))
+
+    def test_an_app_translates_without_them(self):
+        import subprocess
+        source = "\n".join((
+            'from apkpy_lib import *',
+            'home = Screen(id="home")',
+            'out = label("", id="out", screen=home)',
+            'def go():',
+            '    parts = "a,b".split(",")',
+            '    second = parts[1]',
+            '    count = 2',
+            '    total = count',
+            '    out.set_value(f"{second} x{total}")',
+            'button("Go", id="go", screen=home, command=go)',
+            'run(start_screen=home)', ''))
+        import os
+        # The child writes the Java in the console's code page unless told
+        # otherwise; on a Portuguese Windows a "ã" in it was not UTF-8 and
+        # the test failed reading the answer, not on the translation.
+        env = dict(os.environ, PYTHONIOENCODING="utf-8")
+        done = subprocess.run([sys.executable, "-c", WITHOUT_THEM], input=source, capture_output=True,
+                              text=True, encoding="utf-8", timeout=300, env=env)
+        self.assertEqual(done.returncode, 0, done.stderr[-3000:])
+        self.assertNotIn("C4001", done.stdout)
+        self.assertIn("_apkpyListGet(String.valueOf(parts), String.valueOf(1))", done.stdout)
+        self.assertIn('" x"', done.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

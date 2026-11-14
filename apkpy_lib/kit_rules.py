@@ -58,6 +58,9 @@ __all__ = [
     "display_at_the_top", "display_wrong_orientation", "display_wrong_brightness",
     "DOCS_OF", "APP_LOCK_INVALID", "APP_LOCK_FILE", "APP_LOCK_WORDS", "app_lock_minutes",
     "app_lock_due", "app_lock_title", "app_lock_heading", "app_lock_at_the_top", "app_lock_wrong_minutes",
+    "SHARED_FAMILIES", "CALENDAR_DAYS", "calendar_window", "GALLERY_TYPES", "gallery_type",
+    "REMINDER_REPEATS", "reminder_repeat", "reminder_at", "reminder_next", "clock_alarm",
+    "clock_seconds",
 ]
 
 CODE = "U2048"
@@ -241,11 +244,16 @@ SPEC = {
     },
     "calendar": {
         "class": "ApkpyHandoff",
-        "says": "An event, written into the phone's calendar app for the person to save.",
+        "says": "An event, written into the phone's calendar app for the person to save, "
+                "and the events already in it.",
         "reasons": {
-            "ok": "The calendar opened with the event filled in.",
+            "ok": "The calendar opened with the event filled in, or its events were read.",
             "invalid": "start= or end= is not a date ApkPy reads, or the end is before the start.",
             "no_app": "No calendar app is installed.",
+            "permission_denied": "The person did not allow the app to read the calendar.",
+            "permission_blocked": "The calendar is refused for good; only the phone's "
+                                  "settings change that.",
+            "failed": "The phone's calendar could not be read.",
         },
         "verbs": {
             "add_event": Verb(DO, [_p("title"), _p("start"), _p("end", "text", ""),
@@ -253,21 +261,36 @@ SPEC = {
                                    _p("all_day", "bool", False)],
                               java="addEvent",
                               says="Open the calendar's new-event screen, filled in."),
+            "events": Verb(LATER, [_p("start", "text", ""), _p("end", "text", "")],
+                           java="events", home="ApkpyCalendar",
+                           needs=("launcher", "read_calendar"),
+                           says="The events between two times, as JSON text that "
+                                "json.loads() makes a list of; a week from today when "
+                                "no time is given."),
         },
     },
     "phone": {
         "class": "ApkpyHandoff",
-        "says": "The dialler and the messages app, with the number already typed.",
+        "says": "The dialler and the messages app, with the number already typed, "
+                "and a call placed by the app.",
         "reasons": {
-            "ok": "The other app opened.",
+            "ok": "The other app opened, or the call was placed.",
             "invalid": "There is no number to dial or write to.",
             "no_app": "This device has no dialler or no messages app.",
+            "no_phone": "This device cannot make calls: a tablet with no mobile radio.",
+            "permission_denied": "The person did not allow the app to make calls.",
+            "permission_blocked": "Calls are refused for good; only the phone's settings "
+                                  "change that.",
         },
         "verbs": {
             "dial": Verb(DO, [_p("number")], java="dial",
                          says="Open the dialler on this number; the person presses call."),
             "sms": Verb(DO, [_p("number"), _p("text", "text", "")], java="sms",
                         says="Open a message to this number; the person presses send."),
+            "call": Verb(LATER, [_p("number")], java="call", home="ApkpyCall",
+                         needs=("launcher", "call_phone"),
+                         says="Call this number now, asking the first time for leave "
+                              "to make calls; on_result once the call is placed."),
         },
     },
     "recorder": {
@@ -531,6 +554,8 @@ SPEC = {
             "ok": "The phone was asked to.",
             "invalid": "The brightness is not a number from 0 to 1 or \"auto\", or "
                        "the orientation is not \"portrait\", \"landscape\" or \"auto\".",
+            "unsupported": "Before Android 14 the phone does not tell an app that a "
+                           "screenshot was taken.",
         },
         "verbs": {
             "keep_on": Verb(DO, [_p("on", "bool", True)], java="keepOn",
@@ -545,6 +570,10 @@ SPEC = {
             "orientation": Verb(DO, [_p("kind")], java="orientation",
                                 says="Which way up this screen is: \"portrait\", "
                                      "\"landscape\", or \"auto\" to turn with the phone."),
+            "on_screenshot": Verb(DO, [_p("run", "function")], java="onScreenshot",
+                                  needs=("screen_capture",),
+                                  says="Call the function when the person takes a "
+                                       "screenshot of this screen (Android 14 and later)."),
         },
     },
     "app_lock": {
@@ -572,7 +601,71 @@ SPEC = {
                            says="Whether the app is locked right now."),
         },
     },
+    "clock": {
+        "class": "ApkpyClock",
+        "says": "An alarm or a countdown, set in the phone's clock app.",
+        "reasons": {
+            "ok": "The clock app has it.",
+            "invalid": "The hour is not 0 to 23, the minute not 0 to 59, or the "
+                       "seconds not 1 to 86400.",
+            "no_app": "No clock app on this phone takes alarms from other apps.",
+        },
+        "verbs": {
+            "alarm": Verb(DO, [_p("hour", "whole"), _p("minute", "whole", 0),
+                               _p("label", "text", "")],
+                          java="alarm", needs=("set_alarm",),
+                          says="An alarm at this time, set in the clock app: it rings "
+                               "with this app closed."),
+            "timer": Verb(DO, [_p("seconds", "whole"), _p("label", "text", "")],
+                          java="timer", needs=("set_alarm",),
+                          says="A countdown of this many seconds, started in the clock app."),
+        },
+    },
+    "gallery": {
+        "class": "ApkpyGallery",
+        "says": "A picture or a video of the app, put in the phone's gallery.",
+        "reasons": {
+            "ok": "It is in the gallery.",
+            "not_found": "There is no such file in the app.",
+            "invalid": "The file is not a picture or a video the gallery shows.",
+            "permission_denied": "The person did not allow the app to save to the phone "
+                                 "(Android 9 and older ask).",
+            "permission_blocked": "Saving to the phone is refused for good; only the "
+                                  "phone's settings change that.",
+            "failed": "The file could not be written: no room is left, or the phone "
+                      "refused it.",
+        },
+        "verbs": {
+            # gallery.pick() is older than this table and is not one of these.
+            "save": Verb(LATER, [_p("path"), _p("album", "text", "")], java="save",
+                         needs=("launcher", "gallery_write"),
+                         says="Put a picture or a video of the app in the gallery, in an "
+                              "album named after the app, or album=; on_result gets the "
+                              "name it was saved as."),
+        },
+    },
+    "clipboard": {
+        "class": "ApkpyClipboard",
+        "says": "The text the person copied, in this app or in another.",
+        "reasons": {
+            "ok": "The text was read.",
+        },
+        "verbs": {
+            # clipboard.copy() is older than this table and is not one of these.
+            "paste": Verb(VALUE, java="paste",
+                          says="The text on the clipboard, or \"\". Android shows the "
+                               "person a short notice that the app read it."),
+            "has_text": Verb(FLAG, java="hasText",
+                             says="Whether there is text to paste, without reading it: "
+                                  "no notice is shown."),
+        },
+    },
 }
+
+# Families of the table that are older than it, and have calls of their own
+# that are none of its business: files.download(), gallery.pick(),
+# clipboard.copy().
+SHARED_FAMILIES = ("files", "gallery", "clipboard")
 
 # A family that needs a line at the top of the file before any of its calls
 # means anything: family -> (the declaration, why, what to write).
@@ -646,6 +739,7 @@ FEEDBACK = {
 
 # The ranges a number is kept inside, on both sides.
 LIMITS = {
+    "clock_seconds": (1, 86400),
     "vibrate_ms": (1, 5000),
     "rate": (0.25, 4.0),
     "pitch": (0.5, 2.0),
@@ -1324,6 +1418,128 @@ def display_wrong_brightness(label, written):
         "received": str(written),
         "suggestions": hints,
     }
+
+
+# ── the clock ────────────────────────────────────────────────────────────────
+
+def clock_alarm(hour, minute):
+    """``(hour, minute)`` as whole numbers, or ``None`` when either is not one
+    a clock has: 0 to 23 and 0 to 59."""
+    read_hour, read_minute = whole(hour, -1), whole(minute, -1)
+    if not 0 <= read_hour <= 23 or not 0 <= read_minute <= 59:
+        return None
+    return read_hour, read_minute
+
+
+def clock_seconds(seconds):
+    """The length of a countdown, or ``None`` outside what a clock app takes."""
+    low, high = LIMITS["clock_seconds"]
+    read = whole(seconds, -1)
+    return read if low <= read <= high else None
+
+
+# ── the calendar ─────────────────────────────────────────────────────────────
+
+# How far calendar.events() looks when it is given no end.
+CALENDAR_DAYS = 7
+
+
+def calendar_window(start, end, now):
+    """What ``calendar.events`` makes of its two times: ``(begin, finish)``,
+    or ``None`` when they cannot be read or the end is not after the start.
+
+    Nothing given is the week from the start of today. A start with no hour
+    is that day's midnight; an end with no hour is the whole of that day. No
+    end is a week after the start.
+    """
+    given_start, given_end = trim(start), trim(end)
+    if given_start:
+        first = when(given_start)
+        if first is None:
+            return None
+        begin = first[0]
+    else:
+        begin = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if given_end:
+        last = when(given_end)
+        if last is None:
+            return None
+        finish = last[0] if last[1] else last[0] + _datetime.timedelta(days=1)
+    else:
+        finish = begin + _datetime.timedelta(days=CALENDAR_DAYS)
+    if finish <= begin:
+        return None
+    return begin, finish
+
+
+# ── the gallery ──────────────────────────────────────────────────────────────
+
+# What the gallery shows, by the file's ending, and the type it is saved as.
+GALLERY_TYPES = {
+    "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+    "webp": "image/webp", "gif": "image/gif", "bmp": "image/bmp",
+    "heic": "image/heic", "heif": "image/heif",
+    "mp4": "video/mp4", "m4v": "video/mp4", "3gp": "video/3gpp",
+    "webm": "video/webm", "mkv": "video/x-matroska", "mov": "video/quicktime",
+}
+
+
+def gallery_type(name):
+    """The type a file is saved to the gallery as, or ``""`` when the gallery
+    does not show it."""
+    text = trim(name)
+    dot = text.rfind(".")
+    if dot < 0:
+        return ""
+    return GALLERY_TYPES.get(_lower(text[dot + 1:]), "")
+
+
+# ── reminders: notify(at=) ───────────────────────────────────────────────────
+
+REMINDER_REPEATS = ("", "daily", "weekly")
+_CLOCK_TIME = re.compile(r"([0-9]{1,2}):([0-9]{2})")
+
+
+def reminder_repeat(text):
+    """One of :data:`REMINDER_REPEATS`, or ``None`` when the text is none."""
+    kind = _lower("" if text is None else text)
+    return kind if kind in REMINDER_REPEATS else None
+
+
+def reminder_at(text, now):
+    """When ``notify(at=)`` posts, or ``None`` when ``text`` is not a time.
+
+    ``"2026-11-07 09:00"`` is that moment, even one already gone (it is then
+    posted at once). ``"09:00"`` is the next 09:00: today, or tomorrow when
+    today's has gone. A day with no hour is not a time to post at.
+    """
+    given = trim(text)
+    clock = _CLOCK_TIME.fullmatch(given)
+    if clock:
+        hour, minute = int(clock.group(1)), int(clock.group(2))
+        if hour > 23 or minute > 59:
+            return None
+        due = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if due <= now:
+            due += _datetime.timedelta(days=1)
+        return due
+    found = when(given)
+    if found is None or not found[1]:
+        return None
+    return found[0]
+
+
+def reminder_next(due, repeat, now):
+    """The next time a repeated reminder posts after ``now``, or ``None`` for
+    one that does not repeat. Counted on the clock: a daily one at 09:00 stays
+    at 09:00 when the clocks change."""
+    step = {"daily": 1, "weekly": 7}.get(reminder_repeat(repeat) or "")
+    if not step:
+        return None
+    following = due + _datetime.timedelta(days=step)
+    while following <= now:
+        following += _datetime.timedelta(days=step)
+    return following
 
 
 # ── the app's own lock ───────────────────────────────────────────────────────

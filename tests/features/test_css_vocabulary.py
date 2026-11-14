@@ -86,7 +86,10 @@ class TheSuggestionHasToBeWorthReading(unittest.TestCase):
     def test_the_names_people_actually_reach_for_point_somewhere(self):
         from apkpy_lib.core.style_parser import _PROPERTY_HINTS
         self.assertEqual(_PROPERTY_HINTS['elevation'], 'box-shadow')
-        self.assertEqual(_PROPERTY_HINTS['background'], 'background-color')
+        self.assertEqual(_PROPERTY_HINTS['shadow'], 'box-shadow')
+        # `background` was pointed at background-color until it became a
+        # property of its own (a colour or a gradient, 1.15).
+        self.assertNotIn('background', _PROPERTY_HINTS)
 
     def test_every_hint_points_at_something_real(self):
         from apkpy_lib.core.style_parser import _PROPERTY_HINTS

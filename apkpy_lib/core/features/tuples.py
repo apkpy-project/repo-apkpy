@@ -18,13 +18,17 @@ a name every assignment of which gives one, a call of a function whose every
 out (``PAIRS = [(1, 2), (3, 4)]``), and an item of such a list. ``tuple(x)``
 becomes ``list(x)``, marked: the same copy, shown with round brackets.
 
-A tuple inside a list or another tuple is shown with square brackets: the JSON
-does not say which inner lists were tuples.
+A list the source proves holds only tuples -- written out, a comprehension of
+tuples, list(zip(...)), sorted(d.items()), c.most_common() -- is shown as
+[(1, 2), (3, 4)] (``holds_tuples``, _apkpyShowTuples). Any other tuple inside a
+list or another tuple is shown with square brackets: the JSON does not say
+which inner lists were tuples.
 """
 
 import ast
 
 TUPLE = "_apkpy_tuple"
+TUPLES_IN = "_apkpy_tuples_in"      # a list every item of which is a tuple
 
 _MUTATORS = ('append', 'extend', 'insert', 'pop', 'remove', 'sort',
              'reverse', 'clear')
@@ -33,6 +37,11 @@ _MUTATORS = ('append', 'extend', 'insert', 'pop', 'remove', 'sort',
 def is_tuple(node):
     """True when the source proves *node* is a tuple."""
     return isinstance(node, ast.Tuple) or bool(getattr(node, TUPLE, False))
+
+
+def holds_tuples(node):
+    """True when the source proves *node* is a list of tuples."""
+    return bool(getattr(node, TUPLES_IN, False))
 
 
 def _scopes(tree):
@@ -106,9 +115,50 @@ def _bindings(statements):
 
 
 def _tuples_written_out(node):
-    """[(1, 2), (3, 4)]: a list or tuple written out, every item a tuple."""
-    return (isinstance(node, (ast.List, ast.Tuple)) and bool(node.elts)
-            and all(isinstance(e, ast.Tuple) for e in node.elts))
+    """A list every item of which is a tuple: [(1, 2), (3, 4)] written out,
+    [(k, v) for ...], list(zip(a, b)), sorted(d.items()), list(enumerate(xs)),
+    c.most_common()."""
+    if isinstance(node, (ast.List, ast.Tuple)):
+        return bool(node.elts) and all(isinstance(e, ast.Tuple) for e in node.elts)
+    if isinstance(node, ast.ListComp):
+        return isinstance(node.elt, ast.Tuple)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        if node.func.id == '_apkpy_counter_most_common':
+            return True
+        if node.func.id in ('list', 'sorted') and len(node.args) == 1 \
+                and (node.func.id == 'sorted' or not node.keywords):
+            inner = node.args[0]
+            if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Attribute) \
+                    and inner.func.attr == 'items' and not inner.args:
+                return True
+            if isinstance(inner, ast.Call) and isinstance(inner.func, ast.Name) \
+                    and inner.func.id in ('zip', 'enumerate'):
+                return True
+    return False
+
+
+def _tuple_appends(tree):
+    """Names every change of which is .append() of a tuple written out:
+    [(a, b) for a in xs for b in ys] is such a list once
+    features/comprehensions.py has written it as a loop."""
+    good, bad = set(), set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                and node.func.attr in _MUTATORS and isinstance(node.func.value, ast.Name):
+            name = node.func.value.id
+            if node.func.attr == 'append' and len(node.args) == 1 \
+                    and isinstance(node.args[0], ast.Tuple):
+                good.add(name)
+            else:
+                bad.add(name)
+        elif isinstance(node, (ast.Assign, ast.AugAssign, ast.Delete)):
+            targets = node.targets if isinstance(node, (ast.Assign, ast.Delete)) else [node.target]
+            for target in targets:
+                if isinstance(target, ast.Subscript) and isinstance(target.value, ast.Name):
+                    bad.add(target.value.id)
+                if isinstance(node, ast.AugAssign) and isinstance(target, ast.Name):
+                    bad.add(target.id)
+    return good - bad
 
 
 def _changed_names(tree):
@@ -136,6 +186,7 @@ class _Facts:
         self.lists = {}                      # scope -> names that hold tuples only
         self.globals = {}                    # scope -> names declared global
         self.changed = _changed_names(tree)
+        self.tuple_appends = _tuple_appends(tree)
         for name, statements, _params in self.scopes:
             self.globals[name] = {n for node in _walk_scope(statements)
                                   if isinstance(node, ast.Global) for n in node.names}
@@ -143,9 +194,12 @@ class _Facts:
                    for n in self.globals.get(scope, set()) if n in _bindings(statements)}
         for name, statements, params in self.scopes:
             bindings = _bindings(statements)
-            self.lists[name] = {n for n, values in bindings.items()
-                                if n not in params and n not in self.changed and values
-                                and all(_tuples_written_out(v) for v in values)}
+            self.lists[name] = {
+                n for n, values in bindings.items()
+                if n not in params and values
+                and (n not in self.changed or n in self.tuple_appends)
+                and all(_tuples_written_out(v) or n in self.tuple_appends
+                        and isinstance(v, ast.List) and not v.elts for v in values)}
         self.lists[None] -= rebound
         self.rebound = rebound
 
@@ -224,6 +278,7 @@ def mark(tree):
     """Mark the nodes that read a tuple, and stop on a change to one."""
     if not any(isinstance(n, ast.Tuple) and isinstance(getattr(n, 'ctx', None), ast.Load)
                or isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == 'tuple'
+               or _tuples_written_out(n)
                for n in ast.walk(tree)):
         return tree
     facts = _Facts(tree)
@@ -234,6 +289,10 @@ def mark(tree):
                 | facts.from_module(name, bindings, facts.names[None])) - params
         lists = facts.visible_lists(name, bindings)
         for node in _walk_scope(statements):
+            if _tuples_written_out(node) and not isinstance(node, ast.Tuple) \
+                    or isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) \
+                    and node.id in lists:
+                setattr(node, TUPLES_IN, True)
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and not node.keywords:
                 if node.func.id == 'tuple' and len(node.args) <= 1:
                     node.func.id = 'list'
@@ -262,4 +321,4 @@ def mark(tree):
     return tree
 
 
-__all__ = ["mark", "is_tuple", "TUPLE"]
+__all__ = ["mark", "is_tuple", "holds_tuples", "TUPLE", "TUPLES_IN"]

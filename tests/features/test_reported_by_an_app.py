@@ -88,7 +88,8 @@ button("Go", id="b", command=go, screen=home)
         self.assertIn('String v = _apkpyStorageGet("theme", "light");', java)
         # Two deletes in one function: there was a variable per key, declared
         # twice, which javac refused.
-        self.assertEqual(len(_lines(java, r'remove\("theme"\)')), 2 * 2)   # Activity + method
+        # In the click handler; nothing calls go() by name.
+        self.assertEqual(len(_lines(java, r'remove\("theme"\)')), 2)
         self.assertNotIn('prefs_del_', java)
 
     def test_a_key_at_the_top_of_the_file(self):

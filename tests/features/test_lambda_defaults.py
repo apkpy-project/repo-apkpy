@@ -19,6 +19,7 @@ import ast
 import re
 import unittest
 
+from apkpy_lib.core import dead_methods
 from apkpy_lib.core.compiler import translate_python_to_android
 from apkpy_lib.core.features import lambda_defaults
 
@@ -54,7 +55,9 @@ class EachButtonKeepsItsOwnValue(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.files = translate_python_to_android(MENU)
+        # Read the lambdas' own methods, which the click handlers inline.
+        with dead_methods.everything_kept():
+            cls.files = translate_python_to_android(MENU)
         if "error.txt" in cls.files:
             raise AssertionError(cls.files["error.txt"][:800])
         cls.home = cls.files["java/Screen_homeActivity.java"]

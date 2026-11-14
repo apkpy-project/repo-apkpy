@@ -75,6 +75,9 @@ class TheSharedRules(unittest.TestCase):
         self.assertEqual(rules.ring_fraction(150, 100), 1.0)
         self.assertEqual(rules.ring_center_text(72, 100), '72%')
         self.assertEqual(rules.ring_center_text(45, 60, '45 min'), '45 min')
+        # 62.5: halves up, as the phone's Math.round (Onda, 14-11-2026).
+        self.assertEqual(rules.ring_center_text(5, 8), '63%')
+        self.assertEqual(rules.ring_center_text(1, 8), '13%')
 
     def test_items(self):
         items = rules.items_from([{'day': 'Mon', 'n': '4'}, 7, {'day': 'Tue', 'n': 'x'}],
