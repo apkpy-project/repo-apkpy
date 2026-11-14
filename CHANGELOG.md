@@ -10,6 +10,508 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.15.0] - 2026-11-14
+
+An app can have a game, written in Python and made with a Studio, and twelve
+templates start one. Boxes take gradients, see-through colours and shadows
+with a colour; a field says which keyboard it wants; `draw_pad()` takes a
+signature and `web_page()` shows HTML. The app reaches reminders at a time,
+alarms, calls, the calendar, the gallery and the clipboard, and the phone runs
+sets, `Counter`, `defaultdict` and functions kept as values. A hex colour
+with alpha now puts it last, as CSS does: see Changed.
+Notes: [releases/1.15.0.md](releases/1.15.0.md).
+
+### Changed
+
+- **An eight-digit hex colour is read with the alpha last, as CSS writes it.**
+  `#00000080` is black at half strength, as in every browser, and
+  `#RGBA` is its short form. It used to be read in Android's order, alpha
+  first, so `#00000080` was a fully transparent box. A stylesheet written in
+  Android's order -- `#80000000` for black at half strength -- now reads as a
+  transparent colour; the build says so (`U2049`) and gives the colour to write
+  instead. `#00000000` and `transparent` mean the same as before.
+- **CSS colour names mean what they mean in CSS**, on the phone as in the
+  Previewer: `green` is `#008000` (it was `#00FF00` on the phone), and every
+  one of the 148 names reaches the phone as its colour (`orange` used to stop
+  the build with `U2020`).
+- **A screen's Java holds only what that screen uses.** Every screen was
+  written with the whole kit of ApkPy's helpers (format, https, SQLite,
+  TOTP, the styled dialog...) and with a method for every function of the
+  app, called or not. Opened in Android Studio, a four-screen app had 10 600
+  lines of screen Java, nine in ten of them never run; it now has 1 215, and
+  ApkPy's own code in the APK went from 195 KB to 67 KB. Only private
+  methods nothing reaches are left out, so what runs is the same. A function
+  passed as `command=` is written in its click handler, as before; the copy
+  of it as a method of its own, which nothing called, is gone.
+- **For who reads ApkPy's own code: the compiler is a folder.**
+  `apkpy_lib/core/compiler.py`, one file of 30 000 lines, is now the package
+  `apkpy_lib/core/compiler/`: twenty modules, each needing only the ones
+  listed before it in the package's docstring. Two of them are folders of
+  their own, one class each with its methods kept in modules by what they do:
+  `compiler/reader/` reads the app's source (`MultiScreenTranspiler`; its
+  method of 1 400 lines that read a function's statements is now one short
+  method that asks eleven others), and `compiler/activity_java/` writes a
+  screen's Activity (`ActivityJava`, which was one function of 8 800
+  lines). The names the rest of ApkPy takes from
+  the compiler are where they were, and
+  `from apkpy_lib.core.compiler import translate_python_to_android` is the
+  same line as before. The Android projects it writes are the same byte for
+  byte.
+
+### Added
+
+- **Games.** An app can have a game: 2D, or 2.5D in the style of the DS-era
+  RPGs, written in Python in `game/` and run by a Java engine that is the same
+  on the phone and on the PC. Written by Rúben Rego as ApkPyGame, and part of
+  ApkPy from this version (`apkpy_lib.game`).
+  - `apkpy start NAME --game` makes an app with a game. Four templates: `menus`
+    (start, shop, pause and results screens around the game), `blank`,
+    `monster-rpg` (the opening of a monster-catching RPG, with a Studio to make
+    one without code) and `tutorial` (a red square that follows your finger,
+    explained step by step). `apkpy game init` adds a game to an app.
+  - Eight more templates, each a whole short game of its kind to make your
+    own, with its art, its sounds, a pause and a results screen, in English
+    and Portuguese: `platformer`, `shooter`, `runner`, `bricks`, `adventure`
+    (top-down, with keys and doors), `tap`, `puzzle` (a board with its rules
+    in a small `Script`) and `world` (2.5D). All but the puzzle are made of
+    components only, so the Studio changes every part of them. A test plays
+    each to the end with a replay that wins it.
+  - `enable_game()` in `writehere.py` gives the app `game_play()`,
+    `game_resume()`, `game_get()`, `game_set()`, `game_last_result()` and
+    `game_suspended()`. A game can open one of the app's screens and come back
+    to the same world, even after Android closed the app meanwhile.
+  - `python writehere.py` shows the game inside the Previewer, with Back and
+    turning; `apkpy run`, `build` and `release` build it with the app.
+  - `apkpy game studio`: the Studio, one window to make a game, for every game
+    and not only the RPG. It changes the game's own Python, rewriting only what
+    changed, so the code stays yours and can be changed by hand too:
+    - **Objects**: each `@prefab`, its components as forms (made from the same
+      schema the build reads), its animations playing from its sheet, and your
+      own `Script` behaviours with their typed fields;
+    - **Scenes**: their settings, camera, rules and the things in them;
+    - **My game**: the size, orientation, scaling, background and variables;
+    - **Levels**: paint tiles and place objects in Tiled maps (`.tmj`), or make
+      a new level with a starter set of tiles;
+    - **Sounds**: listen, bring in, or make a sound (jump, coin, laser,
+      explosion...) or a short tune, here, from nothing;
+    - and it plays the game inside the window, edits the data tables of
+      `@dataclass` records, draws pictures pixel by pixel, makes the files for
+      the phone and the Play Store, and keeps copies of the project.
+    A project adds sections of its own with `tools/studio_kit.py`: the
+    `monster-rpg` template's maps, story and monsters are one.
+    Started in a folder with no project, or from **New game...** in its side
+    bar, the Studio makes a game: choose the kind from its picture, name it,
+    and it opens on it.
+  - `apkpy game play` opens the game alone, in a window.
+  - `only_if("keys >= 1", ...)`: an action that runs the actions after it only
+    when its condition holds (a door that needs a key, a shop that needs coins).
+  - `deflect()`: an action that sends a ball away from the paddle it touched,
+    turned by where it touched it, so the player aims.
+  - `Canvas`: pixels the game paints while it runs. Scripts set and read
+    pixels and draw lines, rectangles, circles, fills and stamps of images;
+    with `brush=` the player paints with a finger. It starts from a colour or
+    from a PNG, and a replay leaves the same pixels on the phone and on the PC.
+    `examples/games/sketch` is a drawing game made with it.
+  - A body stopped by a solid collider now touches it: `OnCollide` runs once
+    when they meet (a ball and a brick, a hero and a locked door).
+  - `GridController` cannot walk into any cell a solid `Block` is on (a house
+    several cells wide), not only the cell in its middle.
+  - Games without code (physics, controllers, spawners, timers, tweens,
+    animation, particles, Tiled maps, touch buttons, variables and rules) and
+    with code: `Script` classes in a small, typed part of Python, translated to
+    Java by the build. Many files under `game/`, `@dataclass` classes, data
+    tables from JSON, saves, and an interface kit (buttons, panels, lists,
+    tabs, toggles, sliders, a keyboard, bars).
+  - A replay ends in the same state on the phone as on the PC. The engine only
+    goes into the APK of an app with a game.
+- **Arithmetic on values whose type only the running app knows**:
+  `item["price"] * item["qty"]`, `row["a"] - row["b"]`, `total / count` with a
+  parameter, `-item["delta"]`. `-`, `*`, `/`, `//`, `%` and `**` worked only
+  between numbers the code proves; with an item of a list of dicts, the
+  answer of an API or a parameter they stopped the build. Now the phone
+  works it out with Python's answers (`2 * 2.5` is `5.0`, `7 // 2` is `3`,
+  `"ab" * 2` is `"abab"`) and Python's `TypeError`, message and all, where
+  Python stops (`"tea" - 1`, `"ab" * 2.5`). The sum of two such values is
+  decided the same way, and so is the name of a `for` over a list
+  (`for x in xs: total += x * 2`, `[x * 2 for x in xs]`). A value nothing in
+  the app types -- a parameter no call gives a number -- times a whole number
+  still stops the build: its text `"5"` cannot say whether it is the number or
+  the str, and Python repeats one and multiplies the other.
+- **Bitwise operators on whole numbers**: `&`, `|`, `^`, `<<`, `>>`, `~`
+  and `&=`, `|=`, `^=`, `<<=`, `>>=`, with Python's answers (a negative shift
+  count raises the same `ValueError`). They glued text, or stopped the build.
+- **Positional-only and keyword-only parameters**: `def sub(a, b, /)` and
+  `def box(w, *, h=2)`, on a function and on a method. On a function they
+  stopped the build at the body, because the names were never declared; on a
+  method they were refused.
+- **`set()`, `{1, 2}` and `{x for x in xs}`.** `add`, `discard`, `remove`,
+  `pop`, `update`, `clear`, `|`, `&`, `-`, `^` and their `|=` forms, `<=`, `<`,
+  `==`, `issubset`, `issuperset`, `isdisjoint`, `in`, `len`, `sorted`, `for` and
+  `str()`, with CPython's order for numbers: `{3, 1, 2}` shows `{1, 2, 3}`, and
+  `{16, 1, 2, 3, 4}` shows `{16, 1, 2, 3, 4}`, as CPython builds a literal of
+  constants another way. A set of text keeps the order its items went in
+  (CPython's changes from one run to the next). What would show or behave
+  another way stops the build with the reason: a set inside a list, a tuple or
+  a dict, `json.dumps()` of a set, a set compared with a list, `frozenset`,
+  and changing a set at the top of the file. After items are taken out and
+  others put in, a set of numbers can list them in another order than
+  CPython's, which keeps the gaps in its table; `sorted(s)` is the same on
+  both.
+- **`Counter` and `defaultdict`** from `collections`. `Counter(items)`, `c[k]`
+  (0 for a missing key, and nothing added), `c[k] += n`, `most_common(n)`,
+  `update()`, `subtract()`, `total()`, and `str()` as `Counter({'tea': 2})`.
+  `defaultdict(int)` (and `float`, `str`, `bool`, `list`, `dict`, or a lambda
+  that gives a constant) with `d[k] += 1`, `d[k].append(x)` and reads that
+  add the key, as Python's do; `str()` as `defaultdict(<class 'int'>, {...})`.
+  A read of a missing key that may not run (after `and`, in one branch of
+  `x if c else y`) or runs again and again (a `while` test) stops the build,
+  as do `c + d` (`c.update(d)` does it), `defaultdict(set)` and a Counter in a
+  list.
+- **Functions as values**: `f = double`, `steps = [double, inc]`,
+  `{"add": add}`, `apply(double, 3)`, `return double`, then `f(x)`,
+  `actions[op](a, b)` and `pick("x")(1)`. The wrong number of arguments raises
+  Python's `TypeError`, with its words. `str()` of a function stops the build:
+  CPython shows where it is in memory, which changes on every run.
+- **The top of the file is worked out at build**: `N = len(NAMES)`,
+  `SQUARES = [i * i for i in range(5)]`, `sorted(...)`, `"-".join(...)`,
+  `math`, `set(...)` and `Counter(...)` become the literal CPython makes when
+  the app starts. They vanished, and javac stopped on a name never declared.
+  A name changed in place, or from a function, is not read by a later line.
+- **`dict()`, `dict(a=1)` and `dict(d)`**, and **`[*xs, 3]`, `(*xs, 3)` and
+  `{*q}`**.
+- **A list of tuples shows as Python shows it**: `sorted(d.items())`,
+  `list(d.items())`, `[(1, 2), (3, 4)]` and `most_common()` show
+  `[('a', 1), ('b', 2)]`; they showed `[['a', 1], ['b', 2]]`.
+- **Names Java cannot take are renamed before translating**: a variable or a
+  parameter called `default`, `new`, `case`, `final`, `R`, `org` or `View`
+  stopped javac far from its line. `area(new=3)` keeps working.
+- **`confirm(..., ok="Sair", cancel="Ficar")` and `alert(..., ok="Entendi")`**
+  choose the text of the buttons. Without them the buttons are the system's
+  own, in the phone's language ("OK" / "Cancelar" on a phone in Portuguese);
+  they were "OK" and "Cancel" in English in every app.
+
+- **`container(on_click=...)`, `card(on_click=...)` and `set_state()`.** A box
+  takes a tap like a button, and `answer:selected { ... }` in the stylesheet is
+  the look `answer.set_state("selected")` puts on (`None` takes it off) -- an
+  answer card that lights up when it is chosen. On the phone each state is a
+  drawable and a text colour compiled with the app; in the Previewer the
+  component is drawn again in its place.
+- **Several backgrounds on one box**: `background: radial-gradient(...),
+  radial-gradient(...), #0C0C14` stacks them as CSS does, the first on top --
+  three glows on a screen, on the phone (a layer-list) and in the Previewer.
+- **A coloured `box-shadow`**: `0 8px 24px rgba(124, 92, 255, 0.55)` glows in
+  that colour (Android 9+ colours its shadows; the Previewer draws it).
+- **Colours in code.** A fenced block in `markdown()` names its language and
+  its words are coloured as an editor colours them -- ```` ```cpp numbers ````
+  also numbers the lines (Python, JavaScript/TypeScript/JSON, C, C++, Java,
+  Kotlin, C#, Go, Rust, Swift, HTML/XML/SVG and CSS). `syntax: html` on an
+  `inputs(type="textarea")` colours as you type. One table of patterns for
+  both runtimes, so a keyword is the same colour on the phone and on the desk.
+- **`web_page(html=..., url=...)`: a web page inside the screen.** A WebView on
+  the phone, with the page's own `<style>` and `<script>`; `page.set_value()`
+  shows other HTML or an address (with `url=` the app asks for the INTERNET
+  permission). The Previewer draws the HTML a lab or a help page writes --
+  headings, paragraphs, lists, bold, code, links, and the colours and sizes
+  its `<style>` gives tags, classes and ids -- and opens an address in the
+  computer's browser.
+- **`draw_pad()`: a box to sign or scribble in with a finger.** A signature on
+  a delivery, a sketch, a note by hand. `pad.save("signature.png")` keeps it
+  as a PNG in the app's folder (`files.path("signature.png")`), `pad.clear()`
+  wipes it, `pad.is_empty()` says whether anything is drawn, and
+  `on_change=` hears each stroke. `hint="Sign here"` shows while it is empty;
+  `pen=` is the line's width. The stroke is smoothed the same way on the
+  phone and in the Previewer, a stroke down the box does not scroll the
+  screen, and the drawing survives turning the phone. CSS: `color` (the ink),
+  `background-color`, `border-color`, `border-radius`, `height`, `hint-color`.
+- **The keyboard of a field.** `inputs(type="email")`, `type="phone"` and
+  `type="url"` open the keyboard for each (a phone field in the Previewer
+  takes the keys of a dial pad). `action="send"` (or `"next"`, `"done"`,
+  `"search"`, `"go"`) is the key in the keyboard's corner and
+  `on_submit=send` what it does: `send(text)` gets the field's text, or
+  nothing if it takes no parameter. "done", "search" and "go" close the
+  keyboard, "send" keeps it open for the next message, "next" moves to the
+  next field; Enter does the same in the Previewer. A search field has the
+  search key on its own. `autofill="email"` (`"password"`, `"new_password"`,
+  `"username"`, `"otp"`, `"name"`, `"phone"`, `"address"`, `"postal_code"`)
+  tells password managers and the keyboard what the field is.
+  `hide_keyboard()` closes the keyboard -- after a search, so the results
+  are not under it -- and `field.focus()` puts the cursor in a field and
+  opens it, also as the screen opens.
+- **A one-line field is one line on the phone.** A text or search field had
+  no `android:inputType`, which makes an EditText multi-line: Enter typed a
+  new line and the field grew, where the Previewer's field stays one line.
+  It is now `inputType="text"`, and Enter moves to the next field as it does
+  on the desk. A `type="textarea"` keeps its new lines.
+- **`alert()` and `confirm()` in the app's own style.** A `dialog { ... }`
+  block (with `dialog_title`, `dialog_message`, `dialog_ok` and
+  `dialog_cancel`) draws them as the app's card -- background, border,
+  corners, the colours and size of the text, buttons with a colour or a
+  gradient -- on the phone and in the Previewer, with the screen dimmed
+  behind. Without the block they are the system's, as before.
+- **A floating bottom bar.** `bottom_nav { margin: 16px; border-radius: 28px;
+  background-color: rgba(20, 19, 34, 0.78) }` makes it a card off the edges,
+  with the content running on under it; `color`, `active-color` and
+  `indicator-color` colour the items and the pill (they work on the bar that
+  does not float too).
+- **`shimmer: 2.4s`**: a band of light that crosses a box again and again, the
+  shine on a progress bar (a colour may follow the time).
+- **Line icons.** An `.svg` drawn with strokes -- Lucide, Feather, Tabler,
+  Heroicons outline -- is drawn as it looks in a browser: `stroke`,
+  `stroke-width`, `fill` and `style` read from the element or from the
+  `<svg>`/`<g>` around it, `<line>` and `<polyline>`, round ends and corners.
+  It used to be refused ("draws with strokes and no fill"). Minified path data
+  whose arc flags are written together (`a2 2 0 013 5`) is read too.
+- **`icon-size` on a button** (`icon-size: 17px`), on the phone and in the
+  Previewer; it was 20 whatever the stylesheet said.
+- **Gradients: `background: linear-gradient(...)` and `radial-gradient(...)`.**
+  An angle (`135deg`, `0.25turn`) or a direction (`to right`, `to top left`),
+  any number of stops with or without positions, `circle` or `ellipse` at a
+  position, and `repeating-linear-gradient()`. On a screen, a container, a
+  card, a button or a label, with its corners, border and shadow; the text
+  inside stays on top. `background-image` keeps a `background-color` under
+  it, so a scrim from `transparent` to `rgba(0, 0, 0, 0.6)` darkens it. On the
+  phone it is a drawable of the app's own (`ApkpyGradient`, named from the
+  layout's XML, so the layout, padding and shadow work as for a colour); in
+  the Previewer the same geometry drawn with Pillow -- under the text of a
+  card too, in the place its alignment puts it. A button with a gradient keeps
+  a press: Android's ripple, and a veil in the Previewer. `background: <colour>`
+  is read too, as `background-color`.
+- **`rgb()`, `rgba()`, `hsl()` and `hsla()` in a stylesheet**, with commas or
+  spaces, channels as numbers or percentages, the alpha as `0.5` or `50%`, and
+  the hue in `deg`, `turn`, `rad` or `grad`. They used to reach the phone's XML
+  as written, which the build refused, and stopped the Previewer when it
+  opened. A `Theme(...)` takes the same forms.
+- **`opacity` on any component.** It was read on an image only; now a
+  container, a card, a button or a label fades with everything inside it
+  (`android:alpha` on the phone).
+- **See-through colours in the Previewer.** A glass panel
+  (`background-color: rgba(255, 255, 255, 0.15)`) shows the colour behind it
+  instead of its own at full strength, a text colour with alpha is mixed over
+  what it sits on instead of stopping the Previewer, and a component with
+  `opacity` is mixed towards what is behind it -- through a hover, a fade and a
+  redraw.
+
+- **Reminders: `notify(..., at="09:00")`** posts the notification at that
+  time, even with the app closed, and `repeat="daily"` or `"weekly"` posts it
+  again. `at=` is the next 09:00, or a day and an hour (`"2026-11-07 09:00"`),
+  or what the person typed in a field. It comes back after the phone restarts
+  and after the app is updated; `notifications.cancel(id)` takes it away
+  before it is due, and opening the app sets again what Android forgot when
+  the app was stopped. Android may post a reminder later to save battery --
+  by up to three quarters of the time it waited and never more than an hour,
+  so one for 09:00 set the evening before can come at 10:00. `exact=True`
+  asks for it to the minute: from Android 12 that is a page of Settings,
+  "Alarms & reminders", opened once, the first time; when the person allows
+  it, the reminders waiting are set again to the minute, and if they do not,
+  it is as without it. Only an app that writes `exact=True` declares the
+  permission (`SCHEDULE_EXACT_ALARM`), and the Play asks such an app why it
+  needs it. The build refuses a time it cannot read. In the Previewer it is
+  posted while the Previewer is open, and the first `exact=True` shows the
+  page as a sheet.
+- **`clock.alarm(7, 30, "Wake up")` and `clock.timer(480, "Pasta")`** set them
+  in the phone's clock app, where they ring with the app closed. No
+  permission the person sees.
+- **`phone.call(number, on_result=...)`** places the call at once
+  (`phone.dial()` only opens the dialler). Android asks the person the first
+  time.
+- **`calendar.events(start="", end="", on_result=...)`** reads what is in the
+  calendar: a JSON list of events (title, start, end, all_day, location,
+  notes, calendar), the week from today when no time is given. Android asks
+  the person the first time. The Previewer answers a few made-up events in
+  the same shape.
+- **`gallery.save(path, album="", on_result=...)`** puts a picture or a video
+  in the phone's gallery, in an album named after the app or the one given.
+  No permission from Android 10 on. On the desk the gallery is
+  `~/.apkpy/gallery/<album>`.
+- **`clipboard.paste()` and `clipboard.has_text()`** read what the person
+  copied.
+- **`display.on_screenshot(fn)`** calls `fn` when the person takes a
+  screenshot of that screen (Android 14 and later; it answers
+  `"unsupported"` before). In the Previewer, Ctrl+Shift+S takes one.
+
+### Fixed
+
+- **A label's own `padding` is used.** In a card or on a screen, a label is
+  set 16dp in from the sides unless it says otherwise -- but `padding: 0px`
+  did not say otherwise: "$486.20" sat 16dp right of "Spending" in the same
+  card, on the phone and in the Previewer. The padding a label is given now
+  replaces that indent, and with no background it is room around the text
+  (top and bottom included), as in CSS. Four example apps move: their
+  labels said `padding` and now get it.
+- **A ring's percentage is the same on both sides.** 5 of 8 is 62.5%: the
+  phone said 63% and the Previewer, rounding halves to even, 62%. Both say 63%.
+- **Words placed over a picture are as wide as their text.** A column at
+  `position: absolute` with only `left`/`top` set, in an app with a `Theme`,
+  stayed 25px wide in the Previewer: "Morning reset" read "M".
+- **A negative margin no longer closes the Previewer.** `margin: -8px ...`
+  stopped it with "bad pad value", and on the phone the sign was lost: 8dp.
+  A negative margin now counts as 0 on both.
+- **Text over a picture is not reported for contrast.** The check (`U2035`)
+  measured white words over a photo against the page behind it -- 1.07:1 --
+  though what is behind them is the picture, which no colour stands for. A
+  pill or a button over a picture that paints its own fill is still measured
+  on it.
+- **An `id=` the build cannot write out stops the build** (`U2033`) instead
+  of being dropped: the component kept its styles in the Previewer and lost
+  them on the phone. Inside a `for` over a list written in the file, an id
+  chosen with `"a" if done else "b"`, joined with `name.lower()`, or taken
+  from a tuple (`left[0]`, `left[-1]`) is now worked out while building.
+- **A list or a dict read out of another one shows as Python shows it.**
+  `str(d["a"])` of `{"a": ["tea"]}`, `str(rows[0])` of a list of lists,
+  `f"{row}"` and `"%s" % row` in a `for` over one, and an item of a
+  `defaultdict(list)` showed the JSON the phone keeps it as -- `["tea"]` for
+  `['tea']`, `{"k":"v"}` for `{'k': 'v'}` -- with no word.
+- **`def f(x, *_)` takes the values it does not read.** `f(1, 2, 3)` stopped
+  in javac, far from the line: the unread `*_` was left out of the method and
+  the call kept its three values. They are left out of the call too (and
+  `**_` keywords the same); one that calls a function stops the build, as
+  Python would still run it. Handed on as a value (`g = f`), such a function
+  is refused, as the call through the value checks how many values it gets.
+- **Number keys made in a loop are refused where they are read back.**
+  `{x: x * 2 for x in xs}` and `d[x] = 1` in a `for` over a list of numbers
+  made a dict whose keys `str(d)` showed as `'1'`. As for `{1: ...}` written
+  out, the build now stops there (`U2033`); `d[3]` and `3 in d` still work.
+- **A field low on a scrolling screen stays in sight when the keyboard opens.**
+  Since Android 15 an app's window runs edge to edge, and the keyboard gives
+  the screen its height as padding instead of shrinking it: the screen no
+  longer scrolled the field into view, and you typed into a field you could
+  not see -- the same for the next field "next" moved to. The screen now
+  scrolls it above the keyboard (a tall `textarea` from its top).
+- **A field's text is the phone's size in the Previewer.** A field you type
+  in with no `font-size` was 13px on the desk and 18sp on the phone (the
+  size Android gives an EditText), so a form looked smaller than it is.
+- **A field's error, `validate()` and a draw pad inside a background job** are
+  refused as calls that need a screen (J7004), with what you wrote
+  (`name.set_error()`, `pad.clear()`). They read "not translated inside a job
+  yet" (J7005) and the name of an internal command, and the Previewer ran
+  them. `hide_keyboard()` and `field.focus()` are refused the same way.
+- **Python 3.14.** It removed `ast.Str` and `ast.Num`, which until 3.13 still
+  matched every string and number in the tree. On 3.14 an app that assigned a
+  name (`total = count`) or used an f-string with a field stopped the build
+  with C4001, "module 'ast' has no attribute 'Str'". The tests now also run
+  as 3.14 would, without them, and Python 3.14 is in the CI.
+- **The Previewer's reload in a virtual environment on Windows.** There a
+  venv's `python.exe` is a launcher that starts the real Python as one more
+  process, so the app did not recognise the watcher as its parent, became a
+  watcher itself and started copies of the app without end. The app now
+  recognises the watcher one step up as well. Reported by the ApkPyGame
+  authors.
+- **The Previewer's reload test on Linux:** an error's file name was taken from
+  a Windows path with `os.path.basename`, which on Linux kept the whole path.
+- **A number handed to a function stays a number in a list.** `made(n)` with
+  `return [n, 1]` showed `['2', 1]` when another function had a parameter
+  called `n`: the parameters were read as one scope for the whole file.
+- **What answered something else in silence now stops the build, with the
+  reason:** `a @ b` (it was `""`); `{**d, "b": 2}` (it lost `d`); a dict with
+  numbers for keys where its keys are read back (`str(d)`, `for k in d`,
+  `sorted(d)`, `most_common()` showed `'1'` for `1` -- looking a key up, `d[1]`,
+  `1 in d`, `d.get(1)`, works); and a function one call gives a number and
+  another text, that puts the value in a list (`[n]` showed `['2']` for 2).
+- **`[*q]` and `(*xs, 3)`** showed `['']` and `('', 3)`.
+- **`int(sum(prices))` with decimals gives the whole part**, as in Python.
+  It stopped with `ValueError: invalid literal for int() with base 10:
+  '6.75'`: the sum was read back as text. The same for `int(a - b)`.
+- **`7.0 % 0` says `float modulo by zero`**, Python's words; it said
+  `float modulo`.
+- **`if xs:` inside a function is false for an empty list passed in.** The
+  list arrived as its JSON text, `"[]"`, which is not empty, so
+  `def first(xs): return xs[0] if xs else None` answered `""` for `first([])`
+  instead of `None`. A parameter that every call fills with a list or a dict
+  is one inside the function now, the way a parameter that every call fills
+  with a number already was. `", ".join(d)` of a dict joins its keys.
+- **Python that answered something else, in silence:** `if x:` on an item of a
+  list (`[]`, `{}` and `None` in a list were true); `s.startswith(("a", "b"))`
+  and `endswith()` with a tuple (they looked for the text of the tuple);
+  `list("abc")` (it gave `"abc"` back); `(a, b), c = ...` (the inner pair was
+  lost); `str(re.findall(...))` (it showed `["1","22"]`, not `['1', '22']`).
+- **`True + True` is 2.** It stopped in javac.
+- **What stopped in javac, far from its line, stops the build at that line
+  with what to write instead:** `def f(*args)` and `def f(**kwargs)` when the
+  body reads them, `f(*items)` and `cart.add(**options)` on the app's own
+  functions and methods, `b"..."` and `2j`. A `*_` the body never reads is
+  left out.
+- **The advice for builtins is up to date.** `print`, `any`, `all`, `zip` and
+  `enumerate` were still named as not translated; `range()`, `zip()` and
+  `enumerate()` used as a value now say they translate as the list of a
+  `for`.
+- **A label's own `background-color` in the Previewer.** The phone has drawn
+  it, with the label's padding and corners; the Previewer drew the parent's,
+  so a pill badge was plain text. It is drawn now, rounded, over whatever is
+  behind the label.
+- **The contrast check (`U2035`) reads a see-through background over what is
+  behind it**, and a text colour with alpha over its background. White text on
+  a translucent white card on a red screen was reported at 1.00:1, and text at
+  60% white at the ratio of full white.
+- **A chart is as wide as its `width`.** `chart(kind="ring")` with
+  `width: 92px` filled the whole line on the phone, so the text beside a ring
+  in a row was squeezed to a sliver and wrapped one letter per line. The
+  Previewer keeps the width too.
+- **A flex row lays out what is in it the way CSS does, on the phone.** A
+  column with no width starts as wide as its content (it was as wide as the
+  row, so seven day columns were cut to equal slices and clipped the circles
+  inside them), and a label or a button with `width: 48px` is that wide (it
+  was as wide as its text).
+- **A grid card is measured at the width of its cell.** It was measured at the
+  width of the grid and then put in half of it, so a title that wrapped to a
+  second line pushed the text under it out of the card.
+- **A rule's shorthand wins over a wider rule's longhand.** With
+  `label { padding-left: 0 }` and `badge { padding: 6px 12px }`, the badge has
+  12px at the left, as in CSS; it had 0. The same for `margin`,
+  `border-radius` and `border`.
+- **The Previewer:** a long screen with a gradient took minutes to draw (the
+  gradient was composed again for every label on it); a rounded label (an
+  avatar, a badge) drew and cleared itself every 45 ms, and a screenshot
+  caught it as a dark square half the time; an empty 32x32 circle was drawn
+  32x44; a label with a `width` in a flex row stayed as narrow as its text; a
+  button with `padding: 8px 0px` got the default side padding and broke a
+  short word letter by letter; and a narrow child in a column ignored the
+  column's `align-items`.
+- **Screens open faster on the phone.** A flex or grid box measured each child
+  three times, and each of those measured its own children three times: a
+  label four boxes deep was measured 81 times before the first frame. A child
+  is now measured again only when the answer can change, and the box's own
+  settings are read once instead of on every pass -- a profile screen spent
+  105 ms measuring and now spends 61. The first `web_page()` of the app no
+  longer costs its screen 130 ms: the WebView is loaded while the first
+  screen sits idle. And `shimmer` draws only while it is on screen, at 60
+  frames a second; it kept a screen nobody saw redrawing 120 times a second.
+- **A CSS value written over several lines is read.** A `background:` with
+  three gradients, one per line, was dropped without a word.
+- **A label with only a border is drawn with it in the Previewer** (an answer
+  letter in a box).
+- **A row's chip that hugs its content grows with it in the Previewer.** A
+  chip measured before its text arrived kept that first width and cut
+  "185 XP" to "1".
+- **A button wears its stylesheet's padding.** It was only on its shape, and
+  MaterialButton's own 16dp at the sides beat it: `padding: 8px 0px` on seven
+  keys in a row broke "Tab" into one letter per line.
+- **`apkpy run --release` makes an APK that installs.** It was unsigned, and
+  a phone refuses an unsigned APK, so `--usb` and `--qr` installed nothing.
+  It is now signed with the debug key, as a debug build is. The Play refuses
+  an app signed with that key, so a published build is still made with
+  `apkpy release`.
+- **An outlined or text button is no longer reported at 1.00:1 contrast.**
+  Its background is see-through, and the check (`U2035`) read its primary
+  words on the primary colour instead of on what is behind the button.
+- **`inputs(type=...)` with a type ApkPy does not make stops the build with
+  a clear message**, and suggests the closest one (`type="pasword"`). A
+  `type="phone"` field was left out of the phone's screen in silence, and the
+  build then stopped in javac on a field it could not find.
+
+### Tests
+
+- 2,993 unit tests, 260 transpile checks and 310 game tests, all passing.
+  Programs written for each piece of the language -- 368 of them -- ran as
+  generated Java on the JVM and in CPython. By how often each piece is used,
+  95.1% of the language now gives CPython's answer on the phone; the rest
+  stops the build at its line, but for whole numbers past 64 bits.
+- The games: their tests with pytest, and the engine's own Java tests. The
+  eight new templates, the menus and the RPG were played on a phone (a Xiaomi
+  with Android 16), and a replay ends in the same state there as on the PC.
+- The four showcase apps were made again and every tab opened on that phone.
+
+---
+
 ## [1.14.2] - 2026-10-30
 
 Sorting with `key=` and the `json` module: `sorted()`, `list.sort()`, `min()`
