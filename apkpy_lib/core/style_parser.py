@@ -425,6 +425,7 @@ COMPONENT_ARGUMENTS = {
     'grid': frozenset(('cols', 'id', 'items', 'on_click', 'parent',
         'screen')),
     'pager': frozenset(('id', 'parent', 'screen')),
+    'progress': frozenset(('id', 'max', 'parent', 'screen', 'value')),
     'web_page': frozenset(('html', 'id', 'parent', 'screen', 'url')),
     'segmented': frozenset(('check', 'icons', 'id', 'multiple', 'on_change', 'options',
         'parent', 'required', 'screen', 'selected')),

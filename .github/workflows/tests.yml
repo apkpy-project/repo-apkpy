@@ -9,6 +9,11 @@
 #   - a display for the Previewer's tests (Tk): xvfb on Linux; Windows has one
 #   - a JDK for the tests that compile and run ApkPy's Java against a small
 #     stand-in Android (they are skipped without one)
+#   - the org.json jar those tests compile against, which a machine that has
+#     built an app gets from Gradle: fetched here from Maven Central, pinned
+#     by its SHA-256, into the folder Gradle would have used. Without it the
+#     tests that compare the Java's answers with CPython's were skipped
+#     here and ran only on the maintainer's machine (added on 2026-11-16)
 #   - PortAudio for sounddevice on Linux
 # The tests that need android.jar look for an Android SDK and are skipped
 # without one; GitHub's Ubuntu and Windows images come with one.
@@ -70,6 +75,15 @@ jobs:
       - name: System libraries (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y xvfb python3-tk libportaudio2
+      - name: org.json for the JVM tests
+        shell: bash
+        run: |
+          dir="$HOME/.gradle/caches/modules-2/files-2.1/org.json/json/20160810/aca5eb39e2a12fddd6c472b240afe9ebea3a6733"
+          mkdir -p "$dir"
+          curl -fsSL --retry 3 -o "$dir/json-20160810.jar" \
+            https://repo1.maven.org/maven2/org/json/json/20160810/json-20160810.jar
+          echo "bf51c9013128cb15201225e51476f60ad9116813729040655a238d2829aef8b8  $dir/json-20160810.jar" \
+            | sha256sum -c -
       # With the crypto extra: the Previewer's AES, which the suites check.
       - name: Install ApkPy from this checkout
         run: python -m pip install -e ".[crypto]"
@@ -83,22 +97,28 @@ jobs:
         env:
           PYTHONIOENCODING: utf-8
         run: python -W ignore -m unittest discover -s .
+      # The steps below run even when the feature tests fail (a step is
+      # skipped after a failure unless it says otherwise): a failure there
+      # used to hide whether the core and the games were fine. A cancelled
+      # run still stops.
       - name: Core tests
+        if: ${{ !cancelled() }}
         run: python -m unittest discover -s tests -q
       # Games (apkpy_lib.game). Their tests run with pytest; the slow ones open
       # Java and Tk windows for seconds each and stay out of here. The engine's
       # own tests (Java) need only the JDK.
       - name: Game tests (Linux)
-        if: runner.os == 'Linux'
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
         run: |
           python -m pip install pytest
           xvfb-run -a python -m pytest tests/game -m "not slow" -q -p no:cacheprovider
       - name: Game tests (Windows)
-        if: runner.os == 'Windows'
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
         env:
           PYTHONIOENCODING: utf-8
         run: |
           python -m pip install pytest
           python -m pytest tests/game -m "not slow" -q -p no:cacheprovider
       - name: Game engine tests (Java)
+        if: ${{ !cancelled() }}
         run: python tools/game/test_engine.py

@@ -81,6 +81,8 @@ def _fold(source):
     return ast.unparse(module_constants.fold(ast.parse(source)))
 
 
+@unittest.skipUnless(hasattr(ast, "unparse"),
+                     "ast.unparse() is 3.9+: these read the rewritten source back as text")
 class TheFoldTests(unittest.TestCase):
     def test_a_value_worked_out_from_names_above_it(self):
         text = _fold("A = [1, 2]\nB = sum(A) * 10\n")
@@ -111,6 +113,8 @@ def _renamed(source):
     return ast.unparse(java_names.rename(ast.parse(source)))
 
 
+@unittest.skipUnless(hasattr(ast, "unparse"),
+                     "ast.unparse() is 3.9+: these read the rewritten source back as text")
 class TheRenameTests(unittest.TestCase):
     def test_a_java_keyword_and_its_keyword_argument(self):
         text = _renamed("def f(new):\n    return new\n\n\nf(new=1)\n")

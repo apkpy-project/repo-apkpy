@@ -120,6 +120,35 @@ mode too: `appearance.set("system")` makes the app follow the phone.
   targets and low-contrast text are reported before the app ships.
 - **Your own Java** when you need something ApkPy does not wrap.
 
+## Games
+
+An app can have a game: 2D, or 2.5D in the style of the DS-era RPGs, written
+in Python and run by a Java engine that is the same on the phone and on the PC.
+The engine, its templates and the Studio are ApkPyGame, by
+[Rúben Rego](https://github.com/rtvr5656), part of ApkPy since 1.15.
+
+```bash
+apkpy start MyGame --game platformer   # or shooter, runner, bricks, adventure,
+cd MyGame                              #    tap, puzzle, world, monster-rpg
+apkpy game play                        # the game on your desktop
+apkpy game studio                      # the Studio
+```
+
+![Eight of the games apkpy start --game makes: a platformer, rooms with keys and doors, the title of the monster RPG, a shooter, a brick breaker, a tap game, a grid puzzle and a 2.5D valley](assets/games.png)
+
+<sub>Each one is a whole short game, with its art, its sounds, a pause and a
+results screen. Pictured by the engine on a PC.</sub>
+
+The Studio is one window to make the game without code: objects and their
+components, scenes and their rules, levels painted tile by tile, pixel art,
+sounds, and the game playing inside the window. It writes your game's Python
+as you would, and changes only the line that changed.
+
+![The Studio's level editor: a platformer level with coins, bricks and a slime, the list of levels on the left and the tiles on the right](assets/studio-levels.png)
+
+[Your first game](https://repo-apkpy.pages.dev/games/) goes from an empty file
+to a game on the phone, and covers each template and the Studio.
+
 ## Compiled, not embedded
 
 ApkPy compiles your Python to Java when you build, and no interpreter ships in

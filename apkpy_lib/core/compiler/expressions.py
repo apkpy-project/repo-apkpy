@@ -314,7 +314,24 @@ def _truthy_java(node, val_to_java):
         return "_apkpyTruthy(%s)" % _RAW_LOOP_VARS[0][node.id]
     if _kind_from(val_to_java, node) in ('list', 'dict'):
         return "(_apkpyLen(String.valueOf(%s)) > 0)" % val_to_java(node)
+    if _arith_result(node):
+        # row["n"] % 2, decided when the app runs: its answer as the number it
+        # is. As text, "0" was true.
+        return "_apkpyTruthy(_apkpyArithValue(String.valueOf(%s)))" % val_to_java(node)
     return "_apkpyTruthy(%s)" % val_to_java(node)
+
+
+_TRUTH_OPS = (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow,
+              ast.BitAnd, ast.BitOr, ast.BitXor, ast.LShift, ast.RShift)
+
+
+def _arithmetic_truth(node):
+    """`if i % 2:`, `if n - 5:`, `if -x:` -- arithmetic asked for its truth,
+    false at zero as in Python. It stopped the build: only comparisons,
+    names and calls were read as a condition."""
+    if isinstance(node, ast.BinOp):
+        return isinstance(node.op, _TRUTH_OPS)
+    return isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd, ast.Invert))
 
 
 # isinstance(x, T): answered when the app is built where the source says what
@@ -1817,6 +1834,9 @@ def _cond_shape_supported(node):
                 or isinstance(node.ops[0], (ast.In, ast.NotIn, ast.Is, ast.IsNot)))
     if isinstance(node, ast.Name):
         return True
+    # if i % 2:  |  if n - 5:  |  if -x:  -- the truth of a number, false at zero.
+    if _arithmetic_truth(node):
+        return True
     # if d["done"]:  |  if is_valid(x):  |  if q.strip():  -- the truth of a value.
     if isinstance(node, ast.Subscript):
         return True
@@ -1903,6 +1923,8 @@ def _cond_to_java(node, val_to_java, bool_names=()):
         return _truthy_java(node, val_to_java)
     if isinstance(node, ast.Constant) and isinstance(node.value, bool):
         return 'true' if node.value else 'false'
+    if _arithmetic_truth(node):
+        return _truthy_java(node, val_to_java)
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in _STR_BOOL_PREDICATES:
         n_args, tmpl = _STR_BOOL_PREDICATES[node.func.attr]
         base = val_to_java(node.func.value)

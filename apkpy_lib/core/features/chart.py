@@ -205,6 +205,7 @@ public class ApkpyChart extends View {
         this.ringValue = value;
         this.ringMax = max;
         this.center = center;
+        describeProgress();
         invalidate();
     }
 
@@ -215,7 +216,15 @@ public class ApkpyChart extends View {
 
     public void setValue(float value) {
         this.ringValue = value;
+        describeProgress();
         invalidate();
+    }
+
+    /** What TalkBack says for a progress bar: "72%", as the ring shows it. */
+    private void describeProgress() {
+        if ("progress".equals(kind)) {
+            setContentDescription(Math.round(ringFraction(ringValue, ringMax) * 100) + "%");
+        }
     }
 
     public void setOnItemClick(OnItemClick listener) {
@@ -317,6 +326,15 @@ public class ApkpyChart extends View {
         return Math.max(0f, Math.min(1f, value / max));
     }
 
+    /** chart_rules.progress_bar: {corner radius, width of the filled part}. */
+    static float[] progressBar(float fraction, float width, float height, float radius) {
+        float r = radius < 0 ? height / 2f : Math.max(0f, Math.min(radius, height / 2f));
+        if (fraction <= 0 || width <= 0) {
+            return new float[]{r, 0f};
+        }
+        return new float[]{r, Math.min(width, Math.max(fraction * width, 2 * r))};
+    }
+
     static String sliceColor(int index, String itemColor, int series) {
         if (itemColor != null && !itemColor.isEmpty()) {
             return itemColor;
@@ -394,8 +412,21 @@ public class ApkpyChart extends View {
             drawAxes(canvas, width);
         } else if ("donut".equals(kind)) {
             drawDonut(canvas, width);
+        } else if ("progress".equals(kind)) {
+            drawProgress(canvas, width);
         } else {
             drawRing(canvas, width);
+        }
+    }
+
+    private void drawProgress(Canvas canvas, float width) {
+        float[] bar = progressBar(ringFraction(ringValue, ringMax), width, drawHeight, cornerRadius);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(track);
+        canvas.drawRoundRect(new RectF(0, 0, dp(width), dp(drawHeight)), dp(bar[0]), dp(bar[0]), paint);
+        if (bar[1] > 0) {
+            paint.setColor(series);
+            canvas.drawRoundRect(new RectF(0, 0, dp(bar[1]), dp(drawHeight)), dp(bar[0]), dp(bar[0]), paint);
         }
     }
 

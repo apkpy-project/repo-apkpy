@@ -314,6 +314,27 @@ class TheGradientUnderWidgets(unittest.TestCase):
         self.assertAlmostEqual(first.getpixel((10, 10))[0], 128, delta=1)
         self.assertIsNot(gradient_under.flatten(picture, (255, 255, 255)), first)
 
+    def test_a_size_tk_gives_back_as_an_object(self):
+        # The Tk of Python 3.8 to 3.11 gives a label's padx and bd as a
+        # Tcl_Obj: int() refused it, and the label lost its rounded or
+        # gradient background in the Previewer. This stands for one.
+        from apkpy_lib.features import gradient_under
+
+        class TclObj(object):
+            def __str__(self):
+                return "26"
+
+        root = _root()
+        try:
+            label = tk.Label(root, text="M")
+            with self.assertRaises(TypeError):
+                int(TclObj())
+            self.assertEqual(gradient_under._px(label, TclObj()), 26)
+            self.assertEqual(gradient_under._px(label, 3), 3)
+            self.assertEqual(gradient_under._px(label, "0"), 0)
+        finally:
+            root.destroy()
+
     def test_a_shaped_label_paints_once(self):
         from apkpy_lib import ui
         from apkpy_lib.features import gradient_under

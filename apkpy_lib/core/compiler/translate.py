@@ -26,6 +26,8 @@ from ..features import location_background as location_background_feature
 from ..features import rich_content as rich_content_feature
 from ..features import data as data_feature
 from ..features import jobs as jobs_feature
+from ..features import module_flow as module_flow_feature
+from ..features import progress as progress_feature
 from ..features import bluetooth as bluetooth_feature
 from ..features import native as native_feature
 from .. import dead_methods
@@ -239,6 +241,9 @@ def _prepare_android_analysis(python_code, source_name="writehere.py",
     _refuse_matmul(tree)
     # [*xs, 3], (*xs, 3), {*q}: the joined list they are, written out.
     tree = _Unstar().visit(tree)
+    # progress(40) is chart(kind="progress", value=40), as in the Previewer:
+    # from here on it is read as a chart.
+    progress_feature.expand(tree)
     # A @native function written in Python becomes the native.java() block it
     # translates to, before anything else reads the module: from here on it
     # is a block like the ones written in Java.
@@ -392,6 +397,8 @@ def _prepare_android_analysis(python_code, source_name="writehere.py",
     _NUMERIC_CONSTS[0].update(
         {name: kind for name, (_, kind) in _GLOBALS[0].items() if kind is not None})
     transpiler.value_called = _functions_used_as_values(tree)
+    module_flow_feature.refuse_rebound_reads(tree)
+    module_flow_feature.refuse_mixed_storage_reads(tree)
     transpiler.visit(tree)
     _STATE_NAMES[0] = set(getattr(transpiler, 'reactive_states', {}) or {})
     gestures_feature.mark_reorder_positions(transpiler)
@@ -452,6 +459,34 @@ def _prepare_android_analysis(python_code, source_name="writehere.py",
     }
     _install_analysis_globals(analysis)
     return analysis
+
+
+def _keep_app_files_xml(output_files):
+    """res/raw/apkpy_app_keep.xml: every picture and sound of the app's own
+    that went into res/, kept by a release build.
+
+    `apkpy release` shrinks resources, and the shrinker keeps only what the
+    code names. A picture named in the app's data -- {"art": "art/cover.jpg"}
+    in a list a row shows -- is found by name while the app runs, which the
+    shrinker cannot follow: the signed Afterglow showed a row without its
+    cover, where the debug build showed it (18-11-2026). Only files ApkPy
+    copied from the app are listed: the rest it writes can still go."""
+    kept = set()
+    for name, value in output_files.items():
+        if not (isinstance(value, tuple) and value and value[0] == "COPY_FILE"):
+            continue
+        parts = name.split("/")
+        if len(parts) != 3 or parts[0] != "res":
+            continue
+        kind = parts[1].split("-")[0]
+        if kind not in ("drawable", "raw", "mipmap"):
+            continue
+        kept.add("@%s/%s" % (kind, os.path.splitext(parts[2])[0].split(".")[0]))
+    if not kept:
+        return None
+    return ('<?xml version="1.0" encoding="utf-8"?>\n'
+            '<resources xmlns:tools="http://schemas.android.com/tools"\n'
+            '    tools:keep="%s" />\n' % ",".join(sorted(kept)))
 
 
 def translate_python_to_android(python_code, package="com.apkpy.app",
@@ -1887,6 +1922,9 @@ def translate_python_to_android(python_code, package="com.apkpy.app",
         if _lines_map:
             output_files['apkpy/lines.json'] = _lines_json(
                 _lines_map, source_name, python_code)
+        _app_keep = _keep_app_files_xml(output_files)
+        if _app_keep:
+            output_files['res/raw/apkpy_app_keep.xml'] = _app_keep
         return output_files
 
     except Exception as e:

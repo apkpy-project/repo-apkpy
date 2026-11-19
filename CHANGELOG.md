@@ -10,6 +10,90 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.15.1] - 2026-11-19
+
+A number is a condition and a dict keeps whole-number keys as numbers, as in
+Python. `progress()` is a bar with a value, the launcher icon is adaptive,
+the Previewer works on Python 3.8 to 3.11 again, and the games are in the
+README with pictures. Three things that went wrong without a word now stop
+the build with the line and what to write.
+Notes: [releases/1.15.1.md](releases/1.15.1.md).
+
+### Added
+
+- **A number as a condition.** `if i % 2:`, `while n // 10:`, `x if n - 5
+  else y`, `[i for i in range(n) if i % 3]` and `not i % 3`: 0 and 0.0 are
+  false and every other number is true, as in Python. An arithmetic
+  condition used to be refused (`U2033`); at the top of the file it is
+  translated too.
+- **Whole-number keys come back as numbers.** `counts[n] = counts.get(n, 0) + 1`
+  then `str(counts)` is `{1: 3, 2: 1}`; `for k in d`, `for k, v in d.items()`,
+  `sorted(d)`, `max(d)`, `list(d)` and `f"{d}"` give numbers, as in Python.
+  It used to stop the build (`U2033`), because on the phone a dict's keys are
+  text; when every key the dict is ever given is a whole number, the keys are
+  now turned back into numbers where they are read.
+- **`progress(value, max=100)`**: a bar that fills, with `set_value(v)`.
+  Drawn natively, from the same numbers in the Previewer, with `color`,
+  `track-color`, `height` and `border-radius`; TalkBack reads the percentage.
+  It is `chart(kind="progress")`.
+- **An adaptive launcher icon.** From the one PNG in `apkpy.toml`, the build
+  writes the layers Android 8 and later cut to the phone's shape: a picture
+  with a filled background fills it in its own colour, a transparent one sits
+  in the middle on `icon_background` (new in `apkpy.toml`, white by default).
+  It used to be shrunk inside a white circle. Android 12's starting screen
+  uses it too.
+- **Pictures of the games and the Studio** in the README and on the games
+  page: each kind `apkpy start --game` makes, and the Studio's New game,
+  Play, Objects, Scenes and Levels.
+- `AGENTS.md` says where a game lives (`game/`), the commands that make and
+  open one, and sends the assistant to the games guide before it writes one.
+
+### Fixed
+
+- **A signed release lost the pictures an app names in its data.**
+  `apkpy release` shrinks resources, keeping only what the code names; a
+  picture named in a list a row shows (`{"art": "art/cover.jpg"}`) is found
+  by name while the app runs, so it was taken out, and the row showed no
+  picture. The debug build kept it. Every picture and sound the app brings is
+  now listed for the shrinker to keep (`res/raw/apkpy_app_keep.xml`). Seen
+  on the showcase's signed Lumen and Afterglow of 1.15.0, rebuilt with this.
+- **The Previewer on Python 3.8 to 3.11.** A label with a gradient behind it
+  stopped the Previewer: Tk on those versions gives a size such as `padx`
+  back as an object, which `int()` refuses. Python 3.12 and later gave a
+  number, which is why it was not seen.
+- **A name the top of the file sets inside if, for or while, read by a
+  function.** `res = "odd"` inside an `if` at the top, read later by a
+  button's function, became a variable of the screen's start that the
+  function could not see: the Gradle build stopped on Java that javac
+  refuses. It is refused now, with the line, and what to do instead (`U2033`).
+- **`x = storage.get("k") + "!"` at the top of the file.** A saved value read
+  inside a bigger expression (`int(...)`, `or "none"`, `+ "!"`) left the name
+  undeclared, and the build stopped with `cannot find symbol` on every line
+  that used it. It is refused now, with the line (`U2033`); on a line of its
+  own, `x = storage.get("k")`, it works as before.
+- **A dict with tuples for keys.** `{(1, 2): 'a'}` showed as
+  `{'[1,2]': 'a'}` in `str(d)`, with no word. Looking a key up works; reading
+  the keys back is refused now, with the line (`U2033`).
+
+### Tests
+
+- 3,026 unit tests, 260 transpile checks and 310 game tests, all passing.
+- The 368 programs that measure the language, one for each piece of it, give
+  CPython's answer on the phone for 95.2% of it by how often each piece is
+  used (95.1% in 1.15.0), and none answers differently without a word.
+- The tests run on GitHub's machines now have the org.json jar the JVM tests
+  compile against, fetched from Maven Central and checked against its
+  SHA-256: the tests that compare the Java's answers with CPython's were
+  skipped there. The games' tests run even when another step fails.
+- Tests that only passed on Python 3.12 or later, or with files only the
+  maintainer's machine has, now pass or skip with the reason on every Python
+  the CI runs (3.8 to 3.14).
+- The order of a set's items differs between CPython 3.8 and 3.14 and the
+  versions between: the compatibility page says so, and the test that holds
+  the order runs on 3.9 to 3.13.
+
+---
+
 ## [1.15.0] - 2026-11-14
 
 An app can have a game, written in Python and made with a Studio, and twelve

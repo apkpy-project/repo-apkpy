@@ -37,6 +37,50 @@ You write the whole app in Python with a CSS-style design system, see it on your
 
 ---
 
+## ApkPy 1.15.1 — numbers as conditions, a progress bar and an adaptive icon
+
+A number is a condition and a dict keeps whole-number keys as numbers, as in
+Python:
+
+```python
+from apkpy_lib import *
+
+home = Screen(id="home")
+upload = progress(0, id="upload", screen=home)
+out = label("", id="out", screen=home)
+sent = 0
+
+
+def send_more():
+    global sent
+    sent = sent + 25
+    upload.set_value(sent)
+    counts = {}
+    for n in [1, 2, 1, 3, 1]:
+        counts[n] = counts.get(n, 0) + 1
+    odd = [n for n in range(10) if n % 2]
+    out.set_value(str(counts) + " " + str(odd))
+
+
+button("Send", command=send_more, screen=home)
+run(start_screen=home)
+```
+
+On the phone, as in Python, the label reads `{1: 3, 2: 1, 3: 1} [1, 3, 5, 7, 9]`.
+`progress()` is a bar with a value, drawn natively. The launcher icon made
+from the PNG in `apkpy.toml` is the adaptive kind Android 8 and later cut to
+their own shape. The Previewer works on Python 3.8 to 3.11 again, and a
+signed release keeps every picture the app names in its data.
+
+The games that came in 1.15.0, as `apkpy start --game` makes them:
+
+<p>
+  <img src="https://repo-apkpy.pages.dev/assets/games.png" width="600" alt="Eight of the games apkpy start --game makes, pictured by the engine on a PC">
+</p>
+
+Upgrade with `python -m pip install --upgrade apkpy==1.15.1`. See the
+[1.15.1 notes](https://repo-apkpy.pages.dev/version-1.15.1/).
+
 ## ApkPy 1.15.0 — games, gradients and the keyboard
 
 An app can have a game: `apkpy start Hopper --game platformer` makes one, 2D

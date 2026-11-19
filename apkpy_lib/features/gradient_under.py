@@ -218,8 +218,8 @@ def paint_label(label, region):
     W, H = label.winfo_width(), label.winfo_height()
     if W < 2 or H < 2:
         return
-    edge = int(state["bd"]) + int(state["highlightthickness"])
-    padx, pady = int(state["padx"]), int(state["pady"])
+    edge = _px(label, state["bd"]) + _px(label, state["highlightthickness"])
+    padx, pady = _px(label, state["padx"]), _px(label, state["pady"])
     text = str(tk.Misc.cget(label, "text"))
     if text:
         tw = max(0, label.winfo_reqwidth() - 2 * (edge + padx))
@@ -234,7 +234,7 @@ def paint_label(label, region):
     side = _VERTICAL.get(anchor)
     y_t = top if side == "n" else (bottom - th if side == "s" else (top + bottom - th) / 2.0)
     centre_x, centre_y = x_t + tw / 2.0, y_t + th / 2.0
-    hl = int(state["highlightthickness"])
+    hl = _px(label, state["highlightthickness"])
     inner_w, inner_h = W - 2 * hl, H - 2 * hl
     centre_x, centre_y = centre_x - hl, centre_y - hl
     if centre_x <= inner_w / 2.0:
@@ -259,6 +259,13 @@ def paint_label(label, region):
     finally:
         state["painting"] = False
     state["painted"] = True
+
+
+def _px(label, value):
+    """A size Tk gave back, in pixels. The Tk of Python 3.8 to 3.11 gives
+    padx, bd and the like as a Tcl_Obj, which int() refuses: the label was
+    left without its rounded or gradient background in the Previewer."""
+    return int(round(float(label.winfo_fpixels(str(value)))))
 
 
 def _restore(label, state):

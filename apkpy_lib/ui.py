@@ -12246,6 +12246,16 @@ class AppPreview:
                     hits.append(('slice', (cx, cy, size / 2.0 - thickness, size / 2.0, start, sweep), index))
                 if comp.kwargs.get('center') is not None:
                     texts.append((cx, cy, str(comp.kwargs.get('center')), 'center', colors['center'], True))
+            elif kind == 'progress':
+                fraction = rules.ring_fraction(comp.kwargs.get('value', 0), comp.kwargs.get('max', 100))
+                radius, filled = rules.progress_bar(
+                    fraction, width, draw_h,
+                    float(radius_match.group(1)) if radius_match else None)
+                pen.rounded_rectangle([0, 0, width * S - 1, draw_h * S - 1], radius * S,
+                                      fill=_rgba(colors['track']))
+                if filled > 0:
+                    pen.rounded_rectangle([0, 0, filled * S - 1, draw_h * S - 1], radius * S,
+                                          fill=_rgba(colors['series']))
             else:   # ring
                 thickness = float(stroke_match.group(1)) if stroke_match else rules.RING_THICKNESS
                 size = max(10, draw_h - 8)
@@ -15810,6 +15820,25 @@ def chart(items=None, kind="bar", x="label", y="value", id=None, screen=None,
     elif screen is not None:
         screen._add(comp)
     return comp
+
+
+def progress(value=0, max=100, id=None, screen=None, parent=None):
+    """A bar that fills from 0 to ``max``: how far an upload, a form or a
+    goal has got. ``set_value(v)`` moves it::
+
+        upload = progress(0, id="upload", screen=home)
+        upload.set_value(40)          # 40 of 100
+
+        steps = progress(3, max=5, screen=home)
+
+    It is drawn natively, as a chart is (it is ``chart(kind="progress")``),
+    and TalkBack reads it as a percentage. CSS on its id: ``color`` (the
+    filled part, the theme's primary by default), ``track-color``,
+    ``height`` (8 by default) and ``border-radius`` (half the height).
+    For a value with its percentage in the middle, there is
+    ``chart(kind="ring")``.
+    """
+    return chart(kind="progress", value=value, max=max, id=id, screen=screen, parent=parent)
 
 
 class ChoiceDef(ComponentDef):

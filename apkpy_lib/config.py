@@ -52,6 +52,8 @@ def default_config(project_dir="."):
         "version_name": "1.0",
         "version_code": 1,
         "icon": None,
+        # The colour behind a transparent icon on Android 8+ (app_icon.py).
+        "icon_background": None,
     }
 
 
@@ -116,6 +118,15 @@ def load_config(project_dir="."):
         else:
             cfg["_warnings"].append(f"icon not found: {icon} — the app will keep the default icon.")
 
+    background = app.get("icon_background")
+    if isinstance(background, str) and re.match(r'^#[0-9a-fA-F]{6}$', background.strip()):
+        cfg["icon_background"] = background.strip().upper()
+    elif background is not None:
+        cfg["_warnings"].append(
+            f"icon_background must be a colour like '#1E88E5' (was {background!r}) — "
+            "a transparent icon sits on white."
+        )
+
     return cfg
 
 
@@ -138,6 +149,9 @@ version_code = 1
 # (Optional) App icon — a square PNG (ideally 512x512).
 # Uncomment and point it to your file (needs Pillow: pip install Pillow):
 # icon = "icon.png"
+# A picture with a filled background fills the phone's icon shape, in its own
+# colour. One with a transparent background sits on this colour (white if not set):
+# icon_background = "#FFFFFF"
 '''
 
 

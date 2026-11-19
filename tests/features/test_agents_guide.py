@@ -82,6 +82,9 @@ class TheGuideIsTrue(unittest.TestCase):
         for path in re.findall(re.escape(agents_guide.DOCS) + r"/([a-z0-9/._-]*)", GUIDE):
             path = path.rstrip("/")
             page = docs / (path if path.endswith(".txt") else path + ".md")
+            # games/ is the page games/index.md, as MkDocs serves it.
+            if not page.exists() and not path.endswith(".txt"):
+                page = docs / path / "index.md"
             self.assertTrue(page.exists(), path)
 
     def test_it_says_which_version_it_was_written_for(self):

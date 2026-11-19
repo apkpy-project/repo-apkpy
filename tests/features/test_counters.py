@@ -151,10 +151,13 @@ class TheRefusalTests(unittest.TestCase):
                          'button("1", id="b1", command=go, screen=home)\nrun(start_screen=home)\n')
         self.assertEqual(_generated(source, ["ab"]), _cpython(source, ["ab"]))
 
-    def test_a_dict_with_number_keys_shown(self):
-        text = _refused('def go():\n    sq = {}\n    for i in range(3):\n        sq[i] = i * i\n'
-                        '    out.set_value(str(sorted(sq)))\n', head="")
-        self.assertIn('sq has numbers for keys', text)
+    def test_a_dict_with_whole_number_keys_shown(self):
+        # Refused until 1.15.1; every key is a whole number, so the keys are
+        # read back as numbers (features/int_keys.py).
+        source = HEAD + ('def go():\n    sq = {}\n    for i in range(3):\n        sq[i] = i * i\n'
+                         '    out.set_value(str(sorted(sq)) + str(sq))\n\n\n'
+                         'button("1", id="b1", command=go, screen=home)\nrun(start_screen=home)\n')
+        self.assertEqual(_generated(source, ["x"]), _cpython(source, ["x"]))
 
 
 @unittest.skipUnless(HAVE_ANDROID, "no JDK or no Android SDK on this machine")

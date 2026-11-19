@@ -6,6 +6,7 @@ from ..features import item_assignment as item_feature
 from ..features import classes as classes_feature
 from ..features import sets as sets_feature
 from ..features import counters as counters_feature
+from ..features import int_keys as int_keys_feature
 from .. import unsupported
 
 from .kinds import _body_kinds, _int_literal, _kind_from, _static_kind
@@ -431,6 +432,13 @@ def _lists_numbers(node):
         and not isinstance(e.value, bool) for e in node.elts)
 
 
+def _lists_whole_numbers(node):
+    """A list or a tuple written out, every item of it a whole number."""
+    return isinstance(node, (ast.List, ast.Tuple)) and bool(node.elts) and all(
+        isinstance(e, ast.Constant) and isinstance(e.value, int)
+        and not isinstance(e.value, bool) for e in node.elts)
+
+
 def _refuse_number_keys_read_back(tree):
     """A dict the source shows has number keys, where its keys are read back.
 
@@ -439,8 +447,12 @@ def _refuse_number_keys_read_back(tree):
     for is written the same way; what reads the keys back gets the text, and
     said nothing: str(d) showed {'1': 'a'}, list(d) ['1'], sorted(d) put
     '10' before '9', Counter([1, 2, 1]).most_common() [('1', 2), ...].
-    Until keys keep their type, that stops the build where it happens.
+
+    A dict every key of which is a whole number, wherever it is given one,
+    is read back with its keys as numbers (features/int_keys.py, 1.15.1).
+    Any other stops the build where its keys are read back.
     """
+    int_keys_feature.reset()
     numbers = _numeric_body_names(tree)
     scopes = [(None, list(getattr(tree, 'body', [])))]
     scopes += [(fn, fn.body) for fn in ast.walk(tree) if isinstance(fn, ast.FunctionDef)]
@@ -456,6 +468,8 @@ def _refuse_number_keys_read_back(tree):
 
     module_dicts, module_known_dicts = {}, set()
     module_lists = []
+    contexts = []
+    tupled = set()
     for fn, statements in scopes:
         nodes = list(own_nodes(statements))
         local = dict(numbers)
@@ -488,8 +502,38 @@ def _refuse_number_keys_read_back(tree):
                 elif node.iter.func.id == 'enumerate' and isinstance(node.target, ast.Tuple) \
                         and node.target.elts and isinstance(node.target.elts[0], ast.Name):
                     counted.add(node.target.elts[0].id)
+        # The loop names that are certainly whole numbers: range(), the count
+        # of enumerate(), and a list of whole numbers written out.
+        whole_lists = {name for name, value in module_lists
+                       if fn is not None and _lists_whole_numbers(value)}
+        for node in nodes:
+            if isinstance(node, ast.Assign) and len(node.targets) == 1 \
+                    and isinstance(node.targets[0], ast.Name) \
+                    and _lists_whole_numbers(node.value):
+                whole_lists.add(node.targets[0].id)
+        whole = set()
+        for node in nodes:
+            if not isinstance(node, (ast.For, ast.comprehension)):
+                continue
+            it = node.iter
+            if isinstance(node.target, ast.Name) and (
+                    _lists_whole_numbers(it) or isinstance(it, ast.Name) and it.id in whole_lists
+                    or isinstance(it, ast.Call) and isinstance(it.func, ast.Name)
+                    and it.func.id == 'range'):
+                whole.add(node.target.id)
+            elif isinstance(it, ast.Call) and isinstance(it.func, ast.Name) \
+                    and it.func.id == 'enumerate' and isinstance(node.target, ast.Tuple) \
+                    and node.target.elts and isinstance(node.target.elts[0], ast.Name):
+                whole.add(node.target.elts[0].id)
 
-        def number(node):
+        def whole_number(node, whole=whole, local=local):
+            if isinstance(node, ast.Constant):
+                return isinstance(node.value, int) and not isinstance(node.value, bool)
+            if isinstance(node, ast.Name) and node.id in whole:
+                return True
+            return _numeric_arg_kind(node, local) is False
+
+        def number(node, counted=counted, local=local):
             if isinstance(node, ast.Constant):
                 return not isinstance(node.value, str)
             if isinstance(node, ast.Name) and node.id in counted:
@@ -522,6 +566,12 @@ def _refuse_number_keys_read_back(tree):
                 if isinstance(value, ast.Dict) and any(k is not None and number(k)
                                                        for k in value.keys):
                     found[name] = node
+                elif isinstance(value, ast.Dict) and any(isinstance(k, ast.Tuple)
+                                                         for k in value.keys):
+                    # {(1, 2): 'a'} is kept as {"[1,2]": "a"}: str(d) showed
+                    # {'[1,2]': 'a'}.
+                    found[name] = node
+                    tupled.add(name)
                 elif isinstance(value, ast.DictComp) and number(value.key):
                     found[name] = node
                 elif counters_feature.op_of(value) == 'of' and value.args \
@@ -535,9 +585,19 @@ def _refuse_number_keys_read_back(tree):
                     target.slice, getattr(ast, 'Index')) else target.slice
                 if not isinstance(key, ast.Slice) and number(key):
                     found.setdefault(target.value.id, node)
+                elif isinstance(key, ast.Tuple):
+                    found.setdefault(target.value.id, node)
+                    tupled.add(target.value.id)
         if fn is None:
             module_dicts = found
             module_known_dicts = dicts
+        contexts.append((fn, nodes, number, whole_number, found))
+
+    # A dict that is ever given a key that is not certainly a whole number,
+    # or is filled another way, keeps the refusal; the others are read back
+    # with their keys as numbers (features/int_keys.py).
+    mixed = _not_whole_keyed(contexts) | tupled
+    for fn, nodes, number, whole_number, found in contexts:
 
         def held(node):
             return isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) \
@@ -576,6 +636,8 @@ def _refuse_number_keys_read_back(tree):
             if read is None:
                 continue
             name, line = read
+            if name != 'this dict' and name not in mixed and _rewrite_whole_keys(node):
+                continue
             op = counters_feature.op_of(node)
             if op is not None:
                 # As written: c.most_common(1), str(c).
@@ -585,6 +647,13 @@ def _refuse_number_keys_read_back(tree):
                     else ast.Call(func=ast.Name(id='str', ctx=ast.Load()), args=node.args[:1],
                                   keywords=[])
                 node = ast.copy_location(shown, node)
+            if name in tupled:
+                unsupported.raise_unsupported(
+                    node, cause='%s has tuples for keys (line %d). On the phone a tuple key is '
+                                "kept as text, (1, 2) as '[1,2]', so reading the keys back "
+                                "gives the text: str(d) would show {'[1,2]': ...}. Looking a "
+                                'key up -- d[(1, 2)], (1, 2) in d -- works.' % (name, line),
+                    suggestions=['Keep the pairs in a list instead: rows.append([1, 2, value]).'])
             unsupported.raise_unsupported(
                 node, cause='%s has numbers for keys (line %d). On the phone the keys of a '
                             'dict are kept as text, the JSON way, so reading them back gives '
@@ -594,6 +663,82 @@ def _refuse_number_keys_read_back(tree):
                 suggestions=['Use text keys: d[str(n)] = ..., and int(k) where you read '
                              'them back.',
                              'Or keep the numbers in a list of pairs: rows.append([n, value]).'])
+
+
+def _rewrite_whole_keys(node):
+    """A read of a whole-number-keyed dict's keys, rewritten in place: False
+    when it is a shape features/int_keys.py does not write."""
+    if isinstance(node, ast.For):
+        return int_keys_feature.rewrite_for(node)
+    if isinstance(node, ast.comprehension):
+        return int_keys_feature.rewrite_comprehension(node)
+    if isinstance(node, ast.FormattedValue):
+        return int_keys_feature.rewrite_formatted(node)
+    if isinstance(node, ast.Call) and counters_feature.op_of(node) is None:
+        return int_keys_feature.rewrite_call(node)
+    return False
+
+
+def _not_whole_keyed(contexts):
+    """The names that may hold a dict with a key that is not a whole number:
+    given one anywhere, filled another way, or bound some other way."""
+    mixed = set()
+
+    def names_in(target):
+        return [sub.id for sub in ast.walk(target) if isinstance(sub, ast.Name)]
+
+    for fn, nodes, number, whole_number, found in contexts:
+        if fn is not None:
+            args = fn.args
+            mixed.update(a.arg for a in (list(getattr(args, 'posonlyargs', [])) + list(args.args)
+                                         + list(args.kwonlyargs)
+                                         + [a for a in (args.vararg, args.kwarg) if a]))
+        for node in nodes:
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                value = node.value
+                for target in targets:
+                    if isinstance(target, ast.Name):
+                        if isinstance(value, ast.Dict):
+                            if len(targets) != 1 or any(
+                                    k is None or not whole_number(k) for k in value.keys):
+                                mixed.add(target.id)
+                        elif isinstance(value, ast.DictComp):
+                            if not whole_number(value.key):
+                                mixed.add(target.id)
+                        else:
+                            mixed.add(target.id)
+                    elif not isinstance(target, (ast.Subscript, ast.Attribute)):
+                        mixed.update(names_in(target))
+            if isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                for target in targets:
+                    if isinstance(target, ast.Subscript) and isinstance(target.value, ast.Name):
+                        key = target.slice.value if hasattr(ast, 'Index') and isinstance(
+                            target.slice, getattr(ast, 'Index')) else target.slice
+                        if isinstance(key, ast.Slice) or not whole_number(key):
+                            mixed.add(target.value.id)
+                    elif isinstance(node, ast.AugAssign) and isinstance(target, ast.Name):
+                        mixed.add(target.id)
+            elif isinstance(node, (ast.For, ast.comprehension)):
+                mixed.update(names_in(node.target))
+            elif isinstance(node, (ast.With, ast.AsyncWith)):
+                for item in node.items:
+                    if item.optional_vars is not None:
+                        mixed.update(names_in(item.optional_vars))
+            elif isinstance(node, ast.ExceptHandler) and node.name:
+                mixed.add(node.name)
+            elif isinstance(node, getattr(ast, 'NamedExpr', ())):
+                mixed.add(node.target.id)
+            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+                    and isinstance(node.func.value, ast.Name):
+                attr, owner = node.func.attr, node.func.value.id
+                if attr == 'setdefault':
+                    if not node.args or not whole_number(node.args[0]):
+                        mixed.add(owner)
+                elif attr in ('update', 'fromkeys', '__setitem__', '__ior__'):
+                    mixed.add(owner)
+    return mixed
 
 
 def _refuse_matmul(tree):

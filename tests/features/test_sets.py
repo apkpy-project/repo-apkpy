@@ -10,6 +10,7 @@ constants another way.
 """
 
 import random
+import sys
 import unittest
 
 from apkpy_lib.core.compiler import translate_python_to_android
@@ -151,6 +152,9 @@ class TheAnswersTests(unittest.TestCase):
         self.assertEqual(_generated(APP, inputs), _cpython(APP, inputs))
 
 
+@unittest.skipUnless((3, 9) <= sys.version_info[:2] <= (3, 13),
+                     "the phone keeps the order of CPython 3.9 to 3.13; 3.8 and 3.14 build "
+                     "some sets in another order")
 class TheOrderTests(unittest.TestCase):
     """The order CPython walks a set of numbers in, worked out here."""
 

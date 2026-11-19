@@ -335,7 +335,8 @@ class ModuleReader:
                     'true_body':  self._parse_statements(node.body),
                     'false_body': self._parse_statements(node.orelse),
                 })
-        elif isinstance(test, (ast.BoolOp, ast.UnaryOp, ast.Call, ast.Constant, ast.Name)) \
+        elif isinstance(test, (ast.BoolOp, ast.UnaryOp, ast.Call, ast.Constant, ast.Name,
+                               ast.BinOp)) \
                 and _cond_shape_supported(test):
             # if a and b:  |  if not x:  |  if valor.isdigit():  (and/or/not + predicados)
             self.module_init_cmds.append({

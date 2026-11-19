@@ -50,6 +50,9 @@ for the app to use at run time.
 - `apkpy.toml` -- app name, `application_id`, version and icon.
 - Plain Python modules beside it, imported with `import helpers`: functions,
   classes and constants. Screens, themes and CSS stay in `writehere.py`.
+- `game/` -- a game, when the app has one (`apkpy start NAME --game
+  platformer`): Python for ApkPy's own Java game engine, with its own rules.
+  Read {docs}/games/ before writing in it.
 - The generated Android project is output (`~/.apkpy/build/<name>`). Never
   edit it: change `writehere.py` and build again.
 
@@ -64,6 +67,7 @@ for the app to use at run time.
 | What the app prints on a USB-connected phone, live | `apkpy logs` |
 | Check JDK 17-21 and the Android SDK | `apkpy doctor` |
 | Example apps | `apkpy examples` |
+| A game: a new one / on the desktop / the Studio | `apkpy start NAME --game platformer` / `apkpy game play` / `apkpy game studio` |
 
 A change is finished when the Previewer runs it **and** `apkpy build` passes.
 The Previewer is Python and runs things the translator refuses.
@@ -246,7 +250,7 @@ Never available on the phone: `requests`, `numpy`, `pandas`, `os`,
 | Need | Use |
 | --- | --- |
 | Screens and navigation | `Screen(id, scroll=False)`, `on_click_navigate(screen, data=None)`, `back()` (close this screen -- use it for back arrows, not `on_click_navigate(previous)`), `screen.get_param(key, default)`, `bottom_nav(screens, labels=, icons=)`, `app_bar(title, leading=, actions=)` with `action(icon, command=)` |
-| Components | `label`, `button(text, command=, variant=)`, `inputs(placeholder, type=)`, `image`, `card`, `container`, `row`, `column`, `list_view`, `virtual_collection`, `pager` and `tab`, `chart`, `chips`, `segmented`, `markdown`, `avatar`, `video` |
+| Components | `label`, `button(text, command=, variant=)`, `inputs(placeholder, type=)`, `image`, `card`, `container`, `row`, `column`, `list_view`, `virtual_collection`, `pager` and `tab`, `chart`, `progress`, `chips`, `segmented`, `markdown`, `avatar`, `video` |
 | Feedback and overlays | `toast(message)`, `snackbar(message, action=, on_action=)`, `alert(title, message)`, `confirm(title, message, on_result=)`, `modal(...)` and `bottom_sheet(...)` with `.open()` |
 | Reactive values | `state(initial)` with `.bind(component, template="{{value}}")` |
 | Key-value storage | `storage.set(key, value)`, `storage.get(key, default)` -- encrypted |
@@ -304,7 +308,8 @@ draws a plain circle (`U2015`). ApkPy's own short names also work: {icons}.
 - Charts are native: `chart(items, kind="bar")` (or `"line"` with `fill=True`,
   `"donut"`, `"ring"` with `value=`/`max=`), items read by `x=`/`y=`;
   `set_items()` and `set_value()` update them. No matplotlib: it cannot run on
-  the phone.
+  the phone. A bar that fills: `progress(40, max=100, id="upload")` with
+  `set_value(v)`.
 - Filters and choices that stay selected: `chips(["All", "Unread"],
   selected="All", on_change=fn)` (`multiple=True` gives fn a list) and
   `segmented(["Day", "Week", "Month"], selected="Week", on_change=fn)`, 2 to 5
@@ -455,6 +460,7 @@ entry before changing anything: {docs}/friendly-errors/
 - Everything in one file, to read in full: {docs}/llms-full.txt
 - Exact signatures: {docs}/reference/essential/
 - What is translated and what is not: {docs}/compatibility/
+- Games, the templates and the Studio: {docs}/games/
 - Example apps: https://github.com/apkpy-project/repo-apkpy/tree/main/examples
 '''
 

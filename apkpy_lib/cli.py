@@ -1049,29 +1049,24 @@ def _xml_escape(s):
                   .replace('>', '&gt;').replace('"', '&quot;'))
 
 
-def _apply_app_icon(build_dir, icon_path):
-    """Gera o ícone da app (mipmap) em todas as densidades a partir de um PNG
-    quadrado. Precisa de Pillow; se não estiver instalado, avisa e segue com o
-    ícone padrão. Devolve True se gerou. Pós-processamento — não toca no transpilador."""
+def _apply_app_icon(build_dir, icon_path, background=None):
+    """The app's icon from one square PNG: the picture at five densities for
+    Android 7, and an adaptive icon for Android 8 and later (app_icon.py).
+    Needs Pillow; without it the app keeps the default icon. True if written."""
     try:
-        from PIL import Image
+        import PIL  # noqa: F401
     except ImportError:
-        click.echo("   [WARNING]  Pillow não instalado (pip install Pillow) — a app fica com o ícone padrão.")
+        click.echo("   [WARNING]  Pillow is not installed (pip install Pillow): the app keeps the default icon.")
         return False
-    try:
-        img = Image.open(icon_path).convert("RGBA")
-    except Exception as e:
-        click.echo(f"   [WARNING]  não consegui abrir o ícone ({e}) — ícone padrão.")
-        return False
-    densities = {"mdpi": 48, "hdpi": 72, "xhdpi": 96, "xxhdpi": 144, "xxxhdpi": 192}
+    from . import app_icon
     res_dir = os.path.join(build_dir, "app/src/main/res")
-    for dens, size in densities.items():
-        mip_dir = os.path.join(res_dir, f"mipmap-{dens}")
-        os.makedirs(mip_dir, exist_ok=True)
-        resized = img.resize((size, size), Image.LANCZOS)
-        resized.save(os.path.join(mip_dir, "ic_launcher.png"))
-        resized.save(os.path.join(mip_dir, "ic_launcher_round.png"))
-    click.echo(f"   [OK]  app icon generated (5 densities) from {os.path.basename(icon_path)}")
+    try:
+        colour = app_icon.write(res_dir, icon_path, background)
+    except Exception as e:
+        click.echo(f"   [WARNING]  could not open the icon ({e}): the app keeps the default icon.")
+        return False
+    click.echo(f"   [OK]  app icon from {os.path.basename(icon_path)}: 5 densities, "
+               f"and the adaptive icon on {colour}")
     return True
 
 
@@ -1304,7 +1299,8 @@ def _generate_android_project(python_code, build_dir, app_name, config=None, sig
 
     # ── App config (apkpy.toml): nome, ícone, applicationId, versão ──────────
     config = config or appconfig.default_config()
-    has_icon = _apply_app_icon(build_dir, config["icon"]) if config.get("icon") else False
+    has_icon = _apply_app_icon(build_dir, config["icon"], config.get("icon_background")) \
+        if config.get("icon") else False
     _apply_app_config(build_dir, config, has_icon=has_icon)
 
     generate_gradle_files(

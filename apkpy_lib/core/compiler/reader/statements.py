@@ -265,7 +265,9 @@ class StatementReader:
                     })
         # if a and b:  |  if a or b:  |  if not x:  (and/or/not — Tier 1 C)
         # if a and b:  |  if not x:  |  if valor.isdigit():  (and/or/not + predicados)
-        elif isinstance(test, (ast.BoolOp, ast.UnaryOp, ast.Call, ast.Constant, ast.Subscript)) and _cond_shape_supported(test):
+        # if i % 2:  |  if n - 5:  -- a number's truth (_arithmetic_truth).
+        elif isinstance(test, (ast.BoolOp, ast.UnaryOp, ast.Call, ast.Constant, ast.Subscript,
+                               ast.BinOp)) and _cond_shape_supported(test):
             cmds.append({
                 'type': 'if_cond',
                 'test': test,

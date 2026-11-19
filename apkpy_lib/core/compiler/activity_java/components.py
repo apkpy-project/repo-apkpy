@@ -349,7 +349,7 @@ class Components:
                     lines.append(f"{indent}{jv}.setItems({chart_feature.java_string(comp['items_json'])});")
                 elif comp.get('items_node') is not None:
                     lines.append(f"{indent}{jv}.setItems(String.valueOf({self._val_to_java(comp['items_node'])}));")
-                if _kind == 'ring':
+                if _kind in ('ring', 'progress'):
                     _value_node = comp.get('value_node')
                     _value_java = ('0f' if _value_node is None else
                                    f"Float.parseFloat(String.valueOf({self._val_to_java(_value_node)}))")

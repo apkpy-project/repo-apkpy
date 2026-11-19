@@ -7,6 +7,7 @@ the same notes, formatted, are on the site under
 
 | Version | Notes |
 | --- | --- |
+| 1.15.1 | [Numbers as conditions, a progress bar and an adaptive icon](1.15.1.md) |
 | 1.15.0 | [Games, gradients and the keyboard](1.15.0.md) |
 | 1.14.2 | [Sorting, json, and a Previewer that reloads](1.14.2.md) |
 | 1.14.1 | [Classes reach the phone](1.14.1.md) |

@@ -111,7 +111,10 @@ class TheRefusalTests(unittest.TestCase):
         self.assertIn('many() is handed on as a value', text)
 
     def test_number_keys_from_a_loop_read_back(self):
-        text = _flat(_error('    xs = [3, 1]\n    d = {}\n    for x in xs:\n        d[x] = 1\n'
+        # Whole numbers, every one: read back as numbers since 1.15.1.
+        self.assertIsNone(_error('    xs = [3, 1]\n    d = {}\n    for x in xs:\n        d[x] = 1\n'
+                                 '    out.set_value(str(d))'))
+        text = _flat(_error('    xs = [3, 1.5]\n    d = {}\n    for x in xs:\n        d[x] = 1\n'
                             '    out.set_value(str(d))'))
         self.assertIn('d has numbers for keys', text)
 

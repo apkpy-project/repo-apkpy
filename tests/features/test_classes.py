@@ -552,6 +552,10 @@ def _cpython(source, inputs):
 
 def _generated(source, inputs):
     """What the generated Java shows for each button, on the PC's JVM."""
+    if not TOOLING or not TOOLING[2]:
+        # The CI has a JDK and no org.json jar: the tests that call this
+        # without their own check stopped there with a TypeError.
+        raise unittest.SkipTest("no JDK or no org.json jar on this machine")
     javac, java_bin, jar = TOOLING
     files = translate_python_to_android(source)
     assert "error.txt" not in files, files.get("error.txt", "")[:600]

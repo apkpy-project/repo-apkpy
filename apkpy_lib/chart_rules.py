@@ -13,10 +13,11 @@ number: the Previewer draws a 411dp-wide phone at one pixel per dp.
 
 import math
 
-KINDS = ('bar', 'line', 'donut', 'ring')
+KINDS = ('bar', 'line', 'donut', 'ring', 'progress')
 
 # Heights of the drawing itself; a donut's legend comes on top of its height.
-DEFAULT_HEIGHT = {'bar': 200, 'line': 200, 'donut': 180, 'ring': 160}
+# A progress bar (progress(), 1.15.1) is its own thickness.
+DEFAULT_HEIGHT = {'bar': 200, 'line': 200, 'donut': 180, 'ring': 160, 'progress': 8}
 
 TICKS = 4               # gridlines above the zero line
 AXIS_WIDTH = 36         # the y labels' column, left of the plot
@@ -174,6 +175,18 @@ def ring_fraction(value, maximum):
     if m <= 0:
         return 0.0
     return max(0.0, min(1.0, v / m))
+
+
+def progress_bar(fraction, width, height, radius=None):
+    """(corner radius, width of the filled part) of a progress bar.
+
+    The corners are round, half the height, unless border-radius says less.
+    A bar that has started is at least as wide as its round end, so 1% shows
+    as a dot and not as nothing."""
+    r = height / 2.0 if radius is None else max(0.0, min(float(radius), height / 2.0))
+    if fraction <= 0 or width <= 0:
+        return r, 0.0
+    return r, min(float(width), max(fraction * width, 2 * r))
 
 
 def ring_center_text(value, maximum, center=None):

@@ -210,6 +210,10 @@ class JavaAnswersTheSameWay(unittest.TestCase):
                 '        System.out.println("step|30/330|" + labelStep(30, 330f));\n'
                 '        float[][] arcs = slices(new double[]{3, 1, 0, 2});\n'
                 '        for (int i = 0; i < arcs.length; i++) System.out.println("slice|" + i + "|" + arcs[i][0] + "," + arcs[i][1]);\n'
+                '        float[][] bars = {{0f, 300f, 8f, -1f}, {0.004f, 300f, 8f, -1f}, {0.4f, 300f, 8f, -1f},\n'
+                '                          {1.2f, 300f, 14f, 3f}, {0.5f, 300f, 8f, 20f}};\n'
+                '        for (int i = 0; i < bars.length; i++) { float[] b = progressBar(bars[i][0], bars[i][1], bars[i][2], bars[i][3]);\n'
+                '            System.out.println("bar|" + i + "|" + b[0] + "," + b[1]); }\n'
                 '    }\n}\n')
 
     def test_both_languages_agree(self):
@@ -241,6 +245,13 @@ class JavaAnswersTheSameWay(unittest.TestCase):
             java_start, java_sweep = (float(v) for v in answers[('slice', str(index))].split(','))
             self.assertAlmostEqual(start, java_start, places=3)
             self.assertAlmostEqual(sweep, java_sweep, places=3)
+        bars = ((0, 300, 8, None), (0.004, 300, 8, None), (0.4, 300, 8, None),
+                (min(1.0, 1.2), 300, 14, 3), (0.5, 300, 8, 20))
+        for index, (fraction, width, height, radius) in enumerate(bars):
+            radius_py, filled = rules.progress_bar(fraction, width, height, radius)
+            java_r, java_filled = (float(v) for v in answers[('bar', str(index))].split(','))
+            self.assertAlmostEqual(radius_py, java_r, places=3, msg=index)
+            self.assertAlmostEqual(filled, java_filled, places=3, msg=index)
 
 
 if __name__ == '__main__':

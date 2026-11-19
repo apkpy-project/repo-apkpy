@@ -265,7 +265,8 @@ class ThePreviewer(unittest.TestCase):
             label.pack(fill="x")
             root.update()
             width = label.winfo_width()
-            border = int(label.cget("bd")) + int(label.cget("highlightthickness"))
+            # str(): the Tk of Python 3.8 to 3.11 gives these as a Tcl_Obj.
+            border = int(str(label.cget("bd"))) + int(str(label.cget("highlightthickness")))
             text_width = label.winfo_reqwidth() - 2 * (16 + border)
             asked = []
 
